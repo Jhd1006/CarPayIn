@@ -1,6 +1,6 @@
 # 02. 차량 선택 / 차량 등록
 
-관련 다이어그램: `docs/diagrams/lucid-02-vehicle-confirmation.mmd`
+관련 다이어그램: `docs/diagrams/02-vehicle-confirmation.mmd`
 
 ## 이 단계의 목적
 

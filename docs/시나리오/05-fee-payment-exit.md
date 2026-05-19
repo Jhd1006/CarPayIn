@@ -1,6 +1,6 @@
 # 05. 요금 조회 / 결제 / 출차
 
-관련 다이어그램: `docs/diagrams/lucid-05-fee-payment-exit.mmd`
+관련 다이어그램: `docs/diagrams/05-fee-payment-exit.mmd`
 
 ## 이 단계의 목적
 
