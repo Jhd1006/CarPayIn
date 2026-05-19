@@ -1,27 +1,30 @@
-# Car Pay-in Cloud Backend
+# Car Pay-in Cloud Monorepo
 
-새 클라우드 기반 Car Pay-in backend 구현 공간이다.
+클라우드 배포용 Car Pay-in 서비스를 새로 개발하는 monorepo다.
 
-기존 로컬 실험 코드는 `../car-pay-in`에 유지하고, 이 폴더에서는 `../car-pay-in/docs/use-cases/` 기준으로 테스트 먼저 작성한 뒤 기능을 구현한다.
+기존 로컬 실험 코드는 `../car-pay-in`에 유지한다.
+기능 개발은 `../car-pay-in/docs/use-cases/`의 유스케이스를 기준으로 테스트부터 작성한다.
 
 ## 구조
 
 ```text
-app/
-  api/              HTTP route, request/response schema
-  application/      use case service
-  domain/           domain model, business rule, error
-  infra/            DB, Redis, external client, messaging implementation
-  config/           settings, dependency wiring
-migrations/         database migration
-tests/
-  unit/             use case and domain tests
-  integration/      repository/client/API integration tests
-  e2e/              scenario-level tests
+services/
+  carpayin-backend/   Car Pay-in main backend
+  mockpg/             Mock PG service, 추후 추가
+  mockcard/           Mock Card service, 추후 추가
+  pms/                Mock Parking PMS service, 추후 추가
+packages/
+  common/             공유 코드, 추후 필요할 때 추가
 ```
 
-## 시작 유스케이스
+## 개발 흐름
 
-1. `UC-AUTH-001. QR 로그인 세션 생성`
-2. `UC-AUTH-004. 로그인 세션 상태 조회`
-3. `UC-AUTH-005. 차량 선택 확정과 앱 토큰 발급`
+1. `../car-pay-in/docs/use-cases/`에서 유스케이스를 하나 고른다.
+2. 해당 서비스의 `tests/unit/`에 테스트를 먼저 작성한다.
+3. `app/application/`에 유스케이스 구현을 추가한다.
+4. 필요해지면 `app/api/`, `app/infra/`를 연결한다.
+
+## 첫 개발 대상
+
+- `UC-AUTH-001. QR 로그인 세션 생성`
+
