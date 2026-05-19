@@ -6,7 +6,7 @@
 
 # 01. QR 로그인 / 현대 OAuth
 
-관련 다이어그램: `docs/diagrams/lucid-01-qr-oauth-login.mmd`
+관련 다이어그램: `docs/diagrams/01-qr-oauth-login.mmd`
 
 ## 이 단계의 목적
 
@@ -95,7 +95,7 @@ Car Pay-in DB:
 
 # 02. 차량 선택 / 차량 등록
 
-관련 다이어그램: `docs/diagrams/lucid-02-vehicle-confirmation.mmd`
+관련 다이어그램: `docs/diagrams/02-vehicle-confirmation.mmd`
 
 ## 이 단계의 목적
 
@@ -156,7 +156,7 @@ Car Pay-in DB:
 
 # 03. 카드 등록 / Billing Key 저장
 
-관련 다이어그램: `docs/diagrams/lucid-03-card-registration-billing-key.mmd`
+관련 다이어그램: `docs/diagrams/03-card-registration-billing-key.mmd`
 
 ## 이 단계의 목적
 
@@ -247,7 +247,7 @@ Mock Card DB:
 
 # 04. 입차 사전알림 / 주차 세션 생성
 
-관련 다이어그램: `docs/diagrams/lucid-04-entry-parking-session.mmd`
+관련 다이어그램: `docs/diagrams/04-entry-parking-session.mmd`
 
 ## 이 단계의 목적
 
@@ -332,7 +332,7 @@ PMS DB:
 
 # 05. 요금 조회 / 결제 / 출차
 
-관련 다이어그램: `docs/diagrams/lucid-05-fee-payment-exit.mmd`
+관련 다이어그램: `docs/diagrams/05-fee-payment-exit.mmd`
 
 ## 이 단계의 목적
 

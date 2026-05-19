@@ -1,6 +1,6 @@
 # 03. 카드 등록 / Billing Key 저장
 
-관련 다이어그램: `docs/diagrams/lucid-03-card-registration-billing-key.mmd`
+관련 다이어그램: `docs/diagrams/03-card-registration-billing-key.mmd`
 
 ## 이 단계의 목적
 
