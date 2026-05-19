@@ -1,643 +1,575 @@
 """
-카드 등록 / Billing Key 유즈케이스 단위 테스트
-UC-CARD-001: 카드 등록 order 생성
-UC-CARD-002: 카드 등록 완료 webhook 처리
+UC-CARD-001  카드 등록 order 생성     POST /card/order
+UC-CARD-002  카드 등록 완료 webhook 처리  POST /webhook/card
+
+외부 의존성 처리:
+  - DB    : 테스트별 독립된 임시 SQLite 파일 (database.DB_PATH monkeypatch)
+  - MOLIT : main._molit_owner_check 를 fixture 로 대체
+  - MQTT  : mqtt_service.start / publish 를 no-op fixture 로 대체
+
+참고:
+  비즈니스 로직이 라우터에 인라인되어 있어 TestClient 를 사용하는
+  API 통합 테스트로 작성한다. HTTP status code 검증은 이 레이어에서 수행한다.
+  실제 구현체: services/carpayin-server/main.py
 """
 
 import hashlib
-import hmac
+import hmac as hmac_lib
 import json
-import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timedelta
 
 import pytest
-from fastapi import HTTPException
+from fastapi.testclient import TestClient
+
+# ── 공통 상수 ────────────────────────────────────────────────────────────────
+VALID_CAR_ID      = "car-test-001"
+VALID_PLATE       = "12가3456"
+VALID_BANK_NAME   = "신한카드"
+ACCESS_TOKEN      = "test-access-token-abc"
+HMAC_SECRET       = "dev-only-change-me"
+
+ORDER_ID          = "testorder0000001a"
+PAYMENT_METHOD_ID = "pm-test-0001"
+CUSTOMER_KEY      = "ckey-test-0001"
+CARD_BRAND        = "신한카드"
+LAST_FOUR         = "1234"
+
+AUTH_HEADER       = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
 
-# ---------------------------------------------------------------------------
-# 공통 상수
-# ---------------------------------------------------------------------------
-
-VALID_USER_ID = "user-001"
-VALID_CAR_ID = "car-001"
-VALID_PLATE = "12가3456"
-VALID_BANK = "신한"
-VALID_ORDER_ID = str(uuid.uuid4())
-VALID_BILLING_KEY = "bk-test-abc123"
-VALID_CARD_LAST_FOUR = "1234"
-WEBHOOK_SECRET = "test-webhook-secret"
-
-
-# ---------------------------------------------------------------------------
-# 공통 헬퍼
-# ---------------------------------------------------------------------------
-
-
-def make_hmac_signature(order_id: str, billing_key: str, secret: str = WEBHOOK_SECRET) -> str:
-    """HMAC-SHA256 signature 생성"""
-    payload = f"{order_id}:{billing_key}"
-    return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+# ── HMAC 계산 헬퍼 ────────────────────────────────────────────────────────────
+def _make_hmac(
+    order_id: str,
+    customer_key: str,
+    payment_method_id: str,
+    card_brand: str,
+    last_four: str,
+    secret: str = HMAC_SECRET,
+) -> str:
+    """main.py 의 webhook HMAC 생성 로직과 동일하게 계산한다."""
+    payload = {
+        "card_brand": card_brand,
+        "customer_key": customer_key,
+        "last_four": last_four,
+        "order_id": order_id,
+        "payment_method_id": payment_method_id,
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hmac_lib.new(secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+# ── Fixtures ──────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def no_mqtt(monkeypatch):
+    """MQTT 브로커 연결을 no-op 으로 대체해 테스트 환경에서 연결 오류를 방지한다."""
+    monkeypatch.setattr("mqtt_service.start", lambda: None)
+    monkeypatch.setattr("mqtt_service.client", None, raising=False)
 
 
 @pytest.fixture
-def mock_redis():
-    redis = AsyncMock()
-    redis.get = AsyncMock(return_value=None)
-    redis.set = AsyncMock(return_value=True)
-    redis.delete = AsyncMock(return_value=1)
-    return redis
+def test_db(tmp_path, monkeypatch):
+    """각 테스트별 독립된 SQLite DB 를 생성하고 스키마를 초기화한다."""
+    db_file = str(tmp_path / "test.db")
+    monkeypatch.setattr("database.DB_PATH", db_file)
+    import database
+    database.init_db()
+    return db_file
 
 
 @pytest.fixture
-def mock_molit():
-    molit = AsyncMock()
-    molit.verify_owner = AsyncMock(return_value=True)
-    return molit
+def seeded_db(test_db):
+    """유효한 차량 및 만료되지 않은 access token 을 DB 에 삽입한다."""
+    import database
+    expires = (datetime.now() + timedelta(hours=24)).isoformat()
+    with database.get_conn() as con:
+        con.execute(
+            "INSERT INTO vehicles (car_id, plate) VALUES (?, ?)",
+            (VALID_CAR_ID, ""),
+        )
+        con.execute(
+            "INSERT INTO tokens (access_token, car_id, hyundai_user_id, expires_at)"
+            " VALUES (?, ?, ?, ?)",
+            (ACCESS_TOKEN, VALID_CAR_ID, "", expires),
+        )
+    return test_db
 
 
 @pytest.fixture
-def mock_vehicle_repo():
-    repo = AsyncMock()
-    repo.find_by_car_id = AsyncMock(return_value=None)
-    repo.update_plate = AsyncMock(return_value=True)
-    return repo
+def molit_pass(monkeypatch):
+    """MOLIT 소유자 검증이 항상 통과하도록 대체한다."""
+    def _pass(plate, car_id, hyundai_user_id="", owner_name=""):
+        return {
+            "matched": True,
+            "message": "Mock PASS",
+            "checked_at": datetime.now().isoformat(),
+            "plate": plate,
+            "car_id": car_id,
+            "owner_user_id": hyundai_user_id,
+            "owner_name": owner_name,
+            "registry_hit": True,
+        }
+    monkeypatch.setattr("main._molit_owner_check", _pass)
 
 
 @pytest.fixture
-def mock_billing_key_repo():
-    repo = AsyncMock()
-    repo.upsert = AsyncMock(return_value=True)
-    repo.find_by_car_id = AsyncMock(return_value=None)
-    return repo
+def molit_fail(monkeypatch):
+    """MOLIT 소유자 검증이 항상 실패하도록 대체한다."""
+    def _fail(plate, car_id, hyundai_user_id="", owner_name=""):
+        return {
+            "matched": False,
+            "message": "소유주 정보 불일치 (Mock)",
+            "checked_at": datetime.now().isoformat(),
+            "plate": plate,
+            "car_id": car_id,
+            "owner_user_id": hyundai_user_id,
+            "owner_name": owner_name,
+            "registry_hit": False,
+        }
+    monkeypatch.setattr("main._molit_owner_check", _fail)
 
 
 @pytest.fixture
-def mock_card_service(mock_redis, mock_molit, mock_vehicle_repo):
+def client(no_mqtt, test_db):
     """
-    실제 CardService 구현체 대신, 이 테스트에서 검증하는 시나리오 계약을
-    반영하는 인터페이스 모킹.
-    실제 구현 시 아래 FakeCardService를 실제 서비스로 교체한다.
+    실제 main.app 을 사용하는 TestClient.
+    test_db 에서 DB 경로를 먼저 패치한 뒤 TestClient lifespan 을 시작해
+    init_db() 가 테스트 DB 에 적용되도록 한다.
     """
-    return FakeCardService(
-        redis=mock_redis,
-        molit=mock_molit,
-        vehicle_repo=mock_vehicle_repo,
-    )
+    from main import app
+    with TestClient(app) as c:
+        yield c
 
 
-@pytest.fixture
-def mock_webhook_service(mock_redis, mock_billing_key_repo):
-    return FakeWebhookService(
-        redis=mock_redis,
-        billing_key_repo=mock_billing_key_repo,
-        secret=WEBHOOK_SECRET,
-    )
+# ═══════════════════════════════════════════════════════════════════════════════
+# UC-CARD-001 · POST /card/order
+# ═══════════════════════════════════════════════════════════════════════════════
 
+class TestCardOrderCreate:
+    """UC-CARD-001: 카드 등록 order 생성."""
 
-# ---------------------------------------------------------------------------
-# Fake 서비스 (테스트용 인터페이스 구현체)
-# 실제 서비스 레이어가 완성되면 이 클래스를 제거하고 실제 서비스로 교체한다.
-# ---------------------------------------------------------------------------
+    # ── 성공 케이스 ──────────────────────────────────────────────────────────
 
-import re
+    def test_유효한요청_order_id와_pg_url반환(self, client, seeded_db, molit_pass):
+        # Given: 유효한 토큰, 등록된 차량, 약관 동의, 유효한 번호판
+        payload = {"plate": VALID_PLATE, "bank_name": VALID_BANK_NAME, "agree_terms": True}
 
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-def _normalize_plate(plate: str) -> str:
-    """차량번호 정규화: 공백·하이픈 제거"""
-    normalized = re.sub(r"[\s\-]", "", plate)
-    # 한국 차량번호 형식 검증: 숫자2 + 한글1 + 숫자4
-    if not re.fullmatch(r"\d{2,3}[가-힣]\d{4}", normalized):
-        raise HTTPException(status_code=400, detail="차량번호 형식이 올바르지 않습니다.")
-    return normalized
+        # Then
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "order_id" in body
+        assert "pg_url" in body
+        assert body["plate"] == VALID_PLATE
 
+    def test_유효한요청_card_orders_DB에_저장됨(self, client, seeded_db, molit_pass):
+        # Given
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
 
-class FakeCardService:
-    def __init__(self, redis, molit, vehicle_repo):
-        self.redis = redis
-        self.molit = molit
-        self.vehicle_repo = vehicle_repo
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-    async def create_order(
-        self,
-        *,
-        user_id: str | None,
-        car_id: str | None,
-        plate: str,
-        bank_name: str,
-        agree_terms: bool,
-    ) -> dict:
-        # 인증 검사
-        if not user_id or not car_id:
-            raise HTTPException(status_code=401, detail="인증 실패")
+        # Then: 반환된 order_id 로 card_orders 에 car_id 가 저장되어야 한다
+        import database
+        order_id = resp.json()["order_id"]
+        with database.get_conn() as con:
+            row = con.execute(
+                "SELECT car_id FROM card_orders WHERE order_id=?", (order_id,)
+            ).fetchone()
+        assert row is not None
+        assert row["car_id"] == VALID_CAR_ID
 
-        # 약관 동의 검사
-        if not agree_terms:
-            raise HTTPException(status_code=400, detail="약관 동의가 필요합니다 (terms)")
+    def test_bank_name_제공시_pg_url에_card_brand_포함(self, client, seeded_db, molit_pass):
+        # Given: bank_name 제공
+        payload = {"plate": VALID_PLATE, "bank_name": VALID_BANK_NAME, "agree_terms": True}
 
-        # 차량 존재 여부
-        vehicle = await self.vehicle_repo.find_by_car_id(car_id)
-        if vehicle is None:
-            raise HTTPException(status_code=404, detail="차량을 찾을 수 없습니다.")
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-        # 차량번호 정규화 및 형식 검증
-        normalized_plate = _normalize_plate(plate)
-        # 항상 정규화 결과를 DB에 반영한다 (같더라도 명시적 upsert)
-        await self.vehicle_repo.update_plate(car_id, normalized_plate)
+        # Then: pg_url 에 card_brand 파라미터가 포함됨
+        assert resp.status_code == 200
+        assert "card_brand" in resp.json()["pg_url"]
 
-        # MOLIT 소유자 검증
-        is_valid = await self.molit.verify_owner(
-            plate=normalized_plate,
-            user_id=user_id,
-        )
-        if not is_valid:
-            raise HTTPException(status_code=422, detail="MOLIT 소유자 검증 실패")
+    def test_번호판_공백포함시_정규화후_성공(self, client, seeded_db, molit_pass):
+        # Given: 공백이 포함된 번호판 입력
+        payload = {"plate": "12 가 3456", "bank_name": "", "agree_terms": True}
 
-        # Order 생성 및 Redis 저장
-        order_id = str(uuid.uuid4())
-        redis_key = f"mock_pg_card_register:{order_id}"
-        redis_value = json.dumps(
-            {"status": "pending", "car_id": car_id, "user_id": user_id}
-        )
-        await self.redis.set(redis_key, redis_value)
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-        # Mock PG URL 생성
-        pg_url = f"https://mock-pg.example.com/register?order_id={order_id}"
+        # Then: 정규화 후 유효한 번호판으로 처리됨
+        assert resp.status_code == 200
+        assert resp.json()["plate"] == "12가3456"
 
-        return {"order_id": order_id, "pg_url": pg_url}
+    # ── 실패 케이스 ──────────────────────────────────────────────────────────
 
+    def test_약관미동의_400반환(self, client, seeded_db, molit_pass):
+        # Given: agree_terms=False
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": False}
 
-class FakeWebhookService:
-    def __init__(self, redis, billing_key_repo, secret: str):
-        self.redis = redis
-        self.billing_key_repo = billing_key_repo
-        self.secret = secret
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-    def _verify_signature(self, order_id: str, billing_key: str, signature: str) -> bool:
-        expected = hmac.new(
-            self.secret.encode(),
-            f"{order_id}:{billing_key}".encode(),
-            hashlib.sha256,
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature)
+        # Then
+        assert resp.status_code == 400
 
-    async def handle_webhook(
-        self,
-        *,
-        order_id: str,
-        billing_key: str,
-        card_last_four: str,
-        status: str,
-        signature: str,
-    ) -> dict:
-        # Signature 검증
-        if not self._verify_signature(order_id, billing_key, signature):
-            raise HTTPException(status_code=401, detail="signature 불일치")
+    def test_약관미동의_card_orders_저장안됨(self, client, seeded_db, molit_pass):
+        # Given
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": False}
 
-        # card_last_four 형식 검증
-        if not re.fullmatch(r"\d{4}", card_last_four):
-            raise HTTPException(status_code=400, detail="card_last_four 형식 오류")
+        # When
+        client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-        # Redis order 조회
-        redis_key = f"mock_pg_card_register:{order_id}"
-        raw = await self.redis.get(redis_key)
-        if raw is None:
-            raise HTTPException(status_code=400, detail="order가 없거나 만료됨")
+        # Then: 거부 후 card_orders 에 데이터가 없어야 한다
+        import database
+        with database.get_conn() as con:
+            count = con.execute("SELECT COUNT(*) as cnt FROM card_orders").fetchone()
+        assert count["cnt"] == 0
 
-        order_data = json.loads(raw)
-        # complete 상태면 멱등성 처리
-        if order_data.get("status") == "complete":
-            return {"status": "ok"}
+    def test_번호판형식오류_영문혼합_400반환(self, client, seeded_db, molit_pass):
+        # Given: 한국 표준형이 아닌 번호판
+        payload = {"plate": "ABCD1234", "bank_name": "", "agree_terms": True}
 
-        # webhook status 검증
-        if status != "active":
-            raise HTTPException(status_code=400, detail="webhook status가 active가 아님")
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-        car_id = order_data["car_id"]
+        # Then
+        assert resp.status_code == 400
 
-        # vehicle_billing_keys upsert
-        await self.billing_key_repo.upsert(
-            car_id=car_id,
-            billing_key=billing_key,
-            card_last_four=card_last_four,
-            status="active",
-        )
+    def test_번호판_빈문자열_400반환(self, client, seeded_db, molit_pass):
+        # Given: plate 빈값
+        payload = {"plate": "", "bank_name": "", "agree_terms": True}
 
-        # Redis order complete 처리
-        complete_value = json.dumps({**order_data, "status": "complete"})
-        await self.redis.set(redis_key, complete_value)
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-        return {"status": "ok"}
+        # Then
+        assert resp.status_code == 400
 
-
-# ===========================================================================
-# UC-CARD-001: 카드 등록 order 생성
-# ===========================================================================
-
-
-class TestCreateCardOrder:
-    """UC-CARD-001 - POST /card/order"""
-
-    # TC-001-01: 정상 요청 → Redis 저장 + pg_url 반환
-    @pytest.mark.asyncio
-    async def test_valid_request_stores_order_and_returns_pg_url(
-        self,
-        mock_card_service,
-        mock_redis,
-        mock_molit,
-        mock_vehicle_repo,
-    ):
-        """유효한 요청이면 order를 Redis에 pending으로 저장하고 pg_url을 반환한다."""
-        mock_vehicle_repo.find_by_car_id.return_value = {
-            "car_id": VALID_CAR_ID,
-            "user_id": VALID_USER_ID,
-            "plate": VALID_PLATE,
-        }
-        mock_molit.verify_owner.return_value = True
-
-        result = await mock_card_service.create_order(
-            user_id=VALID_USER_ID,
-            car_id=VALID_CAR_ID,
-            plate=VALID_PLATE,
-            bank_name=VALID_BANK,
-            agree_terms=True,
-        )
-
-        assert "order_id" in result
-        assert "pg_url" in result
-        assert result["pg_url"].startswith("https://")
-
-        # Redis에 pending 상태로 저장됐는지 확인
-        order_id = result["order_id"]
-        mock_redis.set.assert_called_once()
-        call_args = mock_redis.set.call_args[0]
-        assert call_args[0] == f"mock_pg_card_register:{order_id}"
-        assert json.loads(call_args[1])["status"] == "pending"
-
-    # TC-001-02: 약관 미동의 → 400 반환
-    @pytest.mark.asyncio
-    async def test_disagree_terms_returns_400(self, mock_card_service):
-        """agree_terms가 False면 400을 반환하고 order를 생성하지 않는다."""
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_card_service.create_order(
-                user_id=VALID_USER_ID,
-                car_id=VALID_CAR_ID,
-                plate=VALID_PLATE,
-                bank_name=VALID_BANK,
-                agree_terms=False,
+    def test_차량없음_404반환(self, client, test_db, molit_pass):
+        # Given: vehicles 에 차량 없이 토큰만 존재
+        import database
+        expires = (datetime.now() + timedelta(hours=24)).isoformat()
+        with database.get_conn() as con:
+            con.execute(
+                "INSERT INTO tokens (access_token, car_id, hyundai_user_id, expires_at)"
+                " VALUES (?, ?, ?, ?)",
+                (ACCESS_TOKEN, VALID_CAR_ID, "", expires),
             )
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
 
-        assert exc_info.value.status_code == 400
-        assert "terms" in exc_info.value.detail.lower() or "약관" in exc_info.value.detail
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-    # TC-001-03: MOLIT 검증 실패 → order 미생성
-    @pytest.mark.asyncio
-    async def test_molit_failure_does_not_create_order(
-        self,
-        mock_card_service,
-        mock_redis,
-        mock_molit,
-        mock_vehicle_repo,
-    ):
-        """MOLIT 소유자 검증이 실패하면 order를 Redis에 저장하지 않는다."""
-        mock_vehicle_repo.find_by_car_id.return_value = {
-            "car_id": VALID_CAR_ID,
-            "user_id": VALID_USER_ID,
-            "plate": VALID_PLATE,
-        }
-        mock_molit.verify_owner.return_value = False
+        # Then
+        assert resp.status_code == 404
 
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_card_service.create_order(
-                user_id=VALID_USER_ID,
-                car_id=VALID_CAR_ID,
-                plate=VALID_PLATE,
-                bank_name=VALID_BANK,
-                agree_terms=True,
+    def test_MOLIT검증실패_403반환(self, client, seeded_db, molit_fail):
+        # Given: MOLIT 검증 실패 fixture
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
+
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
+
+        # Then
+        assert resp.status_code == 403
+
+    def test_MOLIT검증실패_card_orders_저장안됨(self, client, seeded_db, molit_fail):
+        # Given
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
+
+        # When
+        client.post("/card/order", json=payload, headers=AUTH_HEADER)
+
+        # Then: MOLIT 실패 후에도 order 가 저장되어선 안 된다
+        import database
+        with database.get_conn() as con:
+            count = con.execute("SELECT COUNT(*) as cnt FROM card_orders").fetchone()
+        assert count["cnt"] == 0
+
+    def test_인증토큰없음_401반환(self, client, seeded_db, molit_pass):
+        # Given: Authorization 헤더 없음
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
+
+        # When
+        resp = client.post("/card/order", json=payload)
+
+        # Then
+        assert resp.status_code == 401
+
+    def test_만료된토큰_401반환(self, client, test_db, molit_pass):
+        # Given: 만료 시각이 과거인 토큰
+        import database
+        expired = (datetime.now() - timedelta(hours=1)).isoformat()
+        with database.get_conn() as con:
+            con.execute(
+                "INSERT INTO vehicles (car_id, plate) VALUES (?, ?)", (VALID_CAR_ID, "")
             )
-
-        assert exc_info.value.status_code in (400, 422)
-        mock_redis.set.assert_not_called()
-
-    # TC-001-04: 차량 없음 → 404 반환
-    @pytest.mark.asyncio
-    async def test_vehicle_not_found_returns_404(
-        self,
-        mock_card_service,
-        mock_vehicle_repo,
-    ):
-        """토큰의 car_id에 해당하는 차량이 DB에 없으면 404를 반환한다."""
-        mock_vehicle_repo.find_by_car_id.return_value = None
-
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_card_service.create_order(
-                user_id=VALID_USER_ID,
-                car_id="nonexistent-car",
-                plate=VALID_PLATE,
-                bank_name=VALID_BANK,
-                agree_terms=True,
+            con.execute(
+                "INSERT INTO tokens (access_token, car_id, hyundai_user_id, expires_at)"
+                " VALUES (?, ?, ?, ?)",
+                (ACCESS_TOKEN, VALID_CAR_ID, "", expired),
             )
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
 
-        assert exc_info.value.status_code == 404
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-    # TC-001-05: 잘못된 차량번호 형식 → 400 반환
-    @pytest.mark.asyncio
-    async def test_invalid_plate_format_returns_400(
-        self, mock_card_service, mock_vehicle_repo
-    ):
-        """차량번호 형식이 유효하지 않으면 400을 반환한다."""
-        mock_vehicle_repo.find_by_car_id.return_value = {
-            "car_id": VALID_CAR_ID,
-            "user_id": VALID_USER_ID,
-            "plate": VALID_PLATE,
-        }
+        # Then
+        assert resp.status_code == 401
 
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_card_service.create_order(
-                user_id=VALID_USER_ID,
-                car_id=VALID_CAR_ID,
-                plate="INVALID##PLATE",
-                bank_name=VALID_BANK,
-                agree_terms=True,
+    def test_이미등록된번호판_409반환(self, client, seeded_db, molit_pass):
+        # Given: 다른 car_id 에 동일 번호판이 이미 매핑된 상태
+        import database
+        other_car_id = "car-other-001"
+        with database.get_conn() as con:
+            con.execute(
+                "INSERT INTO vehicles (car_id, plate) VALUES (?, ?)",
+                (other_car_id, VALID_PLATE),
             )
+        payload = {"plate": VALID_PLATE, "bank_name": "", "agree_terms": True}
 
-        assert exc_info.value.status_code == 400
+        # When
+        resp = client.post("/card/order", json=payload, headers=AUTH_HEADER)
 
-    # TC-001-06: 인증 토큰 없음 → 401 반환
-    @pytest.mark.asyncio
-    async def test_missing_auth_token_returns_401(self, mock_card_service):
-        """app access token이 없으면 401을 반환한다."""
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_card_service.create_order(
-                user_id=None,
-                car_id=None,
-                plate=VALID_PLATE,
-                bank_name=VALID_BANK,
-                agree_terms=True,
-            )
-
-        assert exc_info.value.status_code == 401
-
-    # TC-001-07: 차량번호 정규화 후 DB 업데이트
-    @pytest.mark.asyncio
-    async def test_plate_normalization_updates_db(
-        self,
-        mock_card_service,
-        mock_redis,
-        mock_molit,
-        mock_vehicle_repo,
-    ):
-        """차량번호 정규화 후 DB 값과 다르면 vehicles.plate를 업데이트한다."""
-        # DB에는 하이픈 포함 비정규화 값이 저장돼 있다
-        mock_vehicle_repo.find_by_car_id.return_value = {
-            "car_id": VALID_CAR_ID,
-            "user_id": VALID_USER_ID,
-            "plate": "12-가-3456",
-        }
-        mock_molit.verify_owner.return_value = True
-
-        await mock_card_service.create_order(
-            user_id=VALID_USER_ID,
-            car_id=VALID_CAR_ID,
-            plate="12-가-3456",
-            bank_name=VALID_BANK,
-            agree_terms=True,
-        )
-
-        # 정규화된 값으로 DB 업데이트 호출 확인
-        mock_vehicle_repo.update_plate.assert_called_once_with(VALID_CAR_ID, "12가3456")
+        # Then
+        assert resp.status_code == 409
 
 
-# ===========================================================================
-# UC-CARD-002: 카드 등록 완료 webhook 처리
-# ===========================================================================
-
+# ═══════════════════════════════════════════════════════════════════════════════
+# UC-CARD-002 · POST /webhook/card
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestCardWebhook:
-    """UC-CARD-002 - POST /card/webhook"""
+    """UC-CARD-002: 카드 등록 완료 webhook 처리."""
 
-    # TC-002-01: 정상 webhook → active billing key 저장
-    @pytest.mark.asyncio
-    async def test_valid_webhook_saves_active_billing_key(
-        self,
-        mock_webhook_service,
-        mock_redis,
-        mock_billing_key_repo,
-    ):
-        """정상 webhook이면 vehicle_billing_keys에 active billing key를 저장한다."""
-        order_id = VALID_ORDER_ID
-        signature = make_hmac_signature(order_id, VALID_BILLING_KEY)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID, "user_id": VALID_USER_ID}
-        )
-
-        result = await mock_webhook_service.handle_webhook(
-            order_id=order_id,
-            billing_key=VALID_BILLING_KEY,
-            card_last_four=VALID_CARD_LAST_FOUR,
-            status="active",
-            signature=signature,
-        )
-
-        assert result == {"status": "ok"}
-        mock_billing_key_repo.upsert.assert_called_once()
-        kwargs = mock_billing_key_repo.upsert.call_args[1]
-        assert kwargs["car_id"] == VALID_CAR_ID
-        assert kwargs["billing_key"] == VALID_BILLING_KEY
-        assert kwargs["status"] == "active"
-        assert kwargs["card_last_four"] == VALID_CARD_LAST_FOUR
-
-    # TC-002-02: 중복 webhook → 멱등성 보장
-    @pytest.mark.asyncio
-    async def test_duplicate_webhook_is_idempotent(
-        self,
-        mock_webhook_service,
-        mock_redis,
-        mock_billing_key_repo,
-    ):
-        """같은 webhook이 두 번 와도 결과가 깨지지 않는다 (멱등성)."""
-        order_id = VALID_ORDER_ID
-        signature = make_hmac_signature(order_id, VALID_BILLING_KEY)
-
-        # 첫 번째 호출 (pending)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID, "user_id": VALID_USER_ID}
-        )
-        first = await mock_webhook_service.handle_webhook(
-            order_id=order_id,
-            billing_key=VALID_BILLING_KEY,
-            card_last_four=VALID_CARD_LAST_FOUR,
-            status="active",
-            signature=signature,
-        )
-
-        # 두 번째 호출 (complete 상태로 변경됨)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "complete", "car_id": VALID_CAR_ID, "user_id": VALID_USER_ID}
-        )
-        second = await mock_webhook_service.handle_webhook(
-            order_id=order_id,
-            billing_key=VALID_BILLING_KEY,
-            card_last_four=VALID_CARD_LAST_FOUR,
-            status="active",
-            signature=signature,
-        )
-
-        assert first == {"status": "ok"}
-        assert second == {"status": "ok"}
-        # 두 번째에는 upsert를 다시 호출하지 않아야 한다
-        assert mock_billing_key_repo.upsert.call_count == 1
-
-    # TC-002-03: order 없음 → 400 반환
-    @pytest.mark.asyncio
-    async def test_missing_order_returns_400(self, mock_webhook_service, mock_redis):
-        """Redis에 해당 order가 없으면 400을 반환한다."""
-        mock_redis.get.return_value = None
-        order_id = VALID_ORDER_ID
-        signature = make_hmac_signature(order_id, VALID_BILLING_KEY)
-
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_webhook_service.handle_webhook(
-                order_id=order_id,
-                billing_key=VALID_BILLING_KEY,
-                card_last_four=VALID_CARD_LAST_FOUR,
-                status="active",
-                signature=signature,
+    @pytest.fixture
+    def db_with_order(self, seeded_db):
+        """card_orders 에 pending order 를 미리 삽입한다."""
+        import database
+        with database.get_conn() as con:
+            con.execute(
+                "INSERT INTO card_orders (order_id, car_id, created_at) VALUES (?, ?, ?)",
+                (ORDER_ID, VALID_CAR_ID, datetime.now().isoformat()),
             )
+        return seeded_db
 
-        assert exc_info.value.status_code == 400
-
-    # TC-002-04: signature 불일치 → 400 또는 401 반환
-    @pytest.mark.asyncio
-    async def test_invalid_signature_returns_401_or_400(
-        self, mock_webhook_service, mock_redis
-    ):
-        """signature가 틀리면 401 또는 400을 반환한다."""
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID}
+    @staticmethod
+    def _webhook_payload(
+        order_id: str = ORDER_ID,
+        customer_key: str = CUSTOMER_KEY,
+        payment_method_id: str = PAYMENT_METHOD_ID,
+        card_brand: str = CARD_BRAND,
+        last_four: str = LAST_FOUR,
+        hmac_override: str | None = None,
+    ) -> dict:
+        sig = hmac_override or _make_hmac(
+            order_id, customer_key, payment_method_id, card_brand, last_four
         )
-
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_webhook_service.handle_webhook(
-                order_id=VALID_ORDER_ID,
-                billing_key=VALID_BILLING_KEY,
-                card_last_four=VALID_CARD_LAST_FOUR,
-                status="active",
-                signature="tampered-invalid-signature",
-            )
-
-        assert exc_info.value.status_code in (400, 401)
-
-    # TC-002-05: webhook status != active → billing key 저장 안 함
-    @pytest.mark.asyncio
-    async def test_non_active_status_does_not_save_billing_key(
-        self,
-        mock_webhook_service,
-        mock_redis,
-        mock_billing_key_repo,
-    ):
-        """webhook status가 'active'가 아니면 billing key를 저장하지 않는다."""
-        order_id = VALID_ORDER_ID
-        signature = make_hmac_signature(order_id, VALID_BILLING_KEY)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID}
-        )
-
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_webhook_service.handle_webhook(
-                order_id=order_id,
-                billing_key=VALID_BILLING_KEY,
-                card_last_four=VALID_CARD_LAST_FOUR,
-                status="failed",
-                signature=signature,
-            )
-
-        assert exc_info.value.status_code in (400, 422)
-        mock_billing_key_repo.upsert.assert_not_called()
-
-    # TC-002-06: card_last_four 형식 오류 → 400 반환
-    @pytest.mark.asyncio
-    async def test_invalid_card_last_four_returns_400(
-        self, mock_webhook_service, mock_redis
-    ):
-        """card_last_four가 4자리 숫자가 아니면 400을 반환한다."""
-        order_id = VALID_ORDER_ID
-        signature = make_hmac_signature(order_id, VALID_BILLING_KEY)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID}
-        )
-
-        with pytest.raises(HTTPException) as exc_info:
-            await mock_webhook_service.handle_webhook(
-                order_id=order_id,
-                billing_key=VALID_BILLING_KEY,
-                card_last_four="12AB",
-                status="active",
-                signature=signature,
-            )
-
-        assert exc_info.value.status_code == 400
-
-    # TC-002-07: 기존 billing key → 새 값으로 교체 (upsert)
-    @pytest.mark.asyncio
-    async def test_existing_billing_key_is_replaced(
-        self,
-        mock_webhook_service,
-        mock_redis,
-        mock_billing_key_repo,
-    ):
-        """기존 billing key가 있으면 새 값으로 교체(upsert)한다."""
-        order_id = VALID_ORDER_ID
-        new_billing_key = "bk-new-xyz789"
-        signature = make_hmac_signature(order_id, new_billing_key)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID, "user_id": VALID_USER_ID}
-        )
-        mock_billing_key_repo.find_by_car_id.return_value = {
-            "car_id": VALID_CAR_ID,
-            "billing_key": "bk-old-aaa111",
-            "status": "active",
+        return {
+            "order_id": order_id,
+            "customer_key": customer_key,
+            "payment_method_id": payment_method_id,
+            "card_brand": card_brand,
+            "last_four": last_four,
+            "hmac": sig,
         }
 
-        result = await mock_webhook_service.handle_webhook(
-            order_id=order_id,
-            billing_key=new_billing_key,
-            card_last_four=VALID_CARD_LAST_FOUR,
-            status="active",
-            signature=signature,
+    # ── 성공 케이스 ──────────────────────────────────────────────────────────
+
+    def test_정상webhook_status_ok반환(self, client, db_with_order):
+        # Given: 유효한 HMAC, DB 에 order 존재
+        payload = self._webhook_payload()
+
+        # When
+        resp = client.post("/webhook/card", json=payload)
+
+        # Then
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+    def test_정상webhook_payment_methods에_active_빌링키_저장됨(self, client, db_with_order):
+        # Given
+        payload = self._webhook_payload()
+
+        # When
+        client.post("/webhook/card", json=payload)
+
+        # Then: payment_methods 에 is_default=1 인 active 결제수단이 저장되어야 한다
+        import database
+        with database.get_conn() as con:
+            row = con.execute(
+                "SELECT * FROM payment_methods WHERE car_id=? AND status='active'",
+                (VALID_CAR_ID,),
+            ).fetchone()
+        assert row is not None
+        assert row["payment_method_id"] == PAYMENT_METHOD_ID
+        assert row["card_last_four"] == LAST_FOUR
+        assert row["is_default"] == 1
+
+    def test_정상webhook_card_orders_삭제됨(self, client, db_with_order):
+        # Given
+        payload = self._webhook_payload()
+
+        # When
+        client.post("/webhook/card", json=payload)
+
+        # Then: 처리 완료 후 card_orders 에서 해당 order 가 삭제되어야 한다
+        import database
+        with database.get_conn() as con:
+            row = con.execute(
+                "SELECT order_id FROM card_orders WHERE order_id=?", (ORDER_ID,)
+            ).fetchone()
+        assert row is None
+
+    def test_정상webhook_vehicles_카드정보_업데이트됨(self, client, db_with_order):
+        # Given
+        payload = self._webhook_payload()
+
+        # When
+        client.post("/webhook/card", json=payload)
+
+        # Then: vehicles 테이블의 결제수단 관련 컬럼도 업데이트되어야 한다
+        import database
+        with database.get_conn() as con:
+            row = con.execute(
+                "SELECT customer_key, payment_method_id, card_last_four, card_brand"
+                " FROM vehicles WHERE car_id=?",
+                (VALID_CAR_ID,),
+            ).fetchone()
+        assert row["payment_method_id"] == PAYMENT_METHOD_ID
+        assert row["card_last_four"] == LAST_FOUR
+        assert row["card_brand"] == CARD_BRAND
+
+    def test_카드재등록시_기존결제수단_is_default_해제됨(self, client, seeded_db):
+        # Given: 첫 번째 카드 등록 후 두 번째 카드 등록
+        import database
+        first_order_id = "firstorder000000001"
+        first_pm_id    = "pm-first-0001"
+        with database.get_conn() as con:
+            con.execute(
+                "INSERT INTO card_orders (order_id, car_id, created_at) VALUES (?, ?, ?)",
+                (first_order_id, VALID_CAR_ID, datetime.now().isoformat()),
+            )
+        first_hmac = _make_hmac(first_order_id, CUSTOMER_KEY, first_pm_id, CARD_BRAND, "9999")
+        client.post("/webhook/card", json={
+            "order_id": first_order_id, "customer_key": CUSTOMER_KEY,
+            "payment_method_id": first_pm_id, "card_brand": CARD_BRAND,
+            "last_four": "9999", "hmac": first_hmac,
+        })
+
+        with database.get_conn() as con:
+            con.execute(
+                "INSERT INTO card_orders (order_id, car_id, created_at) VALUES (?, ?, ?)",
+                (ORDER_ID, VALID_CAR_ID, datetime.now().isoformat()),
+            )
+
+        # When: 두 번째 카드 webhook
+        client.post("/webhook/card", json=self._webhook_payload())
+
+        # Then: 기존 결제수단은 is_default=0, 신규는 is_default=1
+        with database.get_conn() as con:
+            old = con.execute(
+                "SELECT is_default FROM payment_methods WHERE payment_method_id=?",
+                (first_pm_id,),
+            ).fetchone()
+            new_ = con.execute(
+                "SELECT is_default FROM payment_methods WHERE payment_method_id=?",
+                (PAYMENT_METHOD_ID,),
+            ).fetchone()
+        assert old["is_default"] == 0
+        assert new_["is_default"] == 1
+
+    def test_중복webhook_두번_수신해도_payment_methods_중복저장_안됨(self, client, db_with_order):
+        # Given: 동일 webhook 을 두 번 전송
+        payload = self._webhook_payload()
+
+        # When: 첫 번째는 200, 두 번째는 order 없음(404)
+        client.post("/webhook/card", json=payload)
+        client.post("/webhook/card", json=payload)
+
+        # Then: payment_methods 에 해당 차량의 active 결제수단이 정확히 1건이어야 한다
+        import database
+        with database.get_conn() as con:
+            count = con.execute(
+                "SELECT COUNT(*) as cnt FROM payment_methods WHERE car_id=? AND status='active'",
+                (VALID_CAR_ID,),
+            ).fetchone()
+        assert count["cnt"] == 1
+
+    # ── 실패 케이스 ──────────────────────────────────────────────────────────
+
+    def test_HMAC불일치_403반환(self, client, db_with_order):
+        # Given: HMAC 이 잘못된 값
+        payload = self._webhook_payload(hmac_override="invalid-hmac-value")
+
+        # When
+        resp = client.post("/webhook/card", json=payload)
+
+        # Then
+        assert resp.status_code == 403
+
+    def test_HMAC불일치_payment_methods_저장안됨(self, client, db_with_order):
+        # Given
+        payload = self._webhook_payload(hmac_override="bad-hmac")
+
+        # When
+        client.post("/webhook/card", json=payload)
+
+        # Then: HMAC 검증 실패 시 결제수단이 저장되어선 안 된다
+        import database
+        with database.get_conn() as con:
+            count = con.execute(
+                "SELECT COUNT(*) as cnt FROM payment_methods WHERE car_id=?",
+                (VALID_CAR_ID,),
+            ).fetchone()
+        assert count["cnt"] == 0
+
+    def test_없는order_id_404반환(self, client, seeded_db):
+        # Given: card_orders 에 존재하지 않는 order_id (HMAC 은 해당 order_id 기준으로 올바르게 계산)
+        nonexistent = "nonexistentorder001"
+        payload = self._webhook_payload(
+            order_id=nonexistent,
+            hmac_override=_make_hmac(nonexistent, CUSTOMER_KEY, PAYMENT_METHOD_ID, CARD_BRAND, LAST_FOUR),
         )
 
-        assert result == {"status": "ok"}
-        upsert_kwargs = mock_billing_key_repo.upsert.call_args[1]
-        assert upsert_kwargs["billing_key"] == new_billing_key
+        # When
+        resp = client.post("/webhook/card", json=payload)
 
-    # TC-002-08: webhook 처리 후 Redis order 정리
-    @pytest.mark.asyncio
-    async def test_redis_order_is_cleaned_up_after_webhook(
-        self,
-        mock_webhook_service,
-        mock_redis,
-        mock_billing_key_repo,
-    ):
-        """webhook 처리 후 Redis order를 삭제하거나 complete 상태로 변경한다."""
-        order_id = VALID_ORDER_ID
-        signature = make_hmac_signature(order_id, VALID_BILLING_KEY)
-        mock_redis.get.return_value = json.dumps(
-            {"status": "pending", "car_id": VALID_CAR_ID, "user_id": VALID_USER_ID}
-        )
+        # Then
+        assert resp.status_code == 404
 
-        await mock_webhook_service.handle_webhook(
-            order_id=order_id,
-            billing_key=VALID_BILLING_KEY,
-            card_last_four=VALID_CARD_LAST_FOUR,
-            status="active",
-            signature=signature,
-        )
+    def test_필수필드_order_id_누락_400반환(self, client, db_with_order):
+        # Given: order_id 필드 없음
+        payload = self._webhook_payload()
+        del payload["order_id"]
 
-        deleted = mock_redis.delete.called
-        set_complete = mock_redis.set.called and "complete" in str(mock_redis.set.call_args)
-        assert deleted or set_complete, "Redis order가 삭제되거나 complete로 변경돼야 합니다."
+        # When
+        resp = client.post("/webhook/card", json=payload)
+
+        # Then
+        assert resp.status_code == 400
+
+    def test_필수필드_hmac_누락_400반환(self, client, db_with_order):
+        # Given: hmac 필드 없음
+        payload = self._webhook_payload()
+        del payload["hmac"]
+
+        # When
+        resp = client.post("/webhook/card", json=payload)
+
+        # Then
+        assert resp.status_code == 400
+
+    def test_필수필드_payment_method_id_누락_400반환(self, client, db_with_order):
+        # Given: payment_method_id 필드 없음
+        payload = self._webhook_payload()
+        del payload["payment_method_id"]
+
+        # When
+        resp = client.post("/webhook/card", json=payload)
+
+        # Then
+        assert resp.status_code == 400
