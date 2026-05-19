@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant App as AAOS App
+    participant Backend as Car Pay-in Backend
+    participant Redis as Redis
+    participant Hyundai as Hyundai Data API
+    participant DB as Car Pay-in DB
+
+    Backend->>Hyundai: Request vehicle list
+    Hyundai-->>Backend: Return car_id and car_sellname list
+    Backend->>Redis: Save hyundai_oauth:{session_id}
+    Backend->>Redis: Save app_login_result:{session_id}
+
+    loop Until login is complete
+        App->>Backend: GET /auth/session/{session_id}/status
+        Backend-->>App: Return pending or complete status
+    end
+
+    Backend-->>App: Return temp token and vehicle list
+    App->>App: Select vehicle
+    App->>Backend: POST /auth/confirm-car
+
+    Backend->>Redis: Validate app_login_result:{session_id}
+    Backend->>DB: UPSERT vehicles
+    Backend->>DB: INSERT app_refresh_tokens
+    Backend-->>App: Return final app tokens and vehicle confirmation complete
