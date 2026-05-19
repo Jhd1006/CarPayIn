@@ -1,0 +1,38 @@
+sequenceDiagram
+    participant User as User
+    participant App as AAOS App
+    participant Backend as Car Pay-in Backend
+    participant Redis as Redis
+    participant DB as Car Pay-in DB
+    participant MOLIT as MOLIT API
+    participant PG as Mock PG
+    participant PGDB as Mock PG DB
+    participant Card as Mock Card
+    participant CardDB as Mock Card DB
+
+    User->>App: Start card registration
+    App->>Backend: POST /card/order with plate, bank_name, agree_terms
+
+    Backend->>DB: Read vehicles
+    Backend->>MOLIT: Verify vehicle owner
+    MOLIT-->>Backend: Return matched result
+
+    Backend->>Redis: Save mock_pg_card_register:{order_id}
+    Backend-->>App: Return PG WebView URL
+
+    App->>PG: Open card registration WebView
+    User->>PG: Enter card number, expiry, and CVC
+
+    PG->>Card: Verify card
+    Card->>CardDB: INSERT cards
+    Card->>CardDB: INSERT card_tokens
+    Card-->>PG: Return card_token and last_four
+
+    PG->>PGDB: INSERT billing_keys
+    PG-->>Backend: POST /webhook/card
+
+    Backend->>Redis: Read mock_pg_card_register:{order_id}
+    Backend->>DB: UPSERT vehicle_billing_keys
+    Backend->>Redis: Delete mock_pg_card_register:{order_id}
+    Backend-->>PG: Return webhook ok
+    PG-->>App: Card registration complete
