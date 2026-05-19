@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant App as AAOS App
+    participant Backend as Car Pay-in Backend
+    participant Redis as Redis
+    participant DB as Car Pay-in DB
+    participant PMS as Parking PMS
+    participant PMSDB as PMS DB
+    participant LPR as LPR Camera
+
+    App->>Backend: POST /pre-notify with car_id, lot_id, plate
+    Backend->>DB: Read vehicles
+    Backend->>DB: Check active vehicle_billing_keys
+    Backend->>Redis: Save parking_pre_notify:{lot_id}:{plate}
+
+    Backend->>PMS: Register plate
+    PMS->>PMSDB: Save pre-registered plate
+    PMS-->>Backend: Return ok
+    Backend-->>App: Return pre-notify ok
+
+    LPR->>PMS: Detect plate at entry gate
+    PMS->>PMSDB: INSERT parking_sessions
+    PMS-->>Backend: POST /webhook/entry
+
+    Backend->>Redis: Read parking_pre_notify:{lot_id}:{plate}
+    Backend->>DB: INSERT parking_sessions
+    Backend->>Redis: Delete parking_pre_notify:{lot_id}:{plate}
+    Backend-->>App: Notify entry and save parked=true

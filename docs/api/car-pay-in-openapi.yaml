@@ -1,0 +1,1090 @@
+openapi: 3.0.3
+info:
+  title: Car Pay-in API
+  version: 1.0.0
+  description: |
+    Car Pay-in 서비스의 전체 API 명세입니다.
+    - **Car Pay-in Backend API**: AAOS 앱과 통신하는 주요 API
+    - **PMS 연동 API**: 주차 관제 시스템(PMS)과의 연동 API
+    - **Mock PG 연동 API**: 결제 게이트웨이(PG)와의 연동 API
+
+servers:
+  - url: https://api.carpayin.example.com
+    description: Car Pay-in Backend
+  - url: https://pms.example.com
+    description: PMS (Parking Management System)
+  - url: https://pg.example.com
+    description: Mock PG (Payment Gateway)
+
+tags:
+  - name: Health
+    description: 서비스 상태 확인
+  - name: Auth
+    description: QR 로그인 및 인증
+  - name: Card
+    description: 카드 등록
+  - name: Parking
+    description: 입차 알림 및 주차 세션
+  - name: Payment
+    description: 결제 처리
+  - name: PMS
+    description: PMS 연동 API (Car Pay-in → PMS 호출)
+  - name: MockPG
+    description: Mock PG 연동 API (Car Pay-in → PG 호출)
+
+# ─────────────────────────────────────────────
+# Security Schemes
+# ─────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: App Access Token (JWT)
+
+  # ─────────────────────────────────────────────
+  # Reusable Schemas
+  # ─────────────────────────────────────────────
+  schemas:
+
+    # ── 공통 ──────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: INVALID_TOKEN
+        message:
+          type: string
+          example: 유효하지 않은 토큰입니다.
+
+    # ── Auth ──────────────────────────────────
+    QrSessionCreateRequest:
+      type: object
+      required: [login_session_id, vin_hash]
+      properties:
+        login_session_id:
+          type: string
+          description: 앱이 생성한 로그인 세션 ID
+          example: "sess_abc123"
+        vin_hash:
+          type: string
+          description: "SHA-256(VIN + loginSessionId)"
+          example: "a3f1c2..."
+
+    QrSessionCreateResponse:
+      type: object
+      properties:
+        login_url:
+          type: string
+          description: QR 코드로 표시할 로그인 URL
+          example: "https://api.carpayin.example.com/auth/hyundai/start?session_id=sess_abc123"
+
+    SessionStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, complete]
+          example: pending
+        user_id:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        cars:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/CarInfo'
+        temp_access_token:
+          type: string
+          nullable: true
+          description: 차량 확정용 임시 access token
+
+    CarInfo:
+      type: object
+      properties:
+        car_id:
+          type: string
+          example: "car_001"
+        car_sellname:
+          type: string
+          example: "아이오닉 6"
+        plate:
+          type: string
+          example: "12가 3456"
+
+    ConfirmCarRequest:
+      type: object
+      required: [car_id, vin_hash]
+      properties:
+        car_id:
+          type: string
+          description: 사용자가 선택한 차량 ID
+          example: "car_001"
+        vin_hash:
+          type: string
+          description: "SHA-256(VIN + loginSessionId)"
+          example: "a3f1c2..."
+
+    ConfirmCarResponse:
+      type: object
+      properties:
+        app_access_token:
+          type: string
+        app_refresh_token:
+          type: string
+        user_id:
+          type: string
+        name:
+          type: string
+        car_id:
+          type: string
+        car:
+          $ref: '#/components/schemas/CarInfo'
+
+    # ── Card ──────────────────────────────────
+    CardOrderRequest:
+      type: object
+      required: [plate, bank_name, agree_terms]
+      properties:
+        plate:
+          type: string
+          description: 사용자가 입력하거나 확인한 차량번호
+          example: "12가 3456"
+        bank_name:
+          type: string
+          description: 카드 등록에 사용할 카드사 또는 은행명
+          example: "신한"
+        agree_terms:
+          type: boolean
+          description: 개인정보 및 카드 등록 약관 동의 여부
+          example: true
+
+    CardOrderResponse:
+      type: object
+      properties:
+        order_id:
+          type: string
+          example: "order_xyz789"
+        pg_url:
+          type: string
+          description: PG 카드 등록 웹뷰 URL
+          example: "https://pg.example.com/card-register?order_id=order_xyz789"
+
+    CardWebhookRequest:
+      type: object
+      required: [order_id, billing_key, card_last_four, status, signature]
+      properties:
+        order_id:
+          type: string
+          example: "order_xyz789"
+        billing_key:
+          type: string
+          example: "bk_aaa111"
+        card_last_four:
+          type: string
+          example: "1234"
+        status:
+          type: string
+          enum: [active]
+          example: active
+        signature:
+          type: string
+          description: PG webhook HMAC signature
+          example: "9b1f..."
+
+    # ── Parking ───────────────────────────────
+    PreNotifyRequest:
+      type: object
+      required: [car_id, lot_id, plate]
+      properties:
+        car_id:
+          type: string
+          description: 앱 토큰에 연결된 차량 ID
+          example: "car_001"
+        lot_id:
+          type: string
+          description: 주차장 ID
+          example: "lot_001"
+        plate:
+          type: string
+          description: 등록된 차량번호
+          example: "12가 3456"
+
+    PreNotifyResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [registered]
+          example: registered
+        car_id:
+          type: string
+        lot_id:
+          type: string
+        plate:
+          type: string
+
+    EntryWebhookRequest:
+      type: object
+      required: [pms_session_id, lot_id, plate, entry_time]
+      properties:
+        pms_session_id:
+          type: string
+          example: "pms_sess_001"
+        lot_id:
+          type: string
+          example: "lot_001"
+        plate:
+          type: string
+          example: "12가 3456"
+        entry_time:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    EntryWebhookResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [confirmed, not_registered]
+          example: confirmed
+        session_id:
+          type: string
+          nullable: true
+        car_id:
+          type: string
+          nullable: true
+        lot_id:
+          type: string
+        entry_time:
+          type: string
+          format: date-time
+          nullable: true
+
+    ParkingFeeResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        lot_id:
+          type: string
+        amount:
+          type: integer
+          example: 6000
+        currency:
+          type: string
+          example: KRW
+        entry_time:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active]
+
+    # ── Payment ───────────────────────────────
+    PaymentRequest:
+      type: object
+      required: [session_id, amount, currency]
+      properties:
+        session_id:
+          type: string
+          example: "sess_park_001"
+        amount:
+          type: integer
+          example: 6000
+        currency:
+          type: string
+          example: KRW
+
+    PaymentSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+        tx_id:
+          type: string
+        session_id:
+          type: string
+        approval_no:
+          type: string
+        amount:
+          type: integer
+          example: 6000
+        currency:
+          type: string
+          example: KRW
+
+    PaymentFailedResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [failed]
+        tx_id:
+          type: string
+        session_id:
+          type: string
+        failed_reason:
+          type: string
+
+    # ── PMS ───────────────────────────────────
+    PmsPreRegisterRequest:
+      type: object
+      required: [lot_id, plate]
+      properties:
+        lot_id:
+          type: string
+          example: "lot_001"
+        plate:
+          type: string
+          example: "12가 3456"
+
+    PmsFeeResponse:
+      type: object
+      properties:
+        pms_session_id:
+          type: string
+        lot_id:
+          type: string
+        plate:
+          type: string
+        amount:
+          type: integer
+          example: 6000
+        currency:
+          type: string
+          example: KRW
+        entry_time:
+          type: string
+          format: date-time
+        calculated_at:
+          type: string
+          format: date-time
+
+    PmsPaymentCompleteRequest:
+      type: object
+      required: [pms_session_id, carpay_parking_session_id, carpay_tx_id, amount, currency, approval_no, idempotency_key]
+      properties:
+        pms_session_id:
+          type: string
+        carpay_parking_session_id:
+          type: string
+        carpay_tx_id:
+          type: string
+        amount:
+          type: integer
+          example: 6000
+        currency:
+          type: string
+          example: KRW
+        approval_no:
+          type: string
+        idempotency_key:
+          type: string
+          description: "SHA-256(session_id + car_id + amount + currency)"
+
+    PmsPaymentCompleteResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+        pms_session_id:
+          type: string
+        carpay_tx_id:
+          type: string
+
+    # ── Mock PG ───────────────────────────────
+    PgBillingPaymentRequest:
+      type: object
+      required: [billing_key, amount, currency, idempotency_key]
+      properties:
+        billing_key:
+          type: string
+          example: "bk_aaa111"
+        amount:
+          type: integer
+          example: 6000
+        currency:
+          type: string
+          example: KRW
+        idempotency_key:
+          type: string
+          description: "SHA-256(session_id + car_id + amount + currency)"
+
+    PgBillingPaymentSuccessResponse:
+      type: object
+      properties:
+        pg_tx_id:
+          type: string
+        approval_no:
+          type: string
+        status:
+          type: string
+          enum: [success]
+
+    PgBillingPaymentFailedResponse:
+      type: object
+      properties:
+        pg_tx_id:
+          type: string
+        status:
+          type: string
+          enum: [failed]
+        failed_reason:
+          type: string
+
+# ─────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────
+paths:
+
+  # ══════════════════════════════════════════
+  # Health
+  # ══════════════════════════════════════════
+  /health:
+    get:
+      tags: [Health]
+      summary: 서비스 헬스 체크
+      description: ALB health check용 엔드포인트. 서비스가 정상이면 200을 반환합니다.
+      responses:
+        '200':
+          description: 서비스 정상
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # ══════════════════════════════════════════
+  # Auth
+  # ══════════════════════════════════════════
+  /auth/qr-session:
+    post:
+      tags: [Auth]
+      summary: QR 로그인 세션 생성
+      description: |
+        AAOS 앱이 loginSessionId와 vin_hash를 전달하면 Backend가 Redis에 QR 세션을 생성하고
+        QR 코드로 표시할 로그인 URL을 반환합니다.
+        
+        **Redis 저장 (TTL: 15분)**
+        ```
+        key: qr_session:{loginSessionId}
+        value: { vin_hash, status: "pending", created_at, expires_at }
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QrSessionCreateRequest'
+      responses:
+        '200':
+          description: QR 세션 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrSessionCreateResponse'
+        '400':
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/hyundai/start:
+    get:
+      tags: [Auth]
+      summary: 현대 OAuth 로그인 시작 (QR 스캔 진입점)
+      description: |
+        사용자가 QR 코드를 스캔하면 휴대폰 브라우저가 이 URL로 접속합니다.
+        Backend는 session_id로 Redis의 QR 세션을 확인 후 현대 OAuth 로그인 화면으로 redirect합니다.
+        이때 내부 session_id를 그대로 넘기지 않고, 별도의 oauth_state를 생성해 현대 OAuth state로 전달합니다.
+        Backend는 Redis에 oauth_state:{oauth_state} → session_id 매핑을 저장합니다.
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: QR 세션 ID (loginSessionId)
+          example: sess_abc123
+      responses:
+        '302':
+          description: 현대 OAuth 로그인 화면으로 redirect
+        '400':
+          description: 유효하지 않거나 만료된 QR 세션
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/redirect:
+    get:
+      tags: [Auth]
+      summary: 현대 OAuth 콜백
+      description: |
+        현대 로그인 완료 후 현대가 이 URL로 authorization code와 state(=oauth_state)를 전달합니다.
+        
+        Backend 처리 흐름:
+        1. state(oauth_state)로 Redis oauth_state:{oauth_state}를 조회해 원래 session_id 확인
+        2. 현대 token API로 access/refresh token 발급
+        3. 현대 사용자 정보 API 호출 (user_id, name)
+        4. 현대 내 차량 리스트 조회 API 호출
+        5. RDS users, hyundai_tokens 저장
+        6. Redis app_login_result:{session_id} 에 차량 목록과 임시 토큰 저장 (TTL: 별도 관리)
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 현대 OAuth authorization code
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Backend가 생성한 OAuth state 값
+      responses:
+        '200':
+          description: 콜백 처리 완료 (앱 polling 대기 상태로 전환)
+        '400':
+          description: 유효하지 않은 세션 또는 code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/session/{session_id}/status:
+    get:
+      tags: [Auth]
+      summary: 로그인 세션 상태 polling
+      description: |
+        AAOS 앱이 QR 표시 후 로그인 완료 여부를 주기적으로 확인합니다.
+        
+        - **pending**: 현대 로그인 미완료
+        - **complete**: 현대 로그인 및 차량 조회 완료. 차량 목록과 임시 토큰 반환.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: QR 세션 ID
+      responses:
+        '200':
+          description: 세션 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatusResponse'
+        '404':
+          description: 세션 없음 또는 만료
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/confirm-car:
+    post:
+      tags: [Auth]
+      summary: 차량 연결 확정
+      description: |
+        사용자가 차량을 선택하면 앱이 이 API를 호출해 결제 주체 차량을 확정합니다.
+        
+        Backend 검증:
+        1. 임시 app access token 검증
+        2. car_id가 현대 API 차량 목록에 포함되는지 확인
+        3. QR 세션의 vin_hash와 요청의 vin_hash 일치 여부 확인
+        
+        검증 완료 시:
+        - RDS vehicles에 차량 저장
+        - 최종 app access/refresh token 발급
+        - RDS app_refresh_tokens에 refresh token hash 저장
+        
+        **Redis 임시 결과**
+        ```
+        key: app_login_result:{session_id}
+        value: { status: "complete", temp_access_token, user_id, name, cars }
+        ```
+        confirm-car 완료 후에는 Redis 임시 결과를 사용 완료 처리하거나 TTL 만료에 맡깁니다.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmCarRequest'
+      responses:
+        '200':
+          description: 차량 확정 및 최종 토큰 발급 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmCarResponse'
+        '400':
+          description: vin_hash 불일치 또는 유효하지 않은 car_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 임시 토큰 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ══════════════════════════════════════════
+  # Card
+  # ══════════════════════════════════════════
+  /card/order:
+    post:
+      tags: [Card]
+      summary: 카드 등록 요청
+      description: |
+        차량 연결 완료 후 카드 등록을 시작합니다.
+        
+        Backend 처리:
+        1. app access token 검증 (user_id, car_id 확인)
+        2. RDS users, vehicles 유효성 확인
+        3. plate, bank_name, agree_terms 검증
+        4. 차량번호 정규화 및 차량 소유자 검증
+        5. order_id 생성
+        6. Redis에 카드 등록 세션 저장 (TTL: 30분)
+           ```
+           key: mock_pg_card_register:{order_id}
+           value: { order_id, user_id, car_id, status: "pending", created_at, expires_at }
+           ```
+        7. Mock PG에 카드 등록 웹뷰 생성 요청
+        8. PG 카드 등록 URL 반환
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardOrderRequest'
+      responses:
+        '200':
+          description: 카드 등록 요청 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrderResponse'
+        '400':
+          description: 약관 미동의 또는 차량번호 형식 오류
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 사용자 또는 차량 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: MOLIT 차량 소유자 검증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /card/webhook:
+    post:
+      tags: [Card]
+      summary: 카드 등록 완료 webhook (Mock PG → Backend)
+      description: |
+        Mock PG가 카드 등록 완료 후 이 endpoint를 호출합니다.
+        카드 원문 정보는 Car Pay-in Backend에 전달되지 않으며, billing_key만 수신합니다.
+        
+        Backend 처리:
+        1. Redis에서 order_id로 카드 등록 세션 조회 및 status=pending 확인
+        2. RDS vehicles에서 car_id 유효성 재확인
+        3. RDS vehicle_billing_keys upsert
+           - 최초 등록: INSERT (car_id, billing_key, card_last_four, status=active)
+           - 카드 변경: UPDATE (billing_key, card_last_four, status=active, updated_at)
+        4. Redis 카드 등록 세션 완료 처리 또는 삭제
+        
+        **멱등성**: order_id UNIQUE(Mock PG) + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardWebhookRequest'
+      responses:
+        '200':
+          description: 카드 등록 처리 완료
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        '400':
+          description: 유효하지 않은 세션 또는 검증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ══════════════════════════════════════════
+  # Parking
+  # ══════════════════════════════════════════
+  /pre-notify:
+    post:
+      tags: [Parking]
+      summary: 사전 입차 알림
+      description: |
+        차량이 제휴 주차장에 가까워지거나 목적지로 설정 시 앱이 car_id, lot_id, plate를 전달합니다.
+        
+        Backend 검증:
+        1. app access token 검증
+        2. 요청 car_id가 토큰의 car_id와 일치하는지 확인
+        3. RDS users, vehicles 유효성 확인
+        4. 요청 plate가 등록된 vehicles.plate와 일치하는지 확인
+        5. vehicle_billing_keys에 active 빌링키 존재 여부 확인 (없으면 거부)
+        
+        검증 완료 시:
+        - Redis에 사전 입차 등록 저장 (TTL: 1시간)
+          ```
+          key: parking_pre_notify:{lot_id}:{plate}
+          value: { user_id, car_id, lot_id, plate, status: "incoming", created_at, expires_at }
+          ```
+        - PMS에 차량번호 사전 등록 요청
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreNotifyRequest'
+      responses:
+        '200':
+          description: 사전 입차 알림 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreNotifyResponse'
+        '400':
+          description: active 빌링키 없음, car_id 불일치, 차량번호 미등록 또는 불일치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhook/entry:
+    post:
+      tags: [Parking]
+      summary: 입차 이벤트 webhook (PMS → Backend)
+      description: |
+        PMS LPR 카메라가 차량번호 인식 후 입차 이벤트를 이 endpoint로 전송합니다.
+        
+        Backend 처리:
+        1. PMS 신뢰 요청 여부 확인
+        2. Redis에서 parking_pre_notify:{lot_id}:{plate} 조회
+           - 없으면: Car Pay-in 비등록 차량으로 판단, 세션 미생성
+        3. Redis의 user_id, car_id를 기준으로 처리
+        4. RDS parking_sessions에서 car_id의 active 세션 중복 확인
+        5. Car Pay-in DB parking_sessions에 주차 세션 생성 (status=active)
+        6. Redis 사전 입차 등록 상태 완료 처리
+        7. MQTT/AWS IoT로 앱에 입차 확정 알림 발행
+           ```
+           topic: parking/confirmed/{car_id}
+           payload: { session_id, car_id, lot_id, plate, entry_time, status: "active" }
+           ```
+        
+        **멱등성**: car_id당 active 세션 1개 제약(uniq_active_session_per_car)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryWebhookRequest'
+      responses:
+        '200':
+          description: 입차 처리 완료. pre-notify가 없으면 status=not_registered로 반환하고 세션은 생성하지 않음.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryWebhookResponse'
+        '400':
+          description: 유효하지 않은 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /fee/{session_id}:
+    get:
+      tags: [Parking]
+      summary: 현재 주차 요금 조회
+      description: |
+        앱이 입차 확정 알림의 session_id로 현재까지 누적된 주차 요금을 조회합니다.
+        
+        Backend 처리:
+        1. app access token 검증 → car_id 확인
+        2. Redis parking_fee_quote:{session_id} 조회
+        3. quote가 있으면 그대로 반환
+        4. quote가 없으면 RDS parking_sessions에서 session_id 조회
+        5. 세션의 car_id와 토큰의 car_id 일치 확인
+        6. 세션 status=active 확인
+        7. PMS에 요금 조회 요청 (lot_id, plate 기준)
+        8. PMS 결과를 Redis parking_fee_quote:{session_id}에 TTL 5분으로 저장
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 주차 세션 ID
+      responses:
+        '200':
+          description: 요금 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingFeeResponse'
+        '403':
+          description: 세션 소유자 불일치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 세션 없음 또는 active 상태 아님
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ══════════════════════════════════════════
+  # Payment
+  # ══════════════════════════════════════════
+  /payment:
+    post:
+      tags: [Payment]
+      summary: 결제 요청
+      description: |
+        사용자가 정산 금액을 확인 후 결제를 승인하면 앱이 호출합니다.
+        
+        Backend 처리:
+        1. app access token 검증 → car_id 확인
+        2. RDS parking_sessions에서 session_id 조회 및 car_id·status=active 확인
+        3. vehicle_billing_keys에서 active 빌링키 조회 (없으면 결제 거부)
+        4. Redis parking_fee_quote:{session_id} 조회
+        5. 앱의 amount·currency와 직전 quote 일치 확인 (없거나 불일치 시 최신 요금 재조회 안내)
+        6. idempotency_key 생성: SHA-256(session_id + car_id + amount + currency)
+        7. RDS transactions 중복 확인
+           - success 이력 있음: 기존 결과 반환
+           - pending 이력 있음: 기존 처리 상태 반환
+           - 없음: transactions에 pending 상태로 생성
+        8. Mock PG에 빌링키 결제 요청
+        9. 결제 성공 시:
+           - transactions: status=success, pg_tx_id, approval_no 업데이트
+           - parking_sessions: status=completed, exit_time=now() 업데이트
+           - PMS에 결제 완료 통보
+           - MQTT/AWS IoT로 결제 완료 알림 발행
+             ```
+             topic: payment/complete/{car_id}
+             payload: { tx_id, session_id, lot_id, amount, currency, approval_no, status: "success" }
+             ```
+        10. 결제 실패 시:
+           - transactions: status=failed 업데이트
+           - parking_sessions: active 상태 유지
+           - PMS에 완료 통보 없음
+        
+        **transactions.billing_key**: 결제 당시 차량에 연결된 billing_key 스냅샷 저장
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: 결제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSuccessResponse'
+        '402':
+          description: 결제 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentFailedResponse'
+        '409':
+          description: 금액 불일치 - 최신 요금 재조회 필요
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: active 빌링키 없음 또는 유효하지 않은 세션
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ══════════════════════════════════════════
+  # PMS 연동 API (Car Pay-in Backend → PMS)
+  # ══════════════════════════════════════════
+  /pms/parking/pre-register:
+    post:
+      tags: [PMS]
+      summary: 차량번호 사전 등록 (→ PMS)
+      description: |
+        Car Pay-in Backend가 PMS에 입차 예정 차량을 사전 등록합니다.
+        PMS는 해당 차량번호와 주차장 ID를 입차 감지 대상으로 등록합니다.
+        
+        실제 요청 URL: `POST {PMS_URL}/parking/pre-register`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PmsPreRegisterRequest'
+      responses:
+        '200':
+          description: 사전 등록 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /pms/parking/fee:
+    get:
+      tags: [PMS]
+      summary: 주차 요금 조회 (→ PMS)
+      description: |
+        Car Pay-in Backend가 PMS에 현재 주차 요금을 조회합니다.
+        PMS는 plate, lot_id로 active 세션을 찾아 입차 시각부터 현재까지의 요금을 계산합니다.
+        
+        실제 요청 URL: `GET {PMS_URL}/parking/fee`
+      parameters:
+        - name: lot_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: plate
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 요금 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PmsFeeResponse'
+
+  /pms/payment/complete:
+    post:
+      tags: [PMS]
+      summary: 결제 완료 통보 (→ PMS)
+      description: |
+        Car Pay-in Backend가 PMS에 결제 완료를 통보합니다.
+        PMS는 해당 결과를 payment_requests에 저장하고, 출구 차단기 개방 기준으로 사용합니다.
+        
+        실제 요청 URL: `POST {PMS_URL}/payment/complete`
+        
+        **멱등성**: payment_requests.idempotency_key UNIQUE 제약으로 중복 저장 방지
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PmsPaymentCompleteRequest'
+      responses:
+        '200':
+          description: 결제 완료 처리 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PmsPaymentCompleteResponse'
+
+  # ══════════════════════════════════════════
+  # Mock PG 연동 API (Car Pay-in Backend → Mock PG)
+  # ══════════════════════════════════════════
+  /pg/payments/billing:
+    post:
+      tags: [MockPG]
+      summary: 빌링키 결제 요청 (→ Mock PG)
+      description: |
+        Car Pay-in Backend가 Mock PG에 빌링키 기반 결제를 요청합니다.
+        
+        실제 요청 URL: `POST {PG_URL}/payments/billing`
+        
+        Mock PG 처리:
+        1. idempotency_key 중복 확인 (기존 거래 있으면 재사용)
+        2. billing_key 유효성 확인 (없거나 status != active이면 실패)
+        3. card_token으로 Mock Card 서버에 카드 승인 요청
+        4. 승인 결과에 따라 pg_tx_id, approval_no 또는 failed_reason 반환
+        
+        **멱등성**: Mock PG DB transactions.idempotency_key UNIQUE 제약
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PgBillingPaymentRequest'
+      responses:
+        '200':
+          description: 결제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PgBillingPaymentSuccessResponse'
+        '400':
+          description: 결제 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PgBillingPaymentFailedResponse'
