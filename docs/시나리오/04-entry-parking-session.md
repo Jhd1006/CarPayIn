@@ -1,6 +1,6 @@
 # 04. 입차 사전알림 / 주차 세션 생성
 
-관련 다이어그램: `docs/diagrams/lucid-04-entry-parking-session.mmd`
+관련 다이어그램: `docs/diagrams/04-entry-parking-session.mmd`
 
 ## 이 단계의 목적
 

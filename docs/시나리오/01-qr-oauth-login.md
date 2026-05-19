@@ -1,6 +1,6 @@
 # 01. QR 로그인 / 현대 OAuth
 
-관련 다이어그램: `docs/diagrams/lucid-01-qr-oauth-login.mmd`
+관련 다이어그램: `docs/diagrams/01-qr-oauth-login.mmd`
 
 ## 이 단계의 목적
 
