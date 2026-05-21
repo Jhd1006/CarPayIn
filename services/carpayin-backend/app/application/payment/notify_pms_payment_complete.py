@@ -41,8 +41,8 @@ class NotifyPmsPaymentCompleteService:
         try:
             response = self.pms_client.notify_payment_complete(
                 pms_session_id=command.pms_session_id,
-                carpay_session_id=command.carpay_parking_session_id,
-                tx_id=command.carpay_tx_id,
+                carpay_parking_session_id=command.carpay_parking_session_id,
+                carpay_tx_id=command.carpay_tx_id,
                 amount=command.amount,
                 currency=command.currency,
                 approval_no=command.approval_no,
