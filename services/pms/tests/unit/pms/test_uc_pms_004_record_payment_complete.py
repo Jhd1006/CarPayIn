@@ -93,8 +93,8 @@ class TestRecordPaymentComplete:
         )
         assert saved is not None
         assert saved["pms_session_id"] == VALID_PMS_SESSION_ID
-        assert saved["carpay_session_id"] == VALID_CARPAY_SESSION_ID
-        assert saved["tx_id"] == VALID_TX_ID
+        assert saved["carpay_session_id"] == VALID_CARPAY_PARKING_SESSION_ID
+        assert saved["tx_id"] == VALID_CARPAY_TX_ID
         assert saved["amount"] == VALID_AMOUNT
         assert saved["currency"] == VALID_CURRENCY
         assert saved["approval_no"] == VALID_APPROVAL_NO
@@ -111,8 +111,8 @@ class TestRecordPaymentComplete:
         """같은 idempotency_key 재요청은 기존 결과를 반환한다."""
         command = RecordPaymentCompleteCommand(
             pms_session_id=VALID_PMS_SESSION_ID,
-            carpay_session_id=VALID_CARPAY_SESSION_ID,
-            tx_id=VALID_TX_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
             amount=VALID_AMOUNT,
             currency=VALID_CURRENCY,
             approval_no=VALID_APPROVAL_NO,
