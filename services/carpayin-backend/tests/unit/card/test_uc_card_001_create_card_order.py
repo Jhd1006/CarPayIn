@@ -33,7 +33,7 @@ OTHER_CAR_ID = "car-999"
 
 class FakeVehicleRepository:
     def __init__(self, existing_car_ids: list[str] | None = None):
-        self._existing_car_ids: set[str] = set(existing_car_ids or [VALID_CAR_ID])
+        self._existing_car_ids: set[str] = set(existing_car_ids if existing_car_ids is not None else [VALID_CAR_ID])
         self.updated_plates: dict[str, str] = {}
 
     def exists(self, *, user_id: str, car_id: str) -> bool:
