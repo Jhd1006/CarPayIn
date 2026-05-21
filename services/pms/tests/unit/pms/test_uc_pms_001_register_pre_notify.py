@@ -47,7 +47,7 @@ def register_pre_notify_service(fake_pre_registration_repository):
 
 
 class TestRegisterPreNotify:
-    """UC-PMS-001 - POST /parking/pre-register"""
+    """UC-PMS-001 - POST /pms/parking/pre-register"""
 
     def test_valid_plate_is_pre_registered(
         self,
