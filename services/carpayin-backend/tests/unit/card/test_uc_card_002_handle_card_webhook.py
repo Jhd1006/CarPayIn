@@ -48,6 +48,9 @@ class FakeCardOrderStore:
             return entry
         return None
 
+    def get_order(self, *, order_id: str) -> dict | None:
+        return self._pending.get(order_id)
+
     def mark_complete(self, *, order_id: str) -> None:
         if order_id in self._pending:
             self._pending[order_id]["status"] = "complete"
@@ -75,7 +78,7 @@ class FakeBillingKeyRepository:
 
 class FakeVehicleRepository:
     def __init__(self, *, existing_car_ids: list[str] | None = None):
-        self._existing_car_ids: set[str] = set(existing_car_ids or [VALID_CAR_ID])
+        self._existing_car_ids: set[str] = set(existing_car_ids if existing_car_ids is not None else [VALID_CAR_ID])
 
     def exists_by_car_id(self, *, car_id: str) -> bool:
         return car_id in self._existing_car_ids
