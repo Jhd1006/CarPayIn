@@ -34,6 +34,10 @@ class CardOrderStore(Protocol):
     def get_pending(self, *, order_id: str) -> dict | None:
         ...
 
+    def get_order(self, *, order_id: str) -> dict | None:
+        """상태에 관계없이 order를 조회한다 (멱등성 확인용)."""
+        ...
+
     def mark_complete(self, *, order_id: str) -> None:
         ...
 
@@ -108,6 +112,10 @@ class HandleCardWebhookService:
         # 4. Redis에서 pending order 조회
         order = self._card_order_store.get_pending(order_id=command.order_id)
         if order is None:
+            # 이미 처리된 order면 멱등성 보장으로 ok 반환
+            existing = self._card_order_store.get_order(order_id=command.order_id)
+            if existing is not None:
+                return HandleCardWebhookResult(status="ok")
             raise ValueError(f"order를 찾을 수 없거나 만료되었습니다. order_id={command.order_id}")
 
         # 5. 차량 존재 여부 재확인
