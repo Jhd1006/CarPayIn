@@ -1,168 +1,206 @@
-﻿# ?뚯뒪??肄붾뱶 ?묒꽦 而⑤깽??
-## 0. ?뚯씪紐?
-?뚯뒪???뚯씪紐낆뿉???좎뒪耳?댁뒪 踰덊샇瑜??ы븿?쒕떎. ?뚯씪紐낅쭔 蹂닿퀬 ?대뼡 ?좎뒪耳?댁뒪 ?뚯뒪?몄씤吏 ?????덉뼱???쒕떎.
+ 
 
-- ?뚯뒪???뚯씪紐? UC 踰덊샇 ?ы븿
-- 援ы쁽 ?뚯씪紐? 湲곕뒫紐?以묒떖
-- 臾몄꽌, ?뚯뒪??class, docstring: UC 踰덊샇 紐낆떆
+테스트 코드 작성 컨벤션
+0. 파일명
+테스트 파일명: UC 번호 포함
+구현 파일명: 기능명 중심
+문서/테스트 class/docstring: UC 번호 명시
 
-?뺤떇:
+ 
 
-```text
-test_uc_{domain}_{number}_{use_case_name}.py
-```
+테스트 파일명에는 유스케이스 번호를 포함한다. 파일명만 보고 어떤 유스케이스 테스트인지 알 수 있어야 한다.
 
-??
+형식:
 
-```text
+test_uc_{domain}{number}{use_case_name}.py
+
+예:
+
+
+
 test_uc_auth_001_create_qr_session.py
 test_uc_auth_005_confirm_vehicle.py
 test_uc_auth_006_refresh_access_token.py
 test_uc_park_001_register_pre_notify.py
 test_uc_pay_001_get_parking_fee.py
-```
+ 
 
-援ы쁽 ?뚯씪紐낆? UC 踰덊샇蹂대떎 湲곕뒫紐낆쓣 ?곗꽑?쒕떎. 援ы쁽 肄붾뱶???ㅻⅨ 肄붾뱶?먯꽌 import?섎?濡? ?좎뒪耳?댁뒪 踰덊샇瑜??뚯씪紐낆뿉 ?ｊ린蹂대떎 紐낇솗??湲곕뒫紐낆쑝濡??묒꽦?쒕떎.
+구현 파일명은 UC 번호보다 기능명을 우선한다. 구현 코드는 다른 코드에서 import되므로, 유스케이스 번호를 파일명에 넣기보다 명확한 기능명으로 작성한다.
 
-??
+예:
 
-```text
+
+
 create_qr_session.py
 confirm_vehicle.py
 refresh_access_token.py
 register_pre_notify.py
 get_parking_fee.py
-```
+ 
 
-## 1. ?뚯뒪?몃뒗 ?덉씠?대퀎濡?遺꾨━?쒕떎
+1. 테스트는 레이어별로 분리한다
+테스트 코드는 목적에 따라 아래처럼 나누어 작성한다.
 
-?뚯뒪??肄붾뱶??紐⑹쟻???곕씪 ?꾨옒泥섎읆 ?섎늻???묒꽦?쒕떎.
+테스트 종류
 
-| ?뚯뒪??醫낅쪟 | 寃利????| ?묒꽦 ?꾩튂 | 二쇱슂 ?댁슜 |
-| --- | --- | --- | --- |
-| Unit Test | 鍮꾩쫰?덉뒪 濡쒖쭅 | `tests/unit/` | use case service??洹쒖튃 寃利?|
-| API Test | HTTP API 怨꾩빟 | `tests/integration/api/` | endpoint, request, response, status code 寃利?|
-| Integration Test | ?ㅼ젣 ?명봽???곕룞 | `tests/integration/` | DB, Redis, ?몃? client ?곕룞 寃利?|
-| E2E Test | ?꾩껜 ?ъ슜???먮쫫 | `tests/e2e/` | ?듭떖 ?깃났 ?쒕굹由ъ삤 寃利?|
+검증 대상
 
-?섎굹???뚯뒪???뚯씪?먯꽌 ??梨낆엫?ㅼ쓣 ?욎? ?딅뒗??
+작성 위치
 
-## 2. Unit Test 湲곗?
+주요 내용
 
-Unit test??`test_create_qr_session.py`???뺤떇??湲곗??쇰줈 ?묒꽦?쒕떎.
+Unit Test 
 
-Unit test?먯꽌??FastAPI `TestClient`, ?ㅼ젣 DB, ?ㅼ젣 Redis, ?ㅼ젣 ?몃? API瑜??ъ슜?섏? ?딅뒗?? ???`app.application` 怨꾩링??use case service瑜?吏곸젒 ?ㅽ뻾?쒕떎.
+비즈니스 로직 
 
-湲곕낯 ?먮쫫? ?꾨옒? 媛숇떎.
+tests/unit/ 
 
-```text
-Command ?앹꽦
--> Service.execute(command) ?몄텧
--> Result ?먮뒗 Fake 媛앹껜 ?곹깭 寃利?```
+use case service의 규칙 검증 
 
-?덉떆:
+API Test 
 
-```python
+HTTP API 계약 
+
+tests/integration/api/ 
+
+endpoint, request, response, status code 검증 
+
+Integration Test 
+
+실제 인프라 연동 
+
+tests/integration/ 
+
+DB, Redis, 외부 client 연동 검증 
+
+E2E Test 
+
+전체 사용자 흐름 
+
+tests/e2e/ 
+
+핵심 성공 시나리오 검증 
+
+하나의 테스트 파일에서 위 책임들을 섞지 않는다.
+
+2. Unit Test 기준
+Unit test는 test_create_qr_session.py의 형식을 기준으로 작성한다.
+
+Unit test에서는 FastAPI TestClient, 실제 DB, 실제 Redis, 실제 외부 API를 사용하지 않는다.
+
+대신 app.application 계층의 use case service를 직접 실행한다.
+
+기본 흐름은 아래와 같다.
+
+
+
+Command 생성
+→ Service.execute(command) 호출
+→ Result 또는 Fake 객체 상태 검증
+예시:
+
+
+
 command = CreateQrSessionCommand(
     login_session_id=VALID_SESSION_ID,
     vin_hash=VALID_VIN_HASH,
 )
-
 result = create_qr_session_service.execute(command)
-
 assert result.login_url == expected_url
-```
+3. 테스트 파일 구조
+테스트 파일은 아래 순서로 작성한다.
 
-## 3. ?뚯뒪???뚯씪 援ъ“
 
-?뚯뒪???뚯씪? ?꾨옒 ?쒖꽌濡??묒꽦?쒕떎.
 
-```text
-1. ?뚯씪 docstring
+1. 파일 docstring
 2. import
-3. ?뚯뒪???곸닔
-4. Fake ?대옒??5. pytest fixture
-6. ?뚯뒪???대옒??7. ?뚯뒪???⑥닔
-```
+3. 테스트 상수
+4. Fake 클래스
+5. pytest fixture
+6. 테스트 클래스
+7. 테스트 함수
+예시:
 
-?덉떆:
 
-```python
+
 """
-QR 濡쒓렇??/ ?꾨? OAuth ?좎뒪耳?댁뒪 ?⑥쐞 ?뚯뒪??UC-AUTH-001: QR 濡쒓렇???몄뀡 ?앹꽦
+QR 로그인 / 현대 OAuth 유스케이스 단위 테스트
+UC-AUTH-001: QR 로그인 세션 생성
 """
-
 import pytest
-
 from app.application.auth.create_qr_session import (
     CreateQrSessionCommand,
     CreateQrSessionService,
 )
-
-
 VALID_SESSION_ID = "sess-001"
 VALID_VIN_HASH = "vin-hash-001"
 PUBLIC_BASE_URL = "https://api.carpayin.test"
-```
+4. 유스케이스와 API 경로 명시
+테스트 파일 상단에는 UC 번호와 이름을 적는다.
 
-## 4. ?좎뒪耳?댁뒪? API 寃쎈줈 紐낆떆
+테스트 클래스 docstring에는 관련 API 경로를 적는다.
 
-?뚯뒪???뚯씪 ?곷떒?먮뒗 UC 踰덊샇? ?대쫫???곷뒗?? ?뚯뒪???대옒??docstring?먮뒗 愿??API 寃쎈줈瑜??곷뒗??
 
-```python
+
 class TestCreateQrSession:
     """UC-AUTH-001 - POST /auth/qr-session"""
-```
+API 경로는 반드시 최신 문서를 기준으로 한다.
 
-API 寃쎈줈??諛섎뱶??理쒖떊 臾몄꽌瑜?湲곗??쇰줈 ?쒕떎.
+기준 문서:
 
-湲곗? 臾몄꽌:
 
-```text
+
 docs/use-cases/
 docs/api/car-pay-in-openapi.yaml
-```
+테스트 파일에 남아 있는 오래된 주석이나 docstring은 기준으로 삼지 않는다.
 
-?뚯뒪???뚯씪???⑥븘 ?덈뒗 ?ㅻ옒??二쇱꽍?대굹 docstring? 湲곗??쇰줈 ?쇱? ?딅뒗??
+5. 테스트 데이터 상수 규칙
+테스트 데이터는 파일 상단에 상수로 선언한다.
 
-## 5. ?뚯뒪???곗씠???곸닔 洹쒖튃
 
-?뚯뒪???곗씠?곕뒗 ?뚯씪 ?곷떒???곸닔濡??좎뼵?쒕떎.
 
-```python
 VALID_SESSION_ID = "sess-001"
 VALID_VIN_HASH = "vin-hash-001"
 PUBLIC_BASE_URL = "https://api.carpayin.test"
-```
+상수 이름은 의미가 드러나게 작성한다.
 
-?곸닔 ?대쫫? ?섎?媛 ?쒕윭?섍쾶 ?묒꽦?쒕떎.
+Prefix
 
-| Prefix | ?섎? |
-| --- | --- |
-| `VALID_` | ?뺤긽 ?낅젰媛?|
-| `INVALID_` | ?섎せ???낅젰媛?|
-| `EXPIRED_` | 留뚮즺??媛?|
-| `OTHER_` | ?ㅻⅨ ?ъ슜?? 李⑤웾, ?몄뀡 ??鍮꾧탳??媛?|
+의미
 
-?뚯뒪??蹂몃Ц ?덉뿉??媛숈? 臾몄옄?댁씠???レ옄瑜?諛섎났?댁꽌 吏곸젒 ?곗? ?딅뒗??
+VALID_ 
 
-## 6. Fake ?대옒???묒꽦 洹쒖튃
+정상 입력값 
 
-Unit test?먯꽌???ㅼ젣 DB, Redis, ?몃? API ???Fake ?대옒?ㅻ? ?ъ슜?쒕떎.
+INVALID_ 
 
-Fake ?대옒???대쫫? ?꾨옒泥섎읆 ?묒꽦?쒕떎.
+잘못된 입력값 
 
-```text
-Fake{??븷}
-```
+EXPIRED_ 
 
-?덉떆:
+만료된 값 
 
-```python
+OTHER_ 
+
+다른 사용자/차량/세션 등 비교용 값 
+
+테스트 본문 안에서 같은 문자열이나 숫자를 반복해서 직접 쓰지 않는다.
+
+6. Fake 클래스 작성 규칙
+Unit test에서는 실제 DB, Redis, 외부 API 대신 Fake 클래스를 사용한다.
+
+Fake 클래스 이름은 아래처럼 작성한다.
+
+
+
+Fake{역할}
+예시:
+
+
+
 class FakeQrSessionStore:
     def __init__(self):
         self.saved_sessions = {}
-
     def save_pending_session(self, *, session_id: str, vin_hash: str, ttl_seconds: int):
         self.saved_sessions[session_id] = {
             "session_id": session_id,
@@ -170,184 +208,165 @@ class FakeQrSessionStore:
             "status": "pending",
             "ttl_seconds": ttl_seconds,
         }
-```
+Fake는 실제 인프라를 완전히 구현하지 않는다.  
+테스트에 필요한 동작만 메모리의 dict나 list로 구현한다.
 
-Fake???ㅼ젣 ?명봽?쇰? ?꾩쟾??援ы쁽?섏? ?딅뒗?? ?뚯뒪?몄뿉 ?꾩슂???숈옉留?硫붾え由ъ쓽 `dict`??`list`濡?援ы쁽?쒕떎.
+외부 호출 여부를 검증해야 하면 *_calls 리스트에 저장한다.
 
-?몃? ?몄텧 ?щ?瑜?寃利앺빐???섎㈃ `*_calls` 由ъ뒪?몄뿉 ??ν븳??
+7. Fixture 작성 규칙
+Fake 객체와 service 객체는 pytest.fixture로 만든다.
 
-## 7. Fixture ?묒꽦 洹쒖튃
 
-Fake 媛앹껜? service 媛앹껜??`pytest.fixture`濡?留뚮뱺??
 
-```python
 @pytest.fixture
 def fake_qr_session_store():
     return FakeQrSessionStore()
-
-
 @pytest.fixture
 def create_qr_session_service(fake_qr_session_store):
     return CreateQrSessionService(
         qr_session_store=fake_qr_session_store,
         public_base_url=PUBLIC_BASE_URL,
     )
-```
+fixture 이름은 역할이 보이게 작성한다.
 
-fixture ?대쫫? ??븷??蹂댁씠寃??묒꽦?쒕떎.
 
-```text
+
 fake_qr_session_store
 create_qr_session_service
-```
+테스트 함수는 fixture를 인자로 받아 사용한다.
 
-?뚯뒪???⑥닔??fixture瑜??몄옄濡?諛쏆븘 ?ъ슜?쒕떎.
+8. 테스트 클래스와 함수명
+테스트 클래스 이름은 유스케이스 이름에 맞춘다.
 
-## 8. ?뚯뒪???대옒?ㅼ? ?⑥닔紐?
-?뚯뒪???대옒???대쫫? ?좎뒪耳?댁뒪 ?대쫫??留욎텣??
 
-```python
+
 class TestCreateQrSession:
     ...
-```
+테스트 함수명은 영어 snake_case를 사용한다.
 
-?뚯뒪???⑥닔紐낆? ?곸뼱 snake_case瑜??ъ슜?쒕떎.
 
-```python
+
 def test_valid_request_stores_pending_session(...):
     ...
-
 def test_empty_session_id_raises_error(...):
     ...
-```
+하나의 테스트 함수는 하나의 동작 또는 하나의 실패 조건만 검증한다.
 
-?섎굹???뚯뒪???⑥닔???섎굹???숈옉 ?먮뒗 ?섎굹???ㅽ뙣 議곌굔留?寃利앺븳??
+좋은 예:
 
-醫뗭? ??
 
-```text
-?뺤긽 ?붿껌?대㈃ pending ?몄뀡????ν븳???뺤긽 ?붿껌?대㈃ login_url??諛섑솚?쒕떎
-session_id媛 鍮꾩뼱 ?덉쑝硫??ㅽ뙣?쒕떎
-vin_hash媛 鍮꾩뼱 ?덉쑝硫??ㅽ뙣?쒕떎
-```
 
-?섏걶 ??
+정상 요청이면 pending 세션을 저장한다
+정상 요청이면 login_url을 반환한다
+session_id가 비어 있으면 실패한다
+vin_hash가 비어 있으면 실패한다
+나쁜 예:
 
-```text
-?뺤긽 ?붿껌??紐⑤뱺 寃곌낵瑜????뚯뒪?몄뿉???꾨? 寃利앺븳???깃났 耳?댁뒪? ?ㅽ뙣 耳?댁뒪瑜????뚯뒪?몄뿉 ?욌뒗??```
 
-## 9. ?뚯뒪??蹂몃Ц ?묒꽦 ?먮쫫
 
-?뚯뒪??蹂몃Ц? Arrange, Act, Assert ?먮쫫?쇰줈 ?묒꽦?쒕떎.
+정상 요청의 모든 결과를 한 테스트에서 전부 검증한다
+성공 케이스와 실패 케이스를 한 테스트에 섞는다
+9. 테스트 본문 작성 흐름
+테스트 본문은 Arrange, Act, Assert 흐름으로 작성한다.
 
-```python
+
+
 def test_valid_request_stores_pending_session(
     self,
     create_qr_session_service,
     fake_qr_session_store,
 ):
-    """?좏슚???붿껌?대㈃ QR ?몄뀡??pending ?곹깭濡???ν븳??"""
+    """유효한 요청이면 QR 세션을 pending 상태로 저장한다."""
     command = CreateQrSessionCommand(
         login_session_id=VALID_SESSION_ID,
         vin_hash=VALID_VIN_HASH,
     )
-
     create_qr_session_service.execute(command)
-
     saved = fake_qr_session_store.saved_sessions[VALID_SESSION_ID]
     assert saved["session_id"] == VALID_SESSION_ID
     assert saved["vin_hash"] == VALID_VIN_HASH
     assert saved["status"] == "pending"
     assert saved["ttl_seconds"] == 15 * 60
-```
+성공 케이스에서는 반환값뿐 아니라 side effect도 검증한다.
 
-?깃났 耳?댁뒪?먯꽌??諛섑솚媛믩퓧 ?꾨땲??side effect??寃利앺븳??
+예:
 
-??
 
-```text
-Redis????λ릺?댁빞 ?섎뒗 媛?DB???앹꽦?섏뼱???섎뒗 媛??몃? client媛 ?몄텧?섏뼱???섎뒗吏 ?щ?
-諛섑솚 result 媛?```
 
-## 10. ?ㅽ뙣 耳?댁뒪 ?묒꽦 洹쒖튃
+Redis에 저장되어야 하는 값
+DB에 생성되어야 하는 값
+외부 client가 호출되어야 하는지 여부
+반환 result 값
+10. 실패 케이스 작성 규칙
+Unit test에서는 pytest.raises로 service error를 검증한다.
 
-Unit test?먯꽌??`pytest.raises`濡?service error瑜?寃利앺븳??
 
-```python
+
 with pytest.raises(ValueError) as exc_info:
     create_qr_session_service.execute(command)
-
 assert str(exc_info.value) == "login_session_id is required"
-```
+Unit test에서는 HTTP status code를 직접 검증하지 않는다.
 
-Unit test?먯꽌??HTTP status code瑜?吏곸젒 寃利앺븯吏 ?딅뒗??
+예를 들어 유스케이스 문서에 “400 반환”이라고 되어 있어도 unit test에서는 service error만 확인한다.  
+HTTP 400으로 변환되는지는 API test에서 따로 검증한다.
 
-?덈? ?ㅼ뼱 ?좎뒪耳?댁뒪 臾몄꽌??"400 諛섑솚"?대씪怨??섏뼱 ?덉뼱??unit test?먯꽌??service error留??뺤씤?쒕떎. HTTP 400?쇰줈 蹂?섎릺?붿???API test?먯꽌 ?곕줈 寃利앺븳??
+11. API Test 기준
+API test는 실제 HTTP endpoint를 호출해서 API 계약을 검증한다.
 
-## 11. API Test 湲곗?
+검증 대상:
 
-API test???ㅼ젣 HTTP endpoint瑜??몄텧?댁꽌 API 怨꾩빟??寃利앺븳??
 
-寃利????
 
-```text
-endpoint 寃쎈줈
+endpoint 경로
 request body
 response body
 status code
 auth guard
 request validation
-```
+예:
 
-??
 
-```text
-POST /auth/qr-session ?뺤긽 ?붿껌 ??200 諛섑솚
-?묐떟??login_url ?ы븿
-login_session_id ?꾨씫 ??400 諛섑솚
-vin_hash ?꾨씫 ??400 諛섑솚
-```
 
-API test?먯꽌??unit test?먯꽌 寃利앺븳 鍮꾩쫰?덉뒪 ?몃? 洹쒖튃??紐⑤몢 諛섎났?섏? ?딅뒗??
+POST /auth/qr-session 정상 요청 시 200 반환
+응답에 login_url 포함
+login_session_id 누락 시 400 반환
+vin_hash 누락 시 400 반환
+API test에서는 unit test에서 검증한 비즈니스 세부 규칙을 모두 반복하지 않는다.
 
-## 12. Integration Test 湲곗?
+12. Integration Test 기준
+Integration test는 실제 인프라 연동을 검증한다.
 
-Integration test???ㅼ젣 ?명봽???곕룞??寃利앺븳??
+검증 대상:
 
-寃利????
 
-```text
-DB ???議고쉶
-Redis ???議고쉶/TTL
-?몃? client adapter ?붿껌 蹂??transaction 泥섎━
-```
 
-Unit test?먯꽌 Fake濡??泥댄뻽??遺遺꾩씠 ?ㅼ젣 援ы쁽泥댁뿉?쒕룄 ?숈옉?섎뒗吏 ?뺤씤?쒕떎.
+DB 저장/조회
+Redis 저장/조회/TTL
+외부 client adapter 요청 변환
+transaction 처리
+Unit test에서 Fake로 대체했던 부분이 실제 구현체에서도 동작하는지 확인한다.
 
-## 13. E2E Test 湲곗?
+13. E2E Test 기준
+E2E test는 전체 사용자 흐름을 검증한다.
 
-E2E test???꾩껜 ?ъ슜???먮쫫??寃利앺븳??
+예:
 
-??
 
-```text
-QR ?몄뀡 ?앹꽦
--> ?꾨? OAuth ?쒖옉
--> callback 泥섎━
--> 李⑤웾 ?좏깮 ?뺤젙
--> app token 諛쒓툒
-```
 
-E2E test???먮━怨??좎?蹂댁닔 鍮꾩슜???щ?濡??듭떖 ?깃났 ?쒕굹由ъ삤 ?꾩＜濡?理쒖냼?쒕쭔 ?묒꽦?쒕떎.
+QR 세션 생성
+→ 현대 OAuth 시작
+→ callback 처리
+→ 차량 선택 확정
+→ app token 발급
+E2E test는 느리고 유지보수 비용이 크므로 핵심 성공 시나리오 위주로 최소한만 작성한다.
 
-## 14. 理쒖쥌 ?먯튃
+14. 최종 원칙
+비즈니스 규칙은 unit test에서 검증한다.
 
-鍮꾩쫰?덉뒪 洹쒖튃? unit test?먯꽌 寃利앺븳??
+HTTP status code와 request/response는 API test에서 검증한다.
 
-HTTP status code? request/response??API test?먯꽌 寃利앺븳??
+실제 DB, Redis, 외부 client 연동은 integration test에서 검증한다.
 
-?ㅼ젣 DB, Redis, ?몃? client ?곕룞? integration test?먯꽌 寃利앺븳??
+전체 사용자 흐름은 E2E test에서 최소한만 검증한다.
 
-?꾩껜 ?ъ슜???먮쫫? E2E test?먯꽌 理쒖냼?쒕쭔 寃利앺븳??
-
-Unit test??`test_create_qr_session.py`泥섎읆 Fake dependency, pytest fixture, Command-Service-Result 援ъ“瑜?湲곗??쇰줈 ?묒꽦?쒕떎.
+Unit test는 test_create_qr_session.py처럼 Fake dependency, pytest fixture, Command-Service-Result 구조를 기준으로 작성한다.
