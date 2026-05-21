@@ -15,6 +15,7 @@ class GetParkingFeeResult:
     session_id: str
     lot_id: str
     amount: int
+    duration: int
     currency: str
     entry_time: str
     status: str
@@ -45,6 +46,7 @@ class GetParkingFeeService:
                 session_id=cached_quote["session_id"],
                 lot_id=cached_quote["lot_id"],
                 amount=cached_quote["amount"],
+                duration=cached_quote["duration"],
                 currency=cached_quote["currency"],
                 entry_time=cached_quote["entry_time"],
                 status=cached_quote["status"],
@@ -65,7 +67,6 @@ class GetParkingFeeService:
 
         # PMS에 요금 조회
         fee_data = self.pms_client.get_parking_fee(
-            pms_session_id=session.get("pms_session_id", ""),
             lot_id=session["lot_id"],
             plate=session["plate"],
         )
@@ -75,6 +76,7 @@ class GetParkingFeeService:
             session_id=command.session_id,
             lot_id=session["lot_id"],
             amount=fee_data["amount"],
+            duration=fee_data["duration"],
             currency=fee_data["currency"],
             entry_time=session["entry_time"],
             ttl_seconds=FEE_QUOTE_TTL_SECONDS,
@@ -84,6 +86,7 @@ class GetParkingFeeService:
             session_id=command.session_id,
             lot_id=session["lot_id"],
             amount=fee_data["amount"],
+            duration=fee_data["duration"],
             currency=fee_data["currency"],
             entry_time=session["entry_time"],
             status="active",

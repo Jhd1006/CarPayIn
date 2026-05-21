@@ -632,6 +632,7 @@ class TestProcessPayment:
         fake_parking_session_repository,
         fake_billing_key_repository,
         fake_transaction_repository,
+        fake_pg_client,
         fake_pms_client,
     ):
         """pending transaction이 있으면 PG를 다시 호출하지 않고 pending 상태를 반환한다."""

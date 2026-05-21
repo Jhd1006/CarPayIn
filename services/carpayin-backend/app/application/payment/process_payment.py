@@ -92,6 +92,7 @@ class ProcessPaymentService:
             session_id=command.session_id,
             amount=command.amount,
             currency=command.currency,
+            billing_key=billing_key_data["billing_key"],
         )
 
         # PG 결제 요청
@@ -104,9 +105,23 @@ class ProcessPaymentService:
             )
 
             # PG 성공 처리
+            if not pg_result.get("success", True):
+                failed_reason = pg_result.get("failed_reason", "pg_payment_failed")
+                self.transaction_repository.update_transaction_status(
+                    idempotency_key, "failed", failed_reason=failed_reason
+                )
+                return ProcessPaymentResult(
+                    status="failed",
+                    tx_id=tx_id,
+                    failed_reason=failed_reason,
+                )
+
             approval_no = pg_result["approval_no"]
             self.transaction_repository.update_transaction_status(
-                idempotency_key, "success", approval_no=approval_no
+                idempotency_key,
+                "success",
+                pg_tx_id=pg_result.get("pg_tx_id"),
+                approval_no=approval_no,
             )
             self.parking_session_repository.update_session_status(
                 command.session_id, "completed"
@@ -116,10 +131,12 @@ class ProcessPaymentService:
             try:
                 self.pms_client.notify_payment_complete(
                     pms_session_id=session.get("pms_session_id", ""),
-                    tx_id=tx_id,
+                    carpay_parking_session_id=command.session_id,
+                    carpay_tx_id=tx_id,
                     amount=command.amount,
                     currency=command.currency,
                     approval_no=approval_no,
+                    idempotency_key=idempotency_key,
                 )
             except Exception:
                 # PMS 통보 실패는 로그만 남기고 재시도 큐에 추가 (실제 구현에서)
@@ -129,7 +146,10 @@ class ProcessPaymentService:
             self.notification_publisher.publish_payment_notification(
                 session_id=command.session_id,
                 car_id=car_id,
+                lot_id=session["lot_id"],
                 tx_id=tx_id,
+                amount=command.amount,
+                currency=command.currency,
                 approval_no=approval_no,
             )
 
