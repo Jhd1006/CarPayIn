@@ -29,7 +29,6 @@ class ApproveCardPaymentService:
     def execute(
         self, command: ApproveCardPaymentCommand
     ) -> ApproveCardPaymentResult:
-        # idempotency_key 중복 확인
         existing_tx = self.card_transaction_repository.get_by_idempotency_key(
             command.idempotency_key
         )
@@ -40,13 +39,13 @@ class ApproveCardPaymentService:
                 approval_no=existing_tx.get("approval_no"),
             )
 
-        # card_token이 active인지 확인
+        if command.amount <= 0:
+            raise ValueError("invalid_amount")
+
         card_token_data = self.card_token_repository.get_card_token(
             command.card_token
         )
-
         if not card_token_data or card_token_data["status"] != "active":
-            # inactive card_token - failed tx 생성
             tx_id = f"card-tx-{uuid.uuid4().hex[:12]}"
             self.card_transaction_repository.create_transaction(
                 tx_id=tx_id,
@@ -63,25 +62,6 @@ class ApproveCardPaymentService:
                 approval_no=None,
             )
 
-        # amount 유효성 확인 (간단한 검증)
-        if command.amount <= 0:
-            tx_id = f"card-tx-{uuid.uuid4().hex[:12]}"
-            self.card_transaction_repository.create_transaction(
-                tx_id=tx_id,
-                idempotency_key=command.idempotency_key,
-                card_token=command.card_token,
-                amount=command.amount,
-                currency=command.currency,
-                status="failed",
-            )
-
-            return ApproveCardPaymentResult(
-                status="failed",
-                tx_id=tx_id,
-                approval_no=None,
-            )
-
-        # 카드사 tx 생성 및 approval_no 발급
         tx_id = f"card-tx-{uuid.uuid4().hex[:12]}"
         approval_no = f"CARD-{uuid.uuid4().hex[:8].upper()}"
 
