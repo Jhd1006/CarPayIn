@@ -187,3 +187,25 @@ class TestApproveCardPayment:
         # 응답 확인
         assert result.status == "failed"
         assert result.approval_no is None
+
+    def test_invalid_amount_raises_error(
+    self,
+    approve_card_payment_service,
+    fake_card_token_repository,
+    ):
+        """amount가 0 이하면 실패한다."""
+        fake_card_token_repository.add_card_token(
+            VALID_CARD_TOKEN, status="active"
+        )
+
+        command = ApproveCardPaymentCommand(
+            card_token=VALID_CARD_TOKEN,
+            amount=0,  # 유효하지 않은 금액
+            currency=VALID_CURRENCY,
+            idempotency_key=VALID_IDEMPOTENCY_KEY,
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            approve_card_payment_service.execute(command)
+
+        assert str(exc_info.value) == "invalid_amount"
