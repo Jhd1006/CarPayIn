@@ -28,7 +28,7 @@ PMS 기준 주차 세션 정보를 저장한다.
 
 ```sql
 CREATE TABLE parking_sessions (
-  pms_session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pms_session_id TEXT PRIMARY KEY,
   lot_id TEXT NOT NULL DEFAULT 'mock_lot_001',
   plate VARCHAR(20) NOT NULL DEFAULT '',
   entry_time TIMESTAMPTZ NOT NULL,
@@ -67,9 +67,9 @@ PMS 주차 세션, 결제 금액, 요청 상태, Car Pay-in 응답 결과를 관
 ```sql
 CREATE TABLE payment_requests (
   payment_request_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pms_session_id UUID NOT NULL,
-  carpay_parking_session_id UUID,
-  carpay_tx_id UUID,
+  pms_session_id TEXT NOT NULL,
+  carpay_parking_session_id TEXT,
+  carpay_tx_id TEXT,
   amount INTEGER NOT NULL,
   currency TEXT NOT NULL DEFAULT 'KRW',
   status TEXT NOT NULL DEFAULT 'pending',
