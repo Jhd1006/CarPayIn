@@ -4,6 +4,8 @@ from app.application.auth.handle_hyundai_oauth_callback import (
     HandleHyundaiOAuthCallbackService,
 )
 from app.application.auth.start_hyundai_oauth import StartHyundaiOAuthService
+from app.application.parking.handle_entry_webhook import HandleEntryWebhookService
+from app.application.parking.register_pre_notify import RegisterPreNotifyService
 
 
 PUBLIC_BASE_URL = "https://api.carpayin.test"
@@ -132,3 +134,23 @@ def get_login_session_status_service() -> GetLoginSessionStatusService:
     )
 
 
+def get_register_pre_notify_service() -> RegisterPreNotifyService:
+    placeholder = NotConfiguredDependency()
+    return RegisterPreNotifyService(
+        token_validator=placeholder,
+        vehicle_repository=placeholder,
+        billing_key_repository=placeholder,
+        pre_notify_store=placeholder,
+        pms_client=placeholder,
+        plate_normalizer=placeholder,
+    )
+
+
+def get_handle_entry_webhook_service() -> HandleEntryWebhookService:
+    placeholder = NotConfiguredDependency()
+    return HandleEntryWebhookService(
+        pms_auth_validator=placeholder,
+        pre_notify_store=placeholder,
+        parking_session_repository=placeholder,
+        notification_publisher=placeholder,
+    )
