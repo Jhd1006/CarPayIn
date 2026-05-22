@@ -47,10 +47,10 @@ Car Pay-in에서 빌링키 결제를 요청하면 PG 거래가 생성되고, 카
 
 ```sql
 CREATE TABLE transactions (
-  pg_tx_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pg_tx_id TEXT PRIMARY KEY,
   billing_key TEXT NOT NULL,
   card_token TEXT NOT NULL,
-  card_tx_id UUID,
+  card_tx_id TEXT,
   amount INTEGER NOT NULL,
   currency TEXT NOT NULL DEFAULT 'KRW',
   approval_no TEXT,

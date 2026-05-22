@@ -88,6 +88,18 @@ class TestCompleteCardRegistrationApi:
             "billing_key": VALID_BILLING_KEY,
         }
 
+    def test_openapi_prefixed_path_returns_billing_key(
+        self,
+        api_client_with_success_service_stub,
+    ):
+        response = api_client_with_success_service_stub.post(
+            "/pg/card-register",
+            json=valid_registration_payload(),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["billing_key"] == VALID_BILLING_KEY
+
     def test_duplicate_order_id_returns_existing_billing_key(
         self,
         api_client_with_success_service_stub,

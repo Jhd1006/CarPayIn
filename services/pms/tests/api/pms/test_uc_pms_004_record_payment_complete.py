@@ -41,8 +41,8 @@ def api_client_with_service_stub():
 def valid_payment_payload():
     return {
         "pms_session_id": VALID_PMS_SESSION_ID,
-        "carpay_session_id": VALID_CARPAY_SESSION_ID,
-        "tx_id": VALID_TX_ID,
+        "carpay_parking_session_id": VALID_CARPAY_SESSION_ID,
+        "carpay_tx_id": VALID_TX_ID,
         "amount": VALID_AMOUNT,
         "currency": VALID_CURRENCY,
         "approval_no": VALID_APPROVAL_NO,
@@ -60,7 +60,20 @@ class TestRecordPaymentCompleteApi:
         )
 
         assert response.status_code == 200
-        assert response.json() == {"status": "success"}
+        assert response.json() == {
+            "status": "success",
+            "pms_session_id": VALID_PMS_SESSION_ID,
+            "carpay_tx_id": VALID_TX_ID,
+        }
+
+    def test_openapi_prefixed_path_returns_success(self, api_client_with_service_stub):
+        response = api_client_with_service_stub.post(
+            "/pms/payment/complete",
+            json=valid_payment_payload(),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
 
     def test_duplicate_idempotency_key_returns_existing_success(
         self,

@@ -53,6 +53,18 @@ class TestRegisterPreNotifyApi:
             "plate": VALID_PLATE,
         }
 
+    def test_openapi_prefixed_path_returns_registered(
+        self,
+        api_client_with_service_stub,
+    ):
+        response = api_client_with_service_stub.post(
+            "/pms/parking/pre-register",
+            json={"lot_id": VALID_LOT_ID, "plate": VALID_PLATE},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "registered"
+
     def test_duplicate_request_is_idempotent(self, api_client_with_service_stub):
         first_response = api_client_with_service_stub.post(
             "/parking/pre-register",
