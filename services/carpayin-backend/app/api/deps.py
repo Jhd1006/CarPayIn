@@ -1,3 +1,5 @@
+from fastapi import Header, HTTPException
+
 from app.application.auth.create_qr_session import CreateQrSessionService
 from app.application.auth.get_login_session_status import GetLoginSessionStatusService
 from app.application.auth.handle_hyundai_oauth_callback import (
@@ -6,6 +8,8 @@ from app.application.auth.handle_hyundai_oauth_callback import (
 from app.application.auth.start_hyundai_oauth import StartHyundaiOAuthService
 from app.application.parking.handle_entry_webhook import HandleEntryWebhookService
 from app.application.parking.register_pre_notify import RegisterPreNotifyService
+from app.application.payment.get_parking_fee import GetParkingFeeService
+from app.application.payment.process_payment import ProcessPaymentService
 
 
 PUBLIC_BASE_URL = "https://api.carpayin.test"
@@ -93,6 +97,31 @@ oauth_state_store = InMemoryOAuthStateStore()
 app_login_result_store = InMemoryAppLoginResultStore()
 
 
+def get_current_user(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "UNAUTHORIZED",
+                "message": "missing_bearer_token",
+            },
+        )
+
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "UNAUTHORIZED",
+                "message": "missing_bearer_token",
+            },
+        )
+
+    raise RuntimeError("dependency_not_configured")
+
+
 def get_create_qr_session_service() -> CreateQrSessionService:
     return CreateQrSessionService(
         qr_session_store=qr_session_store,
@@ -152,5 +181,29 @@ def get_handle_entry_webhook_service() -> HandleEntryWebhookService:
         pms_auth_validator=placeholder,
         pre_notify_store=placeholder,
         parking_session_repository=placeholder,
+        notification_publisher=placeholder,
+    )
+
+
+def get_parking_fee_service() -> GetParkingFeeService:
+    placeholder = NotConfiguredDependency()
+    return GetParkingFeeService(
+        token_validator=placeholder,
+        parking_session_repository=placeholder,
+        fee_quote_store=placeholder,
+        pms_client=placeholder,
+    )
+
+
+def get_process_payment_service() -> ProcessPaymentService:
+    placeholder = NotConfiguredDependency()
+    return ProcessPaymentService(
+        token_validator=placeholder,
+        fee_quote_store=placeholder,
+        parking_session_repository=placeholder,
+        billing_key_repository=placeholder,
+        transaction_repository=placeholder,
+        pg_client=placeholder,
+        pms_client=placeholder,
         notification_publisher=placeholder,
     )
