@@ -9,12 +9,24 @@ from app.api.routes.parking import router as parking_router
 app = FastAPI(title="Car Pay-in Backend")
 
 
+@app.get("/health")
+def health_check() -> dict:
+    return {"status": "ok"}
+
+
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     error_code = str(exc)
     if error_code in {"session_not_found", "session_expired"}:
         status_code = 404
-    elif error_code in {"invalid_token", "pms_auth_failed"}:
+    elif error_code in {
+        "invalid_token",
+        "pms_auth_failed",
+        "refresh_token_not_found",
+        "refresh_token_revoked",
+        "refresh_token_expired",
+        "temp_token_expired",
+    }:
         status_code = 401
     elif error_code in {"car_id_token_mismatch"}:
         status_code = 403

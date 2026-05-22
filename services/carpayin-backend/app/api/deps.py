@@ -1,10 +1,12 @@
 from fastapi import Header, HTTPException
 
+from app.application.auth.confirm_vehicle import ConfirmVehicleService
 from app.application.auth.create_qr_session import CreateQrSessionService
 from app.application.auth.get_login_session_status import GetLoginSessionStatusService
 from app.application.auth.handle_hyundai_oauth_callback import (
     HandleHyundaiOAuthCallbackService,
 )
+from app.application.auth.refresh_access_token import RefreshAccessTokenService
 from app.application.auth.start_hyundai_oauth import StartHyundaiOAuthService
 from app.application.card.create_card_order import CreateCardOrderService
 from app.application.card.handle_card_webhook import HandleCardWebhookService
@@ -160,6 +162,29 @@ def get_login_session_status_service() -> GetLoginSessionStatusService:
     return GetLoginSessionStatusService(
         app_login_result_store=app_login_result_store,
         qr_session_store=qr_session_store,
+    )
+
+
+def get_confirm_vehicle_service() -> ConfirmVehicleService:
+    placeholder = NotConfiguredDependency()
+    return ConfirmVehicleService(
+        temp_access_token_validator=placeholder,
+        hyundai_oauth_result_store=placeholder,
+        app_login_result_store=app_login_result_store,
+        qr_session_store=qr_session_store,
+        vehicle_repository=placeholder,
+        app_refresh_token_repository=placeholder,
+        app_token_issuer=placeholder,
+        refresh_token_hasher=placeholder,
+    )
+
+
+def get_refresh_access_token_service() -> RefreshAccessTokenService:
+    placeholder = NotConfiguredDependency()
+    return RefreshAccessTokenService(
+        app_refresh_token_repository=placeholder,
+        refresh_token_hasher=placeholder,
+        app_access_token_issuer=placeholder,
     )
 
 
