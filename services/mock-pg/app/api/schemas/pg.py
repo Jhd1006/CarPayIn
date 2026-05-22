@@ -22,5 +22,6 @@ class BillingPaymentRequest(BaseModel):
 
 class BillingPaymentResponse(BaseModel):
     status: str
-    tx_id: str
+    pg_tx_id: str
     approval_no: str | None = None
+    failed_reason: str | None = None
