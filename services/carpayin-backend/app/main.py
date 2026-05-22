@@ -8,6 +8,11 @@ from app.api.routes.parking import router as parking_router
 app = FastAPI(title="Car Pay-in Backend")
 
 
+@app.get("/health")
+def health_check() -> dict:
+    return {"status": "ok"}
+
+
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     error_code = str(exc)
