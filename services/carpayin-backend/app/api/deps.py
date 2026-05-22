@@ -12,6 +12,8 @@ from app.application.card.create_card_order import CreateCardOrderService
 from app.application.card.handle_card_webhook import HandleCardWebhookService
 from app.application.parking.handle_entry_webhook import HandleEntryWebhookService
 from app.application.parking.register_pre_notify import RegisterPreNotifyService
+from app.application.payment.get_parking_fee import GetParkingFeeService
+from app.application.payment.process_payment import ProcessPaymentService
 
 
 PUBLIC_BASE_URL = "https://api.carpayin.test"
@@ -227,5 +229,29 @@ def get_handle_entry_webhook_service() -> HandleEntryWebhookService:
         pms_auth_validator=placeholder,
         pre_notify_store=placeholder,
         parking_session_repository=placeholder,
+        notification_publisher=placeholder,
+    )
+
+
+def get_parking_fee_service() -> GetParkingFeeService:
+    placeholder = NotConfiguredDependency()
+    return GetParkingFeeService(
+        token_validator=placeholder,
+        parking_session_repository=placeholder,
+        fee_quote_store=placeholder,
+        pms_client=placeholder,
+    )
+
+
+def get_process_payment_service() -> ProcessPaymentService:
+    placeholder = NotConfiguredDependency()
+    return ProcessPaymentService(
+        token_validator=placeholder,
+        fee_quote_store=placeholder,
+        parking_session_repository=placeholder,
+        billing_key_repository=placeholder,
+        transaction_repository=placeholder,
+        pg_client=placeholder,
+        pms_client=placeholder,
         notification_publisher=placeholder,
     )

@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes.auth import router as auth_router
 from app.api.routes.card import router as card_router
 from app.api.routes.parking import router as parking_router
+from app.api.routes.payment import router as payment_router
 
 
 app = FastAPI(title="Car Pay-in Backend")
@@ -17,7 +18,9 @@ def health_check() -> dict:
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     error_code = str(exc)
-    if error_code in {"session_not_found", "session_expired"}:
+    if error_code == "session_not_found" and request.url.path != "/payment":
+        status_code = 404
+    elif error_code in {"session_expired", "session_not_active"}:
         status_code = 404
     elif error_code in {
         "invalid_token",
@@ -28,8 +31,10 @@ async def value_error_handler(request: Request, exc: ValueError):
         "temp_token_expired",
     }:
         status_code = 401
-    elif error_code in {"car_id_token_mismatch"}:
+    elif error_code in {"car_id_token_mismatch", "session_car_id_mismatch"}:
         status_code = 403
+    elif error_code in {"quote_not_found", "amount_currency_mismatch"}:
+        status_code = 409
     elif error_code in {"molit_verification_failed"}:
         status_code = 422
     else:
@@ -43,6 +48,7 @@ async def value_error_handler(request: Request, exc: ValueError):
                 401: "UNAUTHORIZED",
                 403: "FORBIDDEN",
                 404: "NOT_FOUND",
+                409: "CONFLICT",
                 422: "UNPROCESSABLE_ENTITY",
             }[status_code],
             "message": error_code,
@@ -86,3 +92,4 @@ async def runtime_error_handler(request: Request, exc: RuntimeError):
 app.include_router(auth_router)
 app.include_router(card_router)
 app.include_router(parking_router)
+app.include_router(payment_router)
