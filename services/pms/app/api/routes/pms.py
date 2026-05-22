@@ -68,26 +68,53 @@ def handle_lpr_entry(
     )
 
 
-@router.get("/parking/fee", response_model=CalculateFeeResponse)
+@router.get(
+    "/pms/parking/fee",
+    response_model=CalculateFeeResponse,
+    response_model_exclude_none=True,
+)
+@router.get(
+    "/parking/fee",
+    response_model=CalculateFeeResponse,
+    response_model_exclude_none=True,
+)
 def calculate_fee(
-    pms_session_id: str,
-    current_time: str,
+    lot_id: str | None = None,
+    plate: str | None = None,
+    pms_session_id: str | None = None,
+    current_time: str | None = None,
     service: CalculateFeeService = Depends(get_calculate_fee_service),
 ) -> CalculateFeeResponse:
     result = service.execute(
         CalculateFeeCommand(
             pms_session_id=pms_session_id,
             current_time=current_time,
+            lot_id=lot_id,
+            plate=plate,
         )
     )
     return CalculateFeeResponse(
+        pms_session_id=result.pms_session_id,
+        lot_id=result.lot_id,
+        plate=result.plate,
         amount=result.amount,
         duration_minutes=result.duration_minutes,
         currency=result.currency,
+        entry_time=result.entry_time,
+        calculated_at=result.calculated_at,
     )
 
 
-@router.post("/payment/complete", response_model=PaymentCompleteResponse)
+@router.post(
+    "/pms/payment/complete",
+    response_model=PaymentCompleteResponse,
+    response_model_exclude_none=True,
+)
+@router.post(
+    "/payment/complete",
+    response_model=PaymentCompleteResponse,
+    response_model_exclude_none=True,
+)
 def record_payment_complete(
     request: PaymentCompleteRequest,
     service: RecordPaymentCompleteService = Depends(
@@ -97,12 +124,16 @@ def record_payment_complete(
     result = service.execute(
         RecordPaymentCompleteCommand(
             pms_session_id=request.pms_session_id,
-            carpay_session_id=request.carpay_session_id,
-            tx_id=request.tx_id,
+            carpay_session_id=request.carpay_parking_session_id,
+            tx_id=request.carpay_tx_id,
             amount=request.amount,
             currency=request.currency,
             approval_no=request.approval_no,
             idempotency_key=request.idempotency_key,
         )
     )
-    return PaymentCompleteResponse(status=result.status)
+    return PaymentCompleteResponse(
+        status=result.status,
+        pms_session_id=request.pms_session_id,
+        carpay_tx_id=request.carpay_tx_id,
+    )

@@ -15,8 +15,11 @@ class ProcessPaymentCommand:
 class ProcessPaymentResult:
     status: str
     tx_id: str
+    session_id: str | None = None
     approval_no: str | None = None
     failed_reason: str | None = None
+    amount: int | None = None
+    currency: str | None = None
 
 
 class ProcessPaymentService:

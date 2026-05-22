@@ -82,9 +82,21 @@ class TestChargeBillingKeyApi:
         assert response.status_code == 200
         assert response.json() == {
             "status": "success",
-            "tx_id": VALID_TX_ID,
+            "pg_tx_id": VALID_TX_ID,
             "approval_no": VALID_APPROVAL_NO,
         }
+
+    def test_openapi_prefixed_path_returns_success(
+        self,
+        api_client_with_success_service_stub,
+    ):
+        response = api_client_with_success_service_stub.post(
+            "/pg/payments/billing",
+            json=valid_payment_payload(),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
 
     def test_duplicate_idempotency_key_returns_existing_result(
         self,
@@ -101,7 +113,7 @@ class TestChargeBillingKeyApi:
 
         assert first_response.status_code == 200
         assert second_response.status_code == 200
-        assert second_response.json()["tx_id"] == VALID_TX_ID
+        assert second_response.json()["pg_tx_id"] == VALID_TX_ID
 
     def test_inactive_billing_key_returns_failed(
         self,
@@ -112,11 +124,11 @@ class TestChargeBillingKeyApi:
             json=valid_payment_payload(),
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         assert response.json() == {
             "status": "failed",
-            "tx_id": VALID_TX_ID,
-            "approval_no": None,
+            "pg_tx_id": VALID_TX_ID,
+            "failed_reason": "payment_failed",
         }
 
     def test_missing_billing_key_returns_422(
