@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.parking import router as parking_router
 
 
 app = FastAPI(title="Car Pay-in Backend")
@@ -34,3 +35,4 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 
 app.include_router(auth_router)
+app.include_router(parking_router)
