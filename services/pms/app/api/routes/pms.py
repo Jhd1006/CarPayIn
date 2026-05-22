@@ -33,6 +33,7 @@ from app.application.pms.register_pre_notify import (
 router = APIRouter()
 
 
+@router.post("/pms/parking/pre-register", response_model=PreRegisterResponse)
 @router.post("/parking/pre-register", response_model=PreRegisterResponse)
 def pre_register_plate(
     request: PreRegisterRequest,
@@ -48,6 +49,7 @@ def pre_register_plate(
     )
 
 
+@router.post("/pms/lpr/entry", response_model=LprEntryResponse)
 @router.post("/lpr/entry", response_model=LprEntryResponse)
 def handle_lpr_entry(
     request: LprEntryRequest,
