@@ -31,24 +31,25 @@ test_uc_card_api_001_002_card_order_and_webhook.py
 
 ## 1. 테스트 위치
 
-API 테스트는 `tests/integration/api/` 아래에 domain별로 분리한다.
+API 테스트는 `tests/api/` 아래에 domain별로 분리한다.
 
 ```text
 tests/
-  integration/
-    api/
-      auth/
-        test_uc_auth_001_create_qr_session.py
-        test_uc_auth_006_refresh_access_token.py
-      card/
-        test_uc_card_api_001_002_card_order_and_webhook.py
-      parking/
-        test_uc_park_001_register_pre_notify.py
-      payment/
-        test_uc_pay_001_get_parking_fee.py
+  api/
+    auth/
+      test_uc_auth_001_create_qr_session.py
+      test_uc_auth_006_refresh_access_token.py
+    card/
+      test_uc_card_api_001_002_card_order_and_webhook.py
+    parking/
+      test_uc_park_001_register_pre_notify.py
+    payment/
+      test_uc_pay_001_get_parking_fee.py
 ```
 
-API 테스트 파일에서는 HTTP API 계약만 검증한다. 실제 DB, Redis, 외부 API 연동 검증은 integration test의 다른 계층에서 다룬다.
+API 테스트 파일에서는 HTTP API 계약만 검증한다. 실제 DB, Redis, 외부 API 연동 검증은 `tests/integration/`에서 다룬다.
+
+이 프로젝트에서는 API test와 integration test를 분리한다. API test는 FastAPI route, request/response schema, status code, auth guard, exception handler처럼 HTTP layer의 계약을 검증한다. Integration test는 repository, DB, Redis, 외부 client adapter처럼 실제 인프라와 연결되는 구현을 검증한다.
 
 ## 2. API Test의 역할
 
@@ -97,7 +98,7 @@ app/
   main.py
   api/
     deps.py
-    routers/
+    routes/
       auth.py
       card.py
       parking.py
