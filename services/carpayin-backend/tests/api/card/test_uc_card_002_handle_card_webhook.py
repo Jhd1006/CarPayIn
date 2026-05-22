@@ -58,11 +58,11 @@ def api_client_with_service_stub():
     app.dependency_overrides[get_handle_card_webhook_service] = (
         lambda: StubHandleCardWebhookService()
     )
-
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -72,10 +72,11 @@ def api_client_with_signature_failing_stub():
         lambda: StubHandleCardWebhookServiceThatFailsWithSignature()
     )
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -85,10 +86,11 @@ def api_client_with_order_failing_stub():
         lambda: StubHandleCardWebhookServiceThatFailsWithOrder()
     )
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 # ──────────────────────────────────────────────
@@ -197,6 +199,8 @@ class TestHandleCardWebhookApi:
         )
 
         assert response.status_code == 401
+        assert response.json()["message"] == "invalid_signature"
+
 
     # ── 비즈니스 오류 케이스 ──
 
@@ -217,3 +221,4 @@ class TestHandleCardWebhookApi:
         )
 
         assert response.status_code == 400
+        assert response.json()["message"] == "order_not_found"
