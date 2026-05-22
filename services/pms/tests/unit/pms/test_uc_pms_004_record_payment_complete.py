@@ -12,8 +12,8 @@ from app.application.pms.record_payment_complete import (
 
 
 VALID_PMS_SESSION_ID = "pms-sess-001"
-VALID_CARPAY_SESSION_ID = "parking-session-001"
-VALID_TX_ID = "tx-123456"
+VALID_CARPAY_PARKING_SESSION_ID = "parking-session-001"
+VALID_CARPAY_TX_ID = "tx-123456"
 VALID_AMOUNT = 5000
 VALID_CURRENCY = "KRW"
 VALID_APPROVAL_NO = "APPR123456"
@@ -67,7 +67,7 @@ def record_payment_complete_service(fake_payment_request_repository):
 
 
 class TestRecordPaymentComplete:
-    """UC-PMS-004 - POST /payment/complete"""
+    """UC-PMS-004 - POST /pms/payment/complete"""
 
     def test_payment_complete_request_is_saved_as_success(
         self,
@@ -77,8 +77,8 @@ class TestRecordPaymentComplete:
         """결제 완료 요청을 success로 저장한다."""
         command = RecordPaymentCompleteCommand(
             pms_session_id=VALID_PMS_SESSION_ID,
-            carpay_session_id=VALID_CARPAY_SESSION_ID,
-            tx_id=VALID_TX_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
             amount=VALID_AMOUNT,
             currency=VALID_CURRENCY,
             approval_no=VALID_APPROVAL_NO,
@@ -93,8 +93,8 @@ class TestRecordPaymentComplete:
         )
         assert saved is not None
         assert saved["pms_session_id"] == VALID_PMS_SESSION_ID
-        assert saved["carpay_session_id"] == VALID_CARPAY_SESSION_ID
-        assert saved["tx_id"] == VALID_TX_ID
+        assert saved["carpay_session_id"] == VALID_CARPAY_PARKING_SESSION_ID
+        assert saved["tx_id"] == VALID_CARPAY_TX_ID
         assert saved["amount"] == VALID_AMOUNT
         assert saved["currency"] == VALID_CURRENCY
         assert saved["approval_no"] == VALID_APPROVAL_NO
@@ -111,8 +111,8 @@ class TestRecordPaymentComplete:
         """같은 idempotency_key 재요청은 기존 결과를 반환한다."""
         command = RecordPaymentCompleteCommand(
             pms_session_id=VALID_PMS_SESSION_ID,
-            carpay_session_id=VALID_CARPAY_SESSION_ID,
-            tx_id=VALID_TX_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
             amount=VALID_AMOUNT,
             currency=VALID_CURRENCY,
             approval_no=VALID_APPROVAL_NO,

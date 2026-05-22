@@ -66,6 +66,7 @@ DB 변경:
 - billing key가 없으면 400을 반환하고 PMS를 호출하지 않는다.
 - 차량번호가 없으면 400을 반환한다.
 - token의 car_id와 요청 car_id가 다르면 403을 반환한다.
+- PMS 사전 등록에 실패한 경우 400을 반환한다.
 
 ## UC-PARK-002. PMS 입차 webhook 처리
 
@@ -120,8 +121,10 @@ DB 변경:
 
 먼저 작성할 테스트:
 
+- PMS 인증이 실패하면 401을 반환한다.
 - pre-notify가 있으면 active parking session을 만든다.
 - pre-notify가 없으면 세션을 만들지 않고 not_registered를 반환한다.
 - 같은 pms_session_id webhook이 중복되어도 세션이 중복 생성되지 않는다.
 - 같은 car_id에 active session이 있으면 기존 결과를 반환하거나 충돌을 처리한다.
+- entry 타임 형식이 잘못되면 400을 반환한다
 
