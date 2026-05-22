@@ -23,6 +23,7 @@ from app.application.pg.complete_card_registration import (
 router = APIRouter()
 
 
+@router.post("/pg/card-register", response_model=CardRegistrationResponse)
 @router.post("/card-register", response_model=CardRegistrationResponse)
 def complete_card_registration(
     request: CardRegistrationRequest,
