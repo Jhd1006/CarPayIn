@@ -42,6 +42,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: App Access Token (JWT)
+    PmsWebhookSignature:
+      type: apiKey
+      in: header
+      name: X-PMS-Signature
+      description: PMS webhook 요청 검증용 HMAC signature
 
   # ─────────────────────────────────────────────
   # Reusable Schemas
@@ -145,6 +150,26 @@ components:
           type: string
         car:
           $ref: '#/components/schemas/CarInfo'
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          description: 발급받은 app refresh token
+          example: "rt_xxxxxxxx"
+
+    RefreshResponse:
+      type: object
+      properties:
+        app_access_token:
+          type: string
+          description: 새로 발급된 app access token
+        app_refresh_token:
+          type: string
+          nullable: true
+          description: 새로 발급된 app refresh token (rotate 정책 적용 시에만 반환)
 
     # ── Card ──────────────────────────────────
     CardOrderRequest:
@@ -277,6 +302,10 @@ components:
         amount:
           type: integer
           example: 6000
+        duration:
+          type: integer
+          description: 주차 시간(분)
+          example: 90
         currency:
           type: string
           example: KRW
@@ -541,8 +570,10 @@ paths:
         2. 현대 token API로 access/refresh token 발급
         3. 현대 사용자 정보 API 호출 (user_id, name)
         4. 현대 내 차량 리스트 조회 API 호출
-        5. RDS users, hyundai_tokens 저장
-        6. Redis app_login_result:{session_id} 에 차량 목록과 임시 토큰 저장 (TTL: 별도 관리)
+        5. RDS users upsert, hyundai_tokens에 암호화된 refresh token 저장
+        6. Redis hyundai_access:{user_id}에 access token 캐시
+        7. Redis hyundai_oauth:{session_id}, app_login_result:{session_id}에 차량 목록과 임시 토큰 저장
+        8. oauth_state:{state}는 used 처리 또는 삭제
       parameters:
         - name: code
           in: query
@@ -589,6 +620,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionStatusResponse'
+        '400':
+          description: OAuth 실패 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: 세션 없음 또는 만료
           content:
@@ -614,6 +651,11 @@ paths:
         - RDS app_refresh_tokens에 refresh token hash 저장
         
         **Redis 임시 결과**
+        ```
+        key: hyundai_oauth:{session_id}
+        value: { user_id, name, cars, temp_access_token }
+        ```
+        또는
         ```
         key: app_login_result:{session_id}
         value: { status: "complete", temp_access_token, user_id, name, cars }
@@ -642,6 +684,42 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: 임시 토큰 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 앱 access token 재발급
+      description: |
+        만료된 app access token을 app refresh token으로 재발급합니다.
+
+        Backend 처리:
+        1. refresh token 원문의 hash를 계산한다.
+        2. DB `app_refresh_tokens`에서 hash가 일치하고 status=active인 token을 조회한다.
+        3. 만료된 token이면 status를 expired로 업데이트하고 401을 반환한다.
+        4. revoked token이면 401을 반환한다.
+        5. 유효하면 새 app access token을 발급한다.
+        6. rotate 정책 적용 시 새 refresh token도 함께 발급하고 기존 token을 revoked 처리한다.
+
+        **보안**: refresh token 원문은 DB에 저장하지 않으며, hash만 저장한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: access token 재발급 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          description: refresh token 없음, 만료(expired), 또는 폐기(revoked)
           content:
             application/json:
               schema:
@@ -709,6 +787,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Mock PG 카드 등록 URL 생성 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /card/webhook:
     post:
@@ -719,12 +803,13 @@ paths:
         카드 원문 정보는 Car Pay-in Backend에 전달되지 않으며, billing_key만 수신합니다.
         
         Backend 처리:
-        1. Redis에서 order_id로 카드 등록 세션 조회 및 status=pending 확인
-        2. RDS vehicles에서 car_id 유효성 재확인
-        3. RDS vehicle_billing_keys upsert
+        1. webhook signature 또는 HMAC 검증
+        2. Redis에서 order_id로 카드 등록 세션 조회 및 status=pending 확인
+        3. RDS vehicles에서 car_id 유효성 재확인
+        4. RDS vehicle_billing_keys upsert
            - 최초 등록: INSERT (car_id, billing_key, card_last_four, status=active)
            - 카드 변경: UPDATE (billing_key, card_last_four, status=active, updated_at)
-        4. Redis 카드 등록 세션 완료 처리 또는 삭제
+        5. Redis 카드 등록 세션 완료 처리 또는 삭제
         
         **멱등성**: order_id UNIQUE(Mock PG) + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
       requestBody:
@@ -746,6 +831,12 @@ paths:
                     enum: [ok]
         '400':
           description: 유효하지 않은 세션 또는 검증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: webhook signature 검증 실패
           content:
             application/json:
               schema:
@@ -791,13 +882,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/PreNotifyResponse'
         '400':
-          description: active 빌링키 없음, car_id 불일치, 차량번호 미등록 또는 불일치
+          description: active 빌링키 없음, 차량번호 미등록 또는 불일치
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 요청 car_id와 토큰 car_id 불일치
           content:
             application/json:
               schema:
@@ -811,7 +908,7 @@ paths:
         PMS LPR 카메라가 차량번호 인식 후 입차 이벤트를 이 endpoint로 전송합니다.
         
         Backend 처리:
-        1. PMS 신뢰 요청 여부 확인
+        1. X-PMS-Signature 등으로 PMS 신뢰 요청 여부 확인
         2. Redis에서 parking_pre_notify:{lot_id}:{plate} 조회
            - 없으면: Car Pay-in 비등록 차량으로 판단, 세션 미생성
         3. Redis의 user_id, car_id를 기준으로 처리
@@ -831,6 +928,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/EntryWebhookRequest'
+      parameters:
+        - name: X-PMS-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: PMS webhook HMAC signature
       responses:
         '200':
           description: 입차 처리 완료. pre-notify가 없으면 status=not_registered로 반환하고 세션은 생성하지 않음.
@@ -840,6 +944,12 @@ paths:
                 $ref: '#/components/schemas/EntryWebhookResponse'
         '400':
           description: 유효하지 않은 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: PMS 인증 실패
           content:
             application/json:
               schema:
@@ -883,8 +993,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: 세션 없음 또는 active 상태 아님
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: PMS 요금 조회 실패
           content:
             application/json:
               schema:
@@ -948,8 +1070,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentFailedResponse'
+        '403':
+          description: 세션 소유자 불일치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: 금액 불일치 - 최신 요금 재조회 필요
+          description: quote 없음/만료 또는 amount/currency 불일치 - 최신 요금 재조회 필요
           content:
             application/json:
               schema:
@@ -1024,6 +1152,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PmsFeeResponse'
+        '404':
+          description: active PMS session 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /pms/payment/complete:
     post:
@@ -1049,6 +1183,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PmsPaymentCompleteResponse'
+        '409':
+          description: PMS idempotency conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # ══════════════════════════════════════════
   # Mock PG 연동 API (Car Pay-in Backend → Mock PG)
