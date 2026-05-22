@@ -1,133 +1,182 @@
 """
-차량 확정 API 테스트
+차량 선택 확정과 앱 토큰 발급 API 테스트.
 UC-AUTH-005: POST /auth/confirm-car
 """
 
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app  # app 인스턴스 import
-from app.api.deps import get_current_user_from_temp_token, get_confirm_car_service
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 테스트 상수
-# ═══════════════════════════════════════════════════════════════════════════
+from app.api.deps import get_confirm_vehicle_service
+from app.application.auth.confirm_vehicle import ConfirmVehicleResult
+from app.main import app
 
-VALID_CAR_ID = "car-12345678"
-VALID_VIN_HASH = "abc123def456"
-VALID_APP_ACCESS_TOKEN = "app-access-token-xyz"
-VALID_APP_REFRESH_TOKEN = "app-refresh-token-xyz"
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Stub 클래스 (main.py의 에러 핸들러와 메시지 일치)
-# ═══════════════════════════════════════════════════════════════════════════
+VALID_TEMP_ACCESS_TOKEN = "temp-access-001"
+VALID_APP_ACCESS_TOKEN = "app-access-001"
+VALID_APP_REFRESH_TOKEN = "app-refresh-001"
+VALID_USER_ID = "hyundai-user-001"
+VALID_USER_NAME = "홍길동"
+VALID_CAR_ID = "hyundai-car-001"
+VALID_VIN_HASH = "vin-hash-001"
+VALID_CAR = {
+    "car_id": VALID_CAR_ID,
+    "car_sellname": "아이오닉 6",
+    "plate": "12가 3456",
+}
+AUTH_HEADERS = {"Authorization": f"Bearer {VALID_TEMP_ACCESS_TOKEN}"}
 
-class StubConfirmCarServiceSuccess:
+
+class StubConfirmVehicleService:
     def execute(self, command):
-        from dataclasses import dataclass
-        @dataclass
-        class ConfirmCarResult:
-            car_id: str
-            app_access_token: str
-            app_refresh_token: str
-            user_info: dict
-            car_info: dict
-        
-        return ConfirmCarResult(
-            car_id=command.car_id,
+        return ConfirmVehicleResult(
             app_access_token=VALID_APP_ACCESS_TOKEN,
             app_refresh_token=VALID_APP_REFRESH_TOKEN,
-            user_info={"user_id": command.user_id},
-            car_info={"car_id": command.car_id},
+            user_id=VALID_USER_ID,
+            name=VALID_USER_NAME,
+            car_id=command.car_id,
+            car=VALID_CAR,
         )
 
-class StubConfirmCarServiceCarNotFound:
+
+class StubConfirmVehicleServiceThatRaises:
+    def __init__(self, error_code: str):
+        self.error_code = error_code
+
     def execute(self, command):
-        # main.py의 에러 핸들러에 맞춰 메시지 수정
-        raise ValueError("car_id_not_in_hyundai_list")
+        raise ValueError(self.error_code)
 
-class StubConfirmCarServiceVinMismatch:
-    def execute(self, command):
-        # main.py에는 정의되지 않았으므로 default 400으로 처리됨
-        raise ValueError("vin_hash_mismatch")
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Fixtures
-# ═══════════════════════════════════════════════════════════════════════════
-
-def fake_current_user():
-    return {
-        "user_id": "user-001",
-        "session_id": "session-001",
-        "access_token": "temp-token-001",
-    }
 
 @pytest.fixture
-def client_factory():
-    """테스트 간 독립성을 위해 dependency_overrides 관리"""
+def api_client_with_service_stub():
     original = app.dependency_overrides.copy()
-    yield app
-    app.dependency_overrides = original
+    app.dependency_overrides[get_confirm_vehicle_service] = (
+        lambda: StubConfirmVehicleService()
+    )
+
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
+
+
+def make_client_with_failing_service(error_code: str):
+    original = app.dependency_overrides.copy()
+    app.dependency_overrides[get_confirm_vehicle_service] = (
+        lambda: StubConfirmVehicleServiceThatRaises(error_code)
+    )
+
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
+
 
 @pytest.fixture
-def api_client_authenticated(client_factory):
-    app.dependency_overrides[get_current_user_from_temp_token] = fake_current_user
-    app.dependency_overrides[get_confirm_car_service] = lambda: StubConfirmCarServiceSuccess()
-    return TestClient(app)
+def api_client_with_expired_temp_token_stub():
+    yield from make_client_with_failing_service("temp_token_expired")
+
 
 @pytest.fixture
-def api_client_car_not_found(client_factory):
-    app.dependency_overrides[get_current_user_from_temp_token] = fake_current_user
-    app.dependency_overrides[get_confirm_car_service] = lambda: StubConfirmCarServiceCarNotFound()
-    return TestClient(app)
+def api_client_with_car_not_in_list_stub():
+    yield from make_client_with_failing_service("car_id_not_in_list")
+
 
 @pytest.fixture
-def api_client_vin_mismatch(client_factory):
-    app.dependency_overrides[get_current_user_from_temp_token] = fake_current_user
-    app.dependency_overrides[get_confirm_car_service] = lambda: StubConfirmCarServiceVinMismatch()
-    return TestClient(app)
+def api_client_with_vin_mismatch_stub():
+    yield from make_client_with_failing_service("vin_hash_mismatch")
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 테스트 케이스
-# ═══════════════════════════════════════════════════════════════════════════
 
-class TestConfirmCarApi:
-    def test_valid_request_returns_200(self, api_client_authenticated):
-        response = api_client_authenticated.post(
+class TestConfirmVehicleApi:
+    """UC-AUTH-005 - POST /auth/confirm-car"""
+
+    def test_valid_request_returns_200_with_app_tokens(
+        self,
+        api_client_with_service_stub,
+    ):
+        response = api_client_with_service_stub.post(
             "/auth/confirm-car",
-            headers={"Authorization": "Bearer temp-token-001"},
-            json={"car_id": VALID_CAR_ID, "vin_hash": VALID_VIN_HASH},
+            headers=AUTH_HEADERS,
+            json={
+                "car_id": VALID_CAR_ID,
+                "vin_hash": VALID_VIN_HASH,
+            },
         )
+
         assert response.status_code == 200
+        body = response.json()
+        assert body["app_access_token"] == VALID_APP_ACCESS_TOKEN
+        assert body["app_refresh_token"] == VALID_APP_REFRESH_TOKEN
+        assert body["user_id"] == VALID_USER_ID
+        assert body["name"] == VALID_USER_NAME
+        assert body["car_id"] == VALID_CAR_ID
+        assert body["car"] == VALID_CAR
 
-    # def test_car_id_not_in_list_returns_400(self, api_client_car_not_found):
-    #     response = api_client_car_not_found.post(
-    #         "/auth/confirm-car",
-    #         headers={"Authorization": "Bearer temp-token-001"},
-    #         json={"car_id": "bad-id", "vin_hash": VALID_VIN_HASH},
-    #     )
-    #     assert response.status_code == 400
-    #     assert response.json()["message"] == "car_id_not_in_hyundai_list"
-
-    def test_car_id_not_in_list_returns_400(self, api_client_car_not_found):
-        response = api_client_car_not_found.post(
+    def test_missing_temp_token_returns_401(self, api_client_with_service_stub):
+        response = api_client_with_service_stub.post(
             "/auth/confirm-car",
-            headers={"Authorization": "Bearer temp-token-001"},
-            json={"car_id": "bad-id", "vin_hash": VALID_VIN_HASH},
+            json={
+                "car_id": VALID_CAR_ID,
+                "vin_hash": VALID_VIN_HASH,
+            },
         )
-        
-        # [핵심] 에러가 났을 때 실제로 서버가 준 응답 전체를 출력
-        print(f"\n--- DEBUG RESPONSE ---")
-        print(f"Status: {response.status_code}")
-        print(f"Body: {response.json()}")
-        
+
+        assert response.status_code == 401
+
+    def test_missing_car_id_returns_422(self, api_client_with_service_stub):
+        response = api_client_with_service_stub.post(
+            "/auth/confirm-car",
+            headers=AUTH_HEADERS,
+            json={"vin_hash": VALID_VIN_HASH},
+        )
+
+        assert response.status_code == 422
+
+    def test_expired_temp_token_returns_401(
+        self,
+        api_client_with_expired_temp_token_stub,
+    ):
+        response = api_client_with_expired_temp_token_stub.post(
+            "/auth/confirm-car",
+            headers=AUTH_HEADERS,
+            json={
+                "car_id": VALID_CAR_ID,
+                "vin_hash": VALID_VIN_HASH,
+            },
+        )
+
+        assert response.status_code == 401
+        assert response.json()["message"] == "temp_token_expired"
+
+    def test_car_id_not_in_list_returns_400(
+        self,
+        api_client_with_car_not_in_list_stub,
+    ):
+        response = api_client_with_car_not_in_list_stub.post(
+            "/auth/confirm-car",
+            headers=AUTH_HEADERS,
+            json={
+                "car_id": VALID_CAR_ID,
+                "vin_hash": VALID_VIN_HASH,
+            },
+        )
+
         assert response.status_code == 400
-        assert response.json()["message"] == "car_id_not_in_hyundai_list"
+        assert response.json()["message"] == "car_id_not_in_list"
 
-    def test_vin_hash_mismatch_returns_400(self, api_client_vin_mismatch):
-        response = api_client_vin_mismatch.post(
+    def test_vin_hash_mismatch_returns_400(
+        self,
+        api_client_with_vin_mismatch_stub,
+    ):
+        response = api_client_with_vin_mismatch_stub.post(
             "/auth/confirm-car",
-            headers={"Authorization": "Bearer temp-token-001"},
-            json={"car_id": VALID_CAR_ID, "vin_hash": "wrong-hash"},
+            headers=AUTH_HEADERS,
+            json={
+                "car_id": VALID_CAR_ID,
+                "vin_hash": VALID_VIN_HASH,
+            },
         )
+
         assert response.status_code == 400
         assert response.json()["message"] == "vin_hash_mismatch"
