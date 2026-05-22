@@ -12,6 +12,9 @@ from app.main import app
 
 
 VALID_PMS_SESSION_ID = "pms-sess-001"
+VALID_LOT_ID = "LOT_GN_01"
+VALID_PLATE = "12가3456"
+VALID_ENTRY_TIME = "2026-05-20T14:30:00"
 VALID_CURRENT_TIME = "2026-05-20T15:30:00"
 
 
@@ -21,6 +24,11 @@ class StubCalculateFeeService:
             amount=5000,
             duration_minutes=60,
             currency="KRW",
+            pms_session_id=VALID_PMS_SESSION_ID,
+            lot_id=VALID_LOT_ID,
+            plate=VALID_PLATE,
+            entry_time=VALID_ENTRY_TIME,
+            calculated_at=VALID_CURRENT_TIME,
         )
 
 
@@ -72,10 +80,35 @@ class TestCalculateFeeApi:
 
         assert response.status_code == 200
         assert response.json() == {
+            "pms_session_id": VALID_PMS_SESSION_ID,
+            "lot_id": VALID_LOT_ID,
+            "plate": VALID_PLATE,
             "amount": 5000,
             "duration_minutes": 60,
             "currency": "KRW",
+            "entry_time": VALID_ENTRY_TIME,
+            "calculated_at": VALID_CURRENT_TIME,
         }
+
+    def test_openapi_query_shape_returns_fee_response(
+        self,
+        api_client_with_service_stub,
+    ):
+        response = api_client_with_service_stub.get(
+            "/pms/parking/fee",
+            params={
+                "lot_id": VALID_LOT_ID,
+                "plate": VALID_PLATE,
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["pms_session_id"] == VALID_PMS_SESSION_ID
+        assert body["lot_id"] == VALID_LOT_ID
+        assert body["plate"] == VALID_PLATE
+        assert body["amount"] == 5000
+        assert body["currency"] == "KRW"
 
     def test_session_not_found_returns_404(
         self,
@@ -84,8 +117,8 @@ class TestCalculateFeeApi:
         response = api_client_with_failing_service_stub.get(
             "/parking/fee",
             params={
-                "pms_session_id": VALID_PMS_SESSION_ID,
-                "current_time": VALID_CURRENT_TIME,
+                "lot_id": VALID_LOT_ID,
+                "plate": VALID_PLATE,
             },
         )
 

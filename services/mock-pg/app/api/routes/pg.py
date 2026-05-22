@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
 from app.api.deps import (
     get_charge_billing_key_service,
@@ -23,6 +23,7 @@ from app.application.pg.complete_card_registration import (
 router = APIRouter()
 
 
+@router.post("/pg/card-register", response_model=CardRegistrationResponse)
 @router.post("/card-register", response_model=CardRegistrationResponse)
 def complete_card_registration(
     request: CardRegistrationRequest,
@@ -44,9 +45,19 @@ def complete_card_registration(
     )
 
 
-@router.post("/payments/billing", response_model=BillingPaymentResponse)
+@router.post(
+    "/pg/payments/billing",
+    response_model=BillingPaymentResponse,
+    response_model_exclude_none=True,
+)
+@router.post(
+    "/payments/billing",
+    response_model=BillingPaymentResponse,
+    response_model_exclude_none=True,
+)
 def charge_billing_key(
     request: BillingPaymentRequest,
+    response: Response,
     service: ChargeBillingKeyService = Depends(get_charge_billing_key_service),
 ) -> BillingPaymentResponse:
     result = service.execute(
@@ -57,8 +68,12 @@ def charge_billing_key(
             idempotency_key=request.idempotency_key,
         )
     )
+    if result.status == "failed":
+        response.status_code = 400
+
     return BillingPaymentResponse(
         status=result.status,
-        tx_id=result.tx_id,
+        pg_tx_id=result.tx_id,
         approval_no=result.approval_no,
+        failed_reason=None if result.status == "success" else "payment_failed",
     )
