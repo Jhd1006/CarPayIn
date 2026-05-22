@@ -1,17 +1,27 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import (
+    get_confirm_vehicle_service,
     get_create_qr_session_service,
     get_handle_hyundai_oauth_callback_service,
     get_login_session_status_service,
+    get_refresh_access_token_service,
     get_start_hyundai_oauth_service,
 )
 from app.api.schemas.auth import (
+    ConfirmVehicleRequest,
+    ConfirmVehicleResponse,
     HyundaiOAuthCallbackResponse,
     QrSessionCreateRequest,
     QrSessionCreateResponse,
+    RefreshAccessTokenRequest,
+    RefreshAccessTokenResponse,
     SessionStatusResponse,
+)
+from app.application.auth.confirm_vehicle import (
+    ConfirmVehicleCommand,
+    ConfirmVehicleService,
 )
 from app.application.auth.create_qr_session import (
     CreateQrSessionCommand,
@@ -25,6 +35,10 @@ from app.application.auth.handle_hyundai_oauth_callback import (
     HandleHyundaiOAuthCallbackCommand,
     HandleHyundaiOAuthCallbackService,
 )
+from app.application.auth.refresh_access_token import (
+    RefreshAccessTokenCommand,
+    RefreshAccessTokenService,
+)
 from app.application.auth.start_hyundai_oauth import (
     StartHyundaiOAuthCommand,
     StartHyundaiOAuthService,
@@ -32,6 +46,28 @@ from app.application.auth.start_hyundai_oauth import (
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def extract_bearer_token(authorization: str | None) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "UNAUTHORIZED",
+                "message": "missing_bearer_token",
+            },
+        )
+
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "UNAUTHORIZED",
+                "message": "missing_bearer_token",
+            },
+        )
+    return token
 
 
 @router.post("/qr-session", response_model=QrSessionCreateResponse)
@@ -91,4 +127,43 @@ def get_login_session_status(
         name=result.name,
         cars=result.cars,
         temp_access_token=result.temp_access_token,
+    )
+
+
+@router.post("/confirm-car", response_model=ConfirmVehicleResponse)
+def confirm_vehicle(
+    request: ConfirmVehicleRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    service: ConfirmVehicleService = Depends(get_confirm_vehicle_service),
+) -> ConfirmVehicleResponse:
+    result = service.execute(
+        ConfirmVehicleCommand(
+            temp_access_token=extract_bearer_token(authorization),
+            car_id=request.car_id,
+            vin_hash=request.vin_hash,
+        )
+    )
+
+    return ConfirmVehicleResponse(
+        app_access_token=result.app_access_token,
+        app_refresh_token=result.app_refresh_token,
+        user_id=result.user_id,
+        name=result.name,
+        car_id=result.car_id,
+        car=result.car,
+    )
+
+
+@router.post("/refresh", response_model=RefreshAccessTokenResponse)
+def refresh_access_token(
+    request: RefreshAccessTokenRequest,
+    service: RefreshAccessTokenService = Depends(get_refresh_access_token_service),
+) -> RefreshAccessTokenResponse:
+    result = service.execute(
+        RefreshAccessTokenCommand(refresh_token=request.refresh_token)
+    )
+
+    return RefreshAccessTokenResponse(
+        app_access_token=result.app_access_token,
+        app_refresh_token=result.app_refresh_token,
     )
