@@ -45,11 +45,13 @@ get_parking_fee.py
 | 테스트 종류 | 검증 대상 | 작성 위치 | 주요 내용 |
 | --- | --- | --- | --- |
 | Unit Test | 비즈니스 로직 | `tests/unit/` | use case service의 규칙 검증 |
-| API Test | HTTP API 계약 | `tests/integration/api/` | endpoint, request, response, status code 검증 |
-| Integration Test | 실제 인프라 연동 | `tests/integration/` | DB, Redis, 외부 client 연동 검증 |
+| API Test | HTTP API 계약 | `tests/api/` | endpoint, request, response, status code 검증 |
+| Integration Test | 실제 인프라 연동 | `tests/integration/` | DB, Redis, repository, 외부 client 연동 검증 |
 | E2E Test | 전체 사용자 흐름 | `tests/e2e/` | 핵심 성공 시나리오 검증 |
 
 하나의 테스트 파일에서 위 책임들을 섞지 않는다.
+
+API test와 integration test는 분리한다. API test는 service dependency를 stub으로 교체하고 HTTP layer의 계약만 검증한다. Integration test는 실제 구현체와 인프라가 함께 동작하는지 검증한다.
 
 ## 2. Unit Test 기준
 
@@ -329,8 +331,8 @@ request validation
 ```text
 POST /auth/qr-session 정상 요청 시 200 반환
 응답에 login_url 포함
-login_session_id 누락 시 400 반환
-vin_hash 누락 시 400 반환
+login_session_id 누락 시 422 반환
+vin_hash 누락 시 422 반환
 ```
 
 API test에서는 unit test에서 검증한 비즈니스 세부 규칙을 모두 반복하지 않는다.
