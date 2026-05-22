@@ -61,18 +61,6 @@ class StubCreateCardOrderServiceThatFailsWithPg:
 # Fixtures
 # ──────────────────────────────────────────────
 
-def _make_authenticated_client(service_factory):
-    from app.api.deps import get_current_user
-
-    def fake_current_user():
-        return {"user_id": "user-001", "car_id": "car-001"}
-
-    original = app.dependency_overrides.copy()
-    app.dependency_overrides[get_create_card_order_service] = service_factory
-    app.dependency_overrides[get_current_user] = fake_current_user
-    return original
-
-
 @pytest.fixture
 def api_client_authenticated():
     from app.api.deps import get_current_user
@@ -85,11 +73,12 @@ def api_client_authenticated():
         lambda: StubCreateCardOrderService()
     )
     app.dependency_overrides[get_current_user] = fake_current_user
-
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -105,10 +94,11 @@ def api_client_with_vehicle_not_found_stub():
     )
     app.dependency_overrides[get_current_user] = fake_current_user
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -124,10 +114,11 @@ def api_client_with_business_error_stub():
     )
     app.dependency_overrides[get_current_user] = fake_current_user
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -143,10 +134,11 @@ def api_client_with_molit_failing_stub():
     )
     app.dependency_overrides[get_current_user] = fake_current_user
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -162,10 +154,11 @@ def api_client_with_pg_failing_stub():
     )
     app.dependency_overrides[get_current_user] = fake_current_user
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
@@ -175,10 +168,11 @@ def api_client_unauthenticated():
         lambda: StubCreateCardOrderService()
     )
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 # ──────────────────────────────────────────────
@@ -205,10 +199,7 @@ class TestCreateCardOrderApi:
         )
 
         assert response.status_code == 200
-
         body = response.json()
-        assert "order_id" in body
-        assert "pg_url" in body
         assert body["order_id"] == VALID_ORDER_ID
         assert body["pg_url"] == VALID_PG_URL
 
@@ -298,6 +289,8 @@ class TestCreateCardOrderApi:
         )
 
         assert response.status_code == 400
+        assert response.json()["message"] == "agree_terms_required"
+
 
     def test_vehicle_not_found_returns_404(
         self,
@@ -314,6 +307,7 @@ class TestCreateCardOrderApi:
         )
 
         assert response.status_code == 404
+        assert response.json()["message"] == "vehicle_not_found"
 
     def test_molit_verification_failure_returns_422(
         self,
@@ -330,6 +324,7 @@ class TestCreateCardOrderApi:
         )
 
         assert response.status_code == 422
+        assert response.json()["message"] == "molit_verification_failed"
 
     def test_pg_url_creation_failure_returns_502(
         self,
@@ -346,3 +341,4 @@ class TestCreateCardOrderApi:
         )
 
         assert response.status_code == 502
+        assert response.json()["message"] == "pg_url_creation_failed"
