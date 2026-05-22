@@ -2,11 +2,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.card import router as card_router
 from app.api.routes.parking import router as parking_router
 from app.api.routes.payment import router as payment_router
 
 
 app = FastAPI(title="Car Pay-in Backend")
+
+
+@app.get("/health")
+def health_check() -> dict:
+    return {"status": "ok"}
 
 
 @app.exception_handler(ValueError)
@@ -16,12 +22,21 @@ async def value_error_handler(request: Request, exc: ValueError):
         status_code = 404
     elif error_code in {"session_expired", "session_not_active"}:
         status_code = 404
-    elif error_code in {"invalid_token", "pms_auth_failed"}:
+    elif error_code in {
+        "invalid_token",
+        "pms_auth_failed",
+        "refresh_token_not_found",
+        "refresh_token_revoked",
+        "refresh_token_expired",
+        "temp_token_expired",
+    }:
         status_code = 401
     elif error_code in {"car_id_token_mismatch", "session_car_id_mismatch"}:
         status_code = 403
     elif error_code in {"quote_not_found", "amount_currency_mismatch"}:
         status_code = 409
+    elif error_code in {"molit_verification_failed"}:
+        status_code = 422
     else:
         status_code = 400
 
@@ -34,8 +49,31 @@ async def value_error_handler(request: Request, exc: ValueError):
                 403: "FORBIDDEN",
                 404: "NOT_FOUND",
                 409: "CONFLICT",
+                422: "UNPROCESSABLE_ENTITY",
             }[status_code],
             "message": error_code,
+        },
+    )
+
+
+@app.exception_handler(LookupError)
+async def lookup_error_handler(request: Request, exc: LookupError):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "code": "NOT_FOUND",
+            "message": str(exc),
+        },
+    )
+
+
+@app.exception_handler(PermissionError)
+async def permission_error_handler(request: Request, exc: PermissionError):
+    return JSONResponse(
+        status_code=401,
+        content={
+            "code": "UNAUTHORIZED",
+            "message": str(exc),
         },
     )
 
@@ -52,5 +90,6 @@ async def runtime_error_handler(request: Request, exc: RuntimeError):
 
 
 app.include_router(auth_router)
+app.include_router(card_router)
 app.include_router(parking_router)
 app.include_router(payment_router)

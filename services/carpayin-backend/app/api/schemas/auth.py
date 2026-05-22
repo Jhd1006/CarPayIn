@@ -21,3 +21,26 @@ class SessionStatusResponse(BaseModel):
     name: str | None = None
     cars: list[dict] | None = None
     temp_access_token: str | None = None
+
+
+class ConfirmVehicleRequest(BaseModel):
+    car_id: str
+    vin_hash: str
+
+
+class ConfirmVehicleResponse(BaseModel):
+    app_access_token: str
+    app_refresh_token: str
+    user_id: str
+    name: str
+    car_id: str
+    car: dict
+
+
+class RefreshAccessTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshAccessTokenResponse(BaseModel):
+    app_access_token: str
+    app_refresh_token: str | None = None
