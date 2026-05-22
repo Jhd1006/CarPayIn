@@ -1,9 +1,13 @@
+from fastapi import Header, HTTPException
+
 from app.application.auth.create_qr_session import CreateQrSessionService
 from app.application.auth.get_login_session_status import GetLoginSessionStatusService
 from app.application.auth.handle_hyundai_oauth_callback import (
     HandleHyundaiOAuthCallbackService,
 )
 from app.application.auth.start_hyundai_oauth import StartHyundaiOAuthService
+from app.application.card.create_card_order import CreateCardOrderService
+from app.application.card.handle_card_webhook import HandleCardWebhookService
 from app.application.parking.handle_entry_webhook import HandleEntryWebhookService
 from app.application.parking.register_pre_notify import RegisterPreNotifyService
 
@@ -93,6 +97,31 @@ oauth_state_store = InMemoryOAuthStateStore()
 app_login_result_store = InMemoryAppLoginResultStore()
 
 
+def get_current_user(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "UNAUTHORIZED",
+                "message": "missing_bearer_token",
+            },
+        )
+
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "UNAUTHORIZED",
+                "message": "missing_bearer_token",
+            },
+        )
+
+    raise RuntimeError("dependency_not_configured")
+
+
 def get_create_qr_session_service() -> CreateQrSessionService:
     return CreateQrSessionService(
         qr_session_store=qr_session_store,
@@ -131,6 +160,27 @@ def get_login_session_status_service() -> GetLoginSessionStatusService:
     return GetLoginSessionStatusService(
         app_login_result_store=app_login_result_store,
         qr_session_store=qr_session_store,
+    )
+
+
+def get_create_card_order_service() -> CreateCardOrderService:
+    placeholder = NotConfiguredDependency()
+    return CreateCardOrderService(
+        vehicle_repository=placeholder,
+        molit_client=placeholder,
+        card_order_store=placeholder,
+        pg_client=placeholder,
+        order_id_generator=placeholder,
+    )
+
+
+def get_handle_card_webhook_service() -> HandleCardWebhookService:
+    placeholder = NotConfiguredDependency()
+    return HandleCardWebhookService(
+        card_order_store=placeholder,
+        billing_key_repository=placeholder,
+        vehicle_repository=placeholder,
+        signature_verifier=placeholder,
     )
 
 
