@@ -59,33 +59,41 @@ def api_client_with_service_stub():
     finally:
         app.dependency_overrides = original
 
-
-def make_client_with_failing_service(error_code: str):
+@pytest.fixture
+def api_client_with_expired_temp_token_stub():
     original = app.dependency_overrides.copy()
     app.dependency_overrides[get_confirm_vehicle_service] = (
-        lambda: StubConfirmVehicleServiceThatRaises(error_code)
+        lambda: StubConfirmVehicleServiceThatRaises("temp_token_expired")
     )
-
     try:
         with TestClient(app) as client:
             yield client
     finally:
         app.dependency_overrides = original
 
-
-@pytest.fixture
-def api_client_with_expired_temp_token_stub():
-    yield from make_client_with_failing_service("temp_token_expired")
-
-
 @pytest.fixture
 def api_client_with_car_not_in_list_stub():
-    yield from make_client_with_failing_service("car_id_not_in_list")
-
+    original = app.dependency_overrides.copy()
+    app.dependency_overrides[get_confirm_vehicle_service] = (
+        lambda: StubConfirmVehicleServiceThatRaises("car_id_not_in_list")
+    )
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 @pytest.fixture
 def api_client_with_vin_mismatch_stub():
-    yield from make_client_with_failing_service("vin_hash_mismatch")
+    original = app.dependency_overrides.copy()
+    app.dependency_overrides[get_confirm_vehicle_service] = (
+        lambda: StubConfirmVehicleServiceThatRaises("vin_hash_mismatch")
+    )
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 class TestConfirmVehicleApi:
