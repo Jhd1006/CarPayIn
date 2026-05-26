@@ -200,6 +200,9 @@ class TestCreateCardOrderApi:
 
         assert response.status_code == 200
         body = response.json()
+        
+        assert "order_id" in body
+        assert "pg_url" in body
         assert body["order_id"] == VALID_ORDER_ID
         assert body["pg_url"] == VALID_PG_URL
 
