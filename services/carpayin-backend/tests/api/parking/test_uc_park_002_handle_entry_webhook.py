@@ -144,6 +144,7 @@ class TestHandleEntryWebhookApi:
 
         assert response.status_code == 200
         body = response.json()
+        assert "status" in body 
         assert body["status"] == "confirmed"
         assert body["session_id"] == VALID_SESSION_ID
         assert body["lot_id"] == VALID_LOT_ID
