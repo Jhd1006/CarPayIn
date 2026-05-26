@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  carpayin-postgres:
+    image: postgres:15
+    container_name: carpayin-postgres
+    environment:
+      POSTGRES_DB: carpayin_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - carpayin_postgres_data:/var/lib/postgresql/data
+
+  mock-card-postgres:
+    image: postgres:15
+    container_name: mock-card-postgres
+    environment:
+      POSTGRES_DB: mock_card_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - mock_card_postgres_data:/var/lib/postgresql/data
+
+  mock-pg-postgres:
+    image: postgres:15
+    container_name: mock-pg-postgres
+    environment:
+      POSTGRES_DB: mock_pg_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - mock_pg_postgres_data:/var/lib/postgresql/data
+
+  pms-postgres:
+    image: postgres:15
+    container_name: pms-postgres
+    environment:
+      POSTGRES_DB: pms_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_pass
+    ports:
+      - "5435:5432"
+    volumes:
+      - pms_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: carpayin-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  carpayin_postgres_data:
+  mock_card_postgres_data:
+  mock_pg_postgres_data:
+  pms_postgres_data:
+  redis_data:
