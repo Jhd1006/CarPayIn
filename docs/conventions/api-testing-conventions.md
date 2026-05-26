@@ -219,10 +219,11 @@ def api_client_with_service_stub():
         lambda: StubCreateCardOrderService()
     )
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 ```
 
 fixture 이름에는 어떤 dependency가 override되는지 드러나게 작성한다.
@@ -257,10 +258,11 @@ def api_client_authenticated():
     )
     app.dependency_overrides[get_current_user] = fake_current_user
 
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides = original
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 ```
 
 401 검증에서는 auth dependency를 override하지 않는다. 토큰 없이 호출해서 실제 auth guard가 동작하는지 확인한다.
