@@ -42,12 +42,12 @@ def api_client_with_service_stub():
         app.dependency_overrides = original
 
 
-def make_client_with_failing_service(error_code: str):
+@pytest.fixture
+def api_client_with_missing_token_stub():
     original = app.dependency_overrides.copy()
     app.dependency_overrides[get_refresh_access_token_service] = (
-        lambda: StubRefreshAccessTokenServiceThatRaises(error_code)
+        lambda: StubRefreshAccessTokenServiceThatRaises("refresh_token_not_found")
     )
-
     try:
         with TestClient(app) as client:
             yield client
@@ -56,18 +56,29 @@ def make_client_with_failing_service(error_code: str):
 
 
 @pytest.fixture
-def api_client_with_missing_token_stub():
-    yield from make_client_with_failing_service("refresh_token_not_found")
-
-
-@pytest.fixture
 def api_client_with_expired_token_stub():
-    yield from make_client_with_failing_service("refresh_token_expired")
+    original = app.dependency_overrides.copy()
+    app.dependency_overrides[get_refresh_access_token_service] = (
+        lambda: StubRefreshAccessTokenServiceThatRaises("refresh_token_expired")
+    )
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 @pytest.fixture
 def api_client_with_revoked_token_stub():
-    yield from make_client_with_failing_service("refresh_token_revoked")
+    original = app.dependency_overrides.copy()
+    app.dependency_overrides[get_refresh_access_token_service] = (
+        lambda: StubRefreshAccessTokenServiceThatRaises("refresh_token_revoked")
+    )
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides = original
 
 
 class TestRefreshAccessTokenApi:
