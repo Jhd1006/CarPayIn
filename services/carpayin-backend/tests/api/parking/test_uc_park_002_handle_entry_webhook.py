@@ -164,21 +164,7 @@ class TestHandleEntryWebhookApi:
         assert response.json()["status"] == "not_registered"
         assert response.json()["session_id"] is None
 
-    def test_duplicate_pms_session_id_returns_existing_confirmed_result(
-        self,
-        api_client_with_existing_session_service_stub,
-    ):
-        response = api_client_with_existing_session_service_stub.post(
-            "/webhook/entry",
-            headers=PMS_HEADERS,
-            json=valid_entry_payload(),
-        )
-
-        assert response.status_code == 200
-        assert response.json()["status"] == "confirmed"
-        assert response.json()["session_id"] == EXISTING_SESSION_ID
-
-    def test_active_car_session_returns_existing_confirmed_result(
+    def test_duplicate_or_active_session_returns_existing_confirmed_result(
         self,
         api_client_with_existing_session_service_stub,
     ):
