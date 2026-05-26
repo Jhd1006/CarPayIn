@@ -185,10 +185,14 @@ class TestProcessPaymentApi:
         assert response.status_code == 200
 
         body = response.json()
+        assert "status" in body
         assert body["status"] == "success"
         assert "tx_id" in body
+        assert "approval_no" in body
         assert body["approval_no"] == VALID_APPROVAL_NO
+        assert "amount" in body
         assert body["amount"] == VALID_AMOUNT
+        assert "currency" in body
         assert body["currency"] == VALID_CURRENCY
 
     def test_pg_failure_returns_402(self, api_client_with_pg_failure_stub):
@@ -205,6 +209,7 @@ class TestProcessPaymentApi:
         assert response.status_code == 402
 
         body = response.json()
+        assert "status" in body
         assert body["status"] == "failed"
         assert "tx_id" in body
         assert "failed_reason" in body
