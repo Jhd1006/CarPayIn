@@ -49,19 +49,7 @@ def api_client_with_service_stub():
             yield client
     finally:
         app.dependency_overrides = original
-
-
-def make_client_with_failing_service(error_code: str):
-    original = app.dependency_overrides.copy()
-    app.dependency_overrides[get_register_pre_notify_service] = (
-        lambda: StubRegisterPreNotifyServiceThatFails(error_code)
-    )
-
-    try:
-        return TestClient(app)
-    finally:
-        app.dependency_overrides = original
-
+        
 
 @pytest.fixture
 def api_client_with_no_billing_key_service_stub():
