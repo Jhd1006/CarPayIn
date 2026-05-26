@@ -130,11 +130,17 @@ class TestGetParkingFeeApi:
         assert response.status_code == 200
 
         body = response.json()
+        assert "session_id" in body
         assert body["session_id"] == VALID_SESSION_ID
+        assert "lot_id" in body
         assert body["lot_id"] == VALID_LOT_ID
+        assert "amount" in body
         assert body["amount"] == VALID_AMOUNT
+        assert "duration" in body
         assert body["duration"] == VALID_DURATION
+        assert "currency" in body
         assert body["currency"] == VALID_CURRENCY
+        assert "status" in body
         assert body["status"] == "active"
 
     def test_missing_bearer_token_returns_401(self, api_client_with_service_stub):
