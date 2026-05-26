@@ -114,11 +114,17 @@ class TestConfirmVehicleApi:
 
         assert response.status_code == 200
         body = response.json()
+        assert "app_access_token" in body
         assert body["app_access_token"] == VALID_APP_ACCESS_TOKEN
+        assert "app_refresh_token" in body
         assert body["app_refresh_token"] == VALID_APP_REFRESH_TOKEN
+        assert "user_id" in body
         assert body["user_id"] == VALID_USER_ID
+        assert "name" in body
         assert body["name"] == VALID_USER_NAME
+        assert "car_id" in body
         assert body["car_id"] == VALID_CAR_ID
+        assert "car" in body
         assert body["car"] == VALID_CAR
 
     def test_missing_temp_token_returns_401(self, api_client_with_service_stub):
