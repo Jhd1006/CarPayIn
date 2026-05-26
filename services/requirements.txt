@@ -1,0 +1,26 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+
+# Settings & Validation
+pydantic
+pydantic-settings
+
+# Database
+sqlalchemy
+alembic
+psycopg[binary]  # ← 버전 제거 (최신 자동 설치)
+psycopg2-binary
+
+# Cache
+redis
+
+# HTTP Client
+httpx
+
+# Testing
+pytest
+pytest-asyncio
+
+# Utilities
+python-dotenv
