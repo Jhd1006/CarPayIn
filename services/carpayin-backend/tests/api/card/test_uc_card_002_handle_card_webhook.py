@@ -119,7 +119,9 @@ class TestHandleCardWebhookApi:
         )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "ok"
+        body = response.json()
+        assert "status" in body
+        assert body["status"] == "ok"
 
     # ── Request validation 케이스 ──
 
