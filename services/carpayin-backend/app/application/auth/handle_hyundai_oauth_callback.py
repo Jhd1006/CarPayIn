@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 
 HYUNDAI_ACCESS_TOKEN_TTL_SECONDS = 60 * 60
-APP_LOGIN_RESULT_TTL_SECONDS = 15 * 60
+HYUNDAI_OAUTH_RESULT_TTL_SECONDS = 15 * 60
+APP_LOGIN_RESULT_TTL_SECONDS = 5 * 60
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,7 @@ class HandleHyundaiOAuthCallbackService:
             name=name,
             cars=cars,
             temp_access_token=temp_access_token,
-            ttl_seconds=APP_LOGIN_RESULT_TTL_SECONDS,
+            ttl_seconds=HYUNDAI_OAUTH_RESULT_TTL_SECONDS,
         )
         self.app_login_result_store.save_result(
             session_id=session_id,

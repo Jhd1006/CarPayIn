@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
 
+PRE_NOTIFY_TTL_SECONDS = 60 * 60
+
+
 @dataclass(frozen=True)
 class RegisterPreNotifyCommand:
     access_token: str
@@ -68,6 +71,8 @@ class RegisterPreNotifyService:
             lot_id=command.lot_id,
             plate=normalized_request_plate,
             car_id=command.car_id,
+            user_id=token_data["user_id"],
+            ttl_seconds=PRE_NOTIFY_TTL_SECONDS,
         )
 
         # PMS에 사전 등록 요청
