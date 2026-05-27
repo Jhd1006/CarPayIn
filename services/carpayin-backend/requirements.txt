@@ -3,6 +3,7 @@ uvicorn[standard]
 pydantic-settings
 redis
 httpx
+cryptography
 psycopg[binary]
 SQLAlchemy
 pytest

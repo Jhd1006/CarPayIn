@@ -33,6 +33,12 @@ class HandleLprEntryService:
         )
 
         if existing_session:
+            self.carpayin_webhook_client.send_entry_webhook(
+                pms_session_id=existing_session["pms_session_id"],
+                lot_id=existing_session["lot_id"],
+                plate=existing_session["plate"],
+                entry_time=existing_session["entry_time"],
+            )
             # 중복 생성하지 않고 기존 세션 반환
             return HandleLprEntryResult(
                 status="existing",
