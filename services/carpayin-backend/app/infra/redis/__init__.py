@@ -6,6 +6,7 @@ from app.infra.redis.stores import (
     RedisHyundaiAccessTokenStore,
     RedisHyundaiOAuthResultStore,
     RedisOAuthStateStore,
+    RedisPaymentNotifyRetryStore,
     RedisPreNotifyStore,
     RedisQrSessionStore,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "RedisHyundaiAccessTokenStore",
     "RedisHyundaiOAuthResultStore",
     "RedisOAuthStateStore",
+    "RedisPaymentNotifyRetryStore",
     "RedisPreNotifyStore",
     "RedisQrSessionStore",
 ]

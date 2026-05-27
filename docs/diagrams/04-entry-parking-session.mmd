@@ -19,6 +19,7 @@ sequenceDiagram
 
     LPR->>PMS: Detect plate at entry gate
     PMS->>PMSDB: INSERT parking_sessions
+    PMS->>PMSDB: Mark pre-registered plate consumed
     PMS-->>Backend: POST /webhook/entry
 
     Backend->>Redis: Read parking_pre_notify:{lot_id}:{plate}

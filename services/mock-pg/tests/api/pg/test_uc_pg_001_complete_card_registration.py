@@ -73,6 +73,18 @@ def valid_registration_payload():
 class TestCompleteCardRegistrationApi:
     """UC-PG-001 - POST /card-register"""
 
+    def test_pg_url_opens_card_registration_webview(self):
+        with TestClient(app) as client:
+            response = client.get(
+                "/pg/card-register",
+                params={"order_id": VALID_ORDER_ID},
+            )
+
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert f'data-order-id="{VALID_ORDER_ID}"' in response.text
+        assert 'id="card-form"' in response.text
+
     def test_card_verification_success_returns_billing_key(
         self,
         api_client_with_success_service_stub,

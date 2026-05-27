@@ -126,12 +126,18 @@ class CreateCardOrderService:
             car_id=command.car_id,
         )
         if not is_verified:
-            raise ValueError("MOLIT 소유자 검증에 실패했습니다.")
+            raise ValueError("molit_verification_failed")
 
-        # 5. order_id 생성
+        # 5. Save the verified plate used by subsequent pre-notify checks.
+        self._vehicle_repository.update_plate(
+            car_id=command.car_id,
+            plate=normalized_plate,
+        )
+
+        # 6. order_id 생성
         order_id = self._order_id_generator.generate()
 
-        # 6. Redis에 카드 등록 세션 저장
+        # 7. Redis에 카드 등록 세션 저장
         self._card_order_store.save_pending(
             order_id=order_id,
             user_id=command.user_id,
@@ -139,10 +145,10 @@ class CreateCardOrderService:
             ttl_seconds=CARD_ORDER_TTL_SECONDS,
         )
 
-        # 7. PG 카드 등록 URL 생성
+        # 8. PG 카드 등록 URL 생성
         pg_url = self._pg_client.create_card_registration_url(order_id=order_id)
 
-        # 8. 결과 반환
+        # 9. 결과 반환
         return CreateCardOrderResult(
             order_id=order_id,
             pg_url=pg_url,
