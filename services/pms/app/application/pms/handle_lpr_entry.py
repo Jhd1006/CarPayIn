@@ -18,9 +18,11 @@ class HandleLprEntryResult:
 class HandleLprEntryService:
     def __init__(
         self,
+        pre_registration_repository,
         pms_session_repository,
         carpayin_webhook_client,
     ):
+        self.pre_registration_repository = pre_registration_repository
         self.pms_session_repository = pms_session_repository
         self.carpayin_webhook_client = carpayin_webhook_client
 
@@ -37,6 +39,13 @@ class HandleLprEntryService:
                 pms_session_id=existing_session["pms_session_id"],
             )
 
+        registration = self.pre_registration_repository.get_active_pre_registration(
+            lot_id=command.lot_id,
+            plate=command.plate,
+        )
+        if registration is None:
+            raise ValueError("pre_registration_not_found")
+
         # 새 PMS session 생성
         pms_session_id = f"pms-sess-{uuid.uuid4().hex[:12]}"
         self.pms_session_repository.create_session(
@@ -44,6 +53,10 @@ class HandleLprEntryService:
             lot_id=command.lot_id,
             plate=command.plate,
             entry_time=command.entry_time,
+        )
+        self.pre_registration_repository.consume_pre_registration(
+            lot_id=command.lot_id,
+            plate=command.plate,
         )
 
         # CarPayIn Backend에 entry webhook 전송

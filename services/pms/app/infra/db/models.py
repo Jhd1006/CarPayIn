@@ -14,6 +14,24 @@ import uuid
 Base = declarative_base()
 
 
+class PreRegistration(Base):
+    __tablename__ = 'pre_registrations'
+
+    lot_id = Column(Text, primary_key=True)
+    plate = Column(String(20), primary_key=True)
+    status = Column(Text, nullable=False, default='pre_registered')
+    registered_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    consumed_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pre_registered', 'consumed', 'cancelled')",
+            name='ck_pms_pre_registrations_status',
+        ),
+        Index('idx_pms_pre_registrations_status', 'status'),
+    )
+
+
 class PMSParkingSession(Base):
     """PMS 기준 주차 세션 정보"""
     __tablename__ = 'parking_sessions'

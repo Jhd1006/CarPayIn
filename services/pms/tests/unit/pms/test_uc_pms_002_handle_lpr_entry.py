@@ -17,6 +17,26 @@ VALID_PLATE = "12가3456"
 VALID_ENTRY_TIME = "2026-05-20T14:30:00"
 
 
+class FakePreRegistrationRepository:
+    def __init__(self):
+        self.registrations = {
+            (VALID_LOT_ID, VALID_PLATE): {
+                "lot_id": VALID_LOT_ID,
+                "plate": VALID_PLATE,
+                "status": "pre_registered",
+            }
+        }
+
+    def get_active_pre_registration(self, *, lot_id: str, plate: str):
+        registration = self.registrations.get((lot_id, plate))
+        if registration is None or registration["status"] != "pre_registered":
+            return None
+        return registration
+
+    def consume_pre_registration(self, *, lot_id: str, plate: str):
+        self.registrations[(lot_id, plate)]["status"] = "consumed"
+
+
 class FakePmsSessionRepository:
     def __init__(self):
         self.sessions = {}
@@ -68,6 +88,11 @@ class FakeCarPayInWebhookClient:
 
 
 @pytest.fixture
+def fake_pre_registration_repository():
+    return FakePreRegistrationRepository()
+
+
+@pytest.fixture
 def fake_pms_session_repository():
     return FakePmsSessionRepository()
 
@@ -79,10 +104,12 @@ def fake_carpayin_webhook_client():
 
 @pytest.fixture
 def handle_lpr_entry_service(
+    fake_pre_registration_repository,
     fake_pms_session_repository,
     fake_carpayin_webhook_client,
 ):
     return HandleLprEntryService(
+        pre_registration_repository=fake_pre_registration_repository,
         pms_session_repository=fake_pms_session_repository,
         carpayin_webhook_client=fake_carpayin_webhook_client,
     )
@@ -94,6 +121,7 @@ class TestHandleLprEntry:
     def test_creates_active_pms_session(
         self,
         handle_lpr_entry_service,
+        fake_pre_registration_repository,
         fake_pms_session_repository,
     ):
         """active PMS session을 생성한다."""
@@ -116,6 +144,12 @@ class TestHandleLprEntry:
         # 응답 확인
         assert result.status == "created"
         assert result.pms_session_id is not None
+        assert (
+            fake_pre_registration_repository.registrations[
+                (VALID_LOT_ID, VALID_PLATE)
+            ]["status"]
+            == "consumed"
+        )
 
     def test_duplicate_plate_does_not_create_duplicate_session(
         self,
@@ -166,3 +200,13 @@ class TestHandleLprEntry:
         assert webhook_payload["lot_id"] == VALID_LOT_ID
         assert webhook_payload["plate"] == VALID_PLATE
         assert webhook_payload["entry_time"] == VALID_ENTRY_TIME
+
+    def test_unregistered_plate_is_rejected(self, handle_lpr_entry_service):
+        command = HandleLprEntryCommand(
+            lot_id=VALID_LOT_ID,
+            plate="99UNKNOWN",
+            entry_time=VALID_ENTRY_TIME,
+        )
+
+        with pytest.raises(ValueError, match="pre_registration_not_found"):
+            handle_lpr_entry_service.execute(command)
