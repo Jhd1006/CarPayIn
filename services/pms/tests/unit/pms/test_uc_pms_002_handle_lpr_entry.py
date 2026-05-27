@@ -155,6 +155,7 @@ class TestHandleLprEntry:
         self,
         handle_lpr_entry_service,
         fake_pms_session_repository,
+        fake_carpayin_webhook_client,
     ):
         """같은 plate에 active session이 있으면 중복 생성하지 않는다."""
         command = HandleLprEntryCommand(
@@ -176,6 +177,7 @@ class TestHandleLprEntry:
 
         # 세션이 하나만 존재
         assert len(fake_pms_session_repository.sessions) == 1
+        assert len(fake_carpayin_webhook_client.webhook_calls) == 2
 
     def test_webhook_payload_contains_required_fields(
         self,

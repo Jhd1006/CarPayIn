@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -58,6 +58,8 @@ class SqlAlchemyParkingSessionRepository:
             raise LookupError("session_not_found")
 
         parking_session.status = status
+        if status == "completed" and parking_session.exit_time is None:
+            parking_session.exit_time = datetime.now(timezone.utc)
         self.session.commit()
 
     @staticmethod
@@ -69,5 +71,10 @@ class SqlAlchemyParkingSessionRepository:
             "lot_id": parking_session.lot_id,
             "plate": parking_session.plate,
             "entry_time": parking_session.entry_time.isoformat(),
+            "exit_time": (
+                parking_session.exit_time.isoformat()
+                if parking_session.exit_time is not None
+                else None
+            ),
             "status": parking_session.status,
         }

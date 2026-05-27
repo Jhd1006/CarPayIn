@@ -221,6 +221,23 @@ class TestCreateCardOrder:
         assert len(fake_pg_client.create_calls) == 1
         assert fake_pg_client.create_calls[0]["order_id"] == VALID_ORDER_ID
 
+    def test_valid_request_persists_verified_plate(
+        self,
+        create_card_order_service,
+        fake_vehicle_repo,
+    ):
+        command = CreateCardOrderCommand(
+            user_id=VALID_USER_ID,
+            car_id=VALID_CAR_ID,
+            plate=VALID_PLATE,
+            bank_name=VALID_BANK_NAME,
+            agree_terms=True,
+        )
+
+        create_card_order_service.execute(command)
+
+        assert fake_vehicle_repo.updated_plates[VALID_CAR_ID] == VALID_PLATE
+
     # ── 실패 케이스 ──
     #
     # [인증 실패 케이스 제외 이유]
