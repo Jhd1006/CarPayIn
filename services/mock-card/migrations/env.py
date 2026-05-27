@@ -12,6 +12,10 @@ from app.infra.db.models import Base
 
 config = context.config
 
+database_url = os.getenv("MOCK_CARD_DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
