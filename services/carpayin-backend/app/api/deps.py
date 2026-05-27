@@ -1,4 +1,5 @@
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy.orm import Session
 
 from app.application.auth.confirm_vehicle import ConfirmVehicleService
 from app.application.auth.create_qr_session import CreateQrSessionService
@@ -14,6 +15,7 @@ from app.application.parking.handle_entry_webhook import HandleEntryWebhookServi
 from app.application.parking.register_pre_notify import RegisterPreNotifyService
 from app.application.payment.get_parking_fee import GetParkingFeeService
 from app.application.payment.process_payment import ProcessPaymentService
+from app.infra.db.session import get_db_session
 from app.infra.redis import (
     RedisAppLoginResultStore,
     RedisCardOrderStore,
@@ -25,6 +27,23 @@ from app.infra.redis import (
     RedisQrSessionStore,
     redis_client,
 )
+from app.infra.repositories.app_refresh_token_repository import (
+    SqlAlchemyAppRefreshTokenRepository,
+)
+from app.infra.repositories.billing_key_repository import (
+    SqlAlchemyBillingKeyRepository,
+)
+from app.infra.repositories.hyundai_token_repository import (
+    SqlAlchemyHyundaiTokenRepository,
+)
+from app.infra.repositories.parking_session_repository import (
+    SqlAlchemyParkingSessionRepository,
+)
+from app.infra.repositories.transaction_repository import (
+    SqlAlchemyTransactionRepository,
+)
+from app.infra.repositories.user_repository import SqlAlchemyUserRepository
+from app.infra.repositories.vehicle_repository import SqlAlchemyVehicleRepository
 
 
 PUBLIC_BASE_URL = "https://api.carpayin.test"
@@ -89,14 +108,16 @@ def get_start_hyundai_oauth_service() -> StartHyundaiOAuthService:
     )
 
 
-def get_handle_hyundai_oauth_callback_service() -> HandleHyundaiOAuthCallbackService:
+def get_handle_hyundai_oauth_callback_service(
+    session: Session = Depends(get_db_session),
+) -> HandleHyundaiOAuthCallbackService:
     placeholder = NotConfiguredDependency()
     return HandleHyundaiOAuthCallbackService(
         oauth_state_store=oauth_state_store,
         qr_session_store=qr_session_store,
         hyundai_oauth_client=placeholder,
-        user_repository=placeholder,
-        hyundai_token_repository=placeholder,
+        user_repository=SqlAlchemyUserRepository(session),
+        hyundai_token_repository=SqlAlchemyHyundaiTokenRepository(session),
         hyundai_access_token_store=hyundai_access_token_store,
         hyundai_oauth_result_store=hyundai_oauth_result_store,
         app_login_result_store=app_login_result_store,
@@ -113,33 +134,39 @@ def get_login_session_status_service() -> GetLoginSessionStatusService:
     )
 
 
-def get_confirm_vehicle_service() -> ConfirmVehicleService:
+def get_confirm_vehicle_service(
+    session: Session = Depends(get_db_session),
+) -> ConfirmVehicleService:
     placeholder = NotConfiguredDependency()
     return ConfirmVehicleService(
         temp_access_token_validator=placeholder,
         hyundai_oauth_result_store=hyundai_oauth_result_store,
         app_login_result_store=app_login_result_store,
         qr_session_store=qr_session_store,
-        vehicle_repository=placeholder,
-        app_refresh_token_repository=placeholder,
+        vehicle_repository=SqlAlchemyVehicleRepository(session),
+        app_refresh_token_repository=SqlAlchemyAppRefreshTokenRepository(session),
         app_token_issuer=placeholder,
         refresh_token_hasher=placeholder,
     )
 
 
-def get_refresh_access_token_service() -> RefreshAccessTokenService:
+def get_refresh_access_token_service(
+    session: Session = Depends(get_db_session),
+) -> RefreshAccessTokenService:
     placeholder = NotConfiguredDependency()
     return RefreshAccessTokenService(
-        app_refresh_token_repository=placeholder,
+        app_refresh_token_repository=SqlAlchemyAppRefreshTokenRepository(session),
         refresh_token_hasher=placeholder,
         app_access_token_issuer=placeholder,
     )
 
 
-def get_create_card_order_service() -> CreateCardOrderService:
+def get_create_card_order_service(
+    session: Session = Depends(get_db_session),
+) -> CreateCardOrderService:
     placeholder = NotConfiguredDependency()
     return CreateCardOrderService(
-        vehicle_repository=placeholder,
+        vehicle_repository=SqlAlchemyVehicleRepository(session),
         molit_client=placeholder,
         card_order_store=card_order_store,
         pg_client=placeholder,
@@ -147,56 +174,66 @@ def get_create_card_order_service() -> CreateCardOrderService:
     )
 
 
-def get_handle_card_webhook_service() -> HandleCardWebhookService:
+def get_handle_card_webhook_service(
+    session: Session = Depends(get_db_session),
+) -> HandleCardWebhookService:
     placeholder = NotConfiguredDependency()
     return HandleCardWebhookService(
         card_order_store=card_order_store,
-        billing_key_repository=placeholder,
-        vehicle_repository=placeholder,
+        billing_key_repository=SqlAlchemyBillingKeyRepository(session),
+        vehicle_repository=SqlAlchemyVehicleRepository(session),
         signature_verifier=placeholder,
     )
 
 
-def get_register_pre_notify_service() -> RegisterPreNotifyService:
+def get_register_pre_notify_service(
+    session: Session = Depends(get_db_session),
+) -> RegisterPreNotifyService:
     placeholder = NotConfiguredDependency()
     return RegisterPreNotifyService(
         token_validator=placeholder,
-        vehicle_repository=placeholder,
-        billing_key_repository=placeholder,
+        vehicle_repository=SqlAlchemyVehicleRepository(session),
+        billing_key_repository=SqlAlchemyBillingKeyRepository(session),
         pre_notify_store=pre_notify_store,
         pms_client=placeholder,
         plate_normalizer=placeholder,
     )
 
 
-def get_handle_entry_webhook_service() -> HandleEntryWebhookService:
+def get_handle_entry_webhook_service(
+    session: Session = Depends(get_db_session),
+) -> HandleEntryWebhookService:
     placeholder = NotConfiguredDependency()
     return HandleEntryWebhookService(
         pms_auth_validator=placeholder,
         pre_notify_store=pre_notify_store,
-        parking_session_repository=placeholder,
+        parking_session_repository=SqlAlchemyParkingSessionRepository(session),
         notification_publisher=placeholder,
     )
 
 
-def get_parking_fee_service() -> GetParkingFeeService:
+def get_parking_fee_service(
+    session: Session = Depends(get_db_session),
+) -> GetParkingFeeService:
     placeholder = NotConfiguredDependency()
     return GetParkingFeeService(
         token_validator=placeholder,
-        parking_session_repository=placeholder,
+        parking_session_repository=SqlAlchemyParkingSessionRepository(session),
         fee_quote_store=fee_quote_store,
         pms_client=placeholder,
     )
 
 
-def get_process_payment_service() -> ProcessPaymentService:
+def get_process_payment_service(
+    session: Session = Depends(get_db_session),
+) -> ProcessPaymentService:
     placeholder = NotConfiguredDependency()
     return ProcessPaymentService(
         token_validator=placeholder,
         fee_quote_store=fee_quote_store,
-        parking_session_repository=placeholder,
-        billing_key_repository=placeholder,
-        transaction_repository=placeholder,
+        parking_session_repository=SqlAlchemyParkingSessionRepository(session),
+        billing_key_repository=SqlAlchemyBillingKeyRepository(session),
+        transaction_repository=SqlAlchemyTransactionRepository(session),
         pg_client=placeholder,
         pms_client=placeholder,
         notification_publisher=placeholder,
