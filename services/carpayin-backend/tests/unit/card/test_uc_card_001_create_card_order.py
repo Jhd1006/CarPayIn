@@ -57,8 +57,15 @@ class FakeCardOrderStore:
     def __init__(self):
         self.pending_orders: dict[str, dict] = {}
 
-    def save_pending(self, *, order_id: str) -> None:
-        self.pending_orders[order_id] = {"status": "pending"}
+    def save_pending(
+        self, *, order_id: str, user_id: str, car_id: str, ttl_seconds: int
+    ) -> None:
+        self.pending_orders[order_id] = {
+            "status": "pending",
+            "user_id": user_id,
+            "car_id": car_id,
+            "ttl_seconds": ttl_seconds,
+        }
 
 
 class FakePgClient:
@@ -155,6 +162,8 @@ class TestCreateCardOrder:
 
         assert VALID_ORDER_ID in fake_card_order_store.pending_orders
         assert fake_card_order_store.pending_orders[VALID_ORDER_ID]["status"] == "pending"
+        assert fake_card_order_store.pending_orders[VALID_ORDER_ID]["user_id"] == VALID_USER_ID
+        assert fake_card_order_store.pending_orders[VALID_ORDER_ID]["car_id"] == VALID_CAR_ID
 
     def test_valid_request_returns_order_id_and_pg_url(
         self,

@@ -44,8 +44,13 @@ class MolitClient(Protocol):
         ...
 
 
+CARD_ORDER_TTL_SECONDS = 30 * 60
+
+
 class CardOrderStore(Protocol):
-    def save_pending(self, *, order_id: str) -> None:
+    def save_pending(
+        self, *, order_id: str, user_id: str, car_id: str, ttl_seconds: int
+    ) -> None:
         ...
 
 
@@ -127,7 +132,12 @@ class CreateCardOrderService:
         order_id = self._order_id_generator.generate()
 
         # 6. Redis에 카드 등록 세션 저장
-        self._card_order_store.save_pending(order_id=order_id)
+        self._card_order_store.save_pending(
+            order_id=order_id,
+            user_id=command.user_id,
+            car_id=command.car_id,
+            ttl_seconds=CARD_ORDER_TTL_SECONDS,
+        )
 
         # 7. PG 카드 등록 URL 생성
         pg_url = self._pg_client.create_card_registration_url(order_id=order_id)
