@@ -1,16 +1,20 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.infra.db.models import PMSParkingSession, PaymentRequest
+from app.infra.db.models import PMSParkingSession, PaymentRequest, PreRegistration
 from app.infra.db.session import SessionLocal
 from app.infra.repositories.payment_request_repository import (
     SqlAlchemyPaymentRequestRepository,
+)
+from app.infra.repositories.pre_registration_repository import (
+    SqlAlchemyPreRegistrationRepository,
 )
 from app.infra.repositories.pms_session_repository import SqlAlchemyPmsSessionRepository
 
 
 def test_pms_tables_can_store_and_load_data_from_postgres():
     session = SessionLocal()
+    pre_registration_repository = SqlAlchemyPreRegistrationRepository(session)
     pms_session_repository = SqlAlchemyPmsSessionRepository(session)
     payment_request_repository = SqlAlchemyPaymentRequestRepository(session)
 
@@ -21,6 +25,19 @@ def test_pms_tables_can_store_and_load_data_from_postgres():
     entry_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     try:
+        stored_registration = pre_registration_repository.save_pre_registration(
+            lot_id="lot-001",
+            plate=plate,
+        )
+        assert stored_registration["status"] == "pre_registered"
+        assert (
+            pre_registration_repository.get_active_pre_registration(
+                lot_id="lot-001",
+                plate=plate,
+            )["plate"]
+            == plate
+        )
+
         pms_session_repository.create_session(
             pms_session_id=pms_session_id,
             lot_id="lot-001",
@@ -56,6 +73,17 @@ def test_pms_tables_can_store_and_load_data_from_postgres():
 
         pms_session_repository.update_status(pms_session_id, "exited")
         assert pms_session_repository.get_session_by_id(pms_session_id)["status"] == "exited"
+        pre_registration_repository.consume_pre_registration(
+            lot_id="lot-001",
+            plate=plate,
+        )
+        assert (
+            pre_registration_repository.get_active_pre_registration(
+                lot_id="lot-001",
+                plate=plate,
+            )
+            is None
+        )
     finally:
         session.rollback()
         payment_request = session.query(PaymentRequest).filter_by(
@@ -66,5 +94,8 @@ def test_pms_tables_can_store_and_load_data_from_postgres():
         parking_session = session.get(PMSParkingSession, pms_session_id)
         if parking_session is not None:
             session.delete(parking_session)
+        registration = session.get(PreRegistration, ("lot-001", plate))
+        if registration is not None:
+            session.delete(registration)
         session.commit()
         session.close()

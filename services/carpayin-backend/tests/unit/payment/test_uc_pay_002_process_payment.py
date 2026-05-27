@@ -217,6 +217,24 @@ class FakeNotificationPublisher:
             }
         )
 
+
+class FakePaymentNotifyRetryStore:
+    def __init__(self):
+        self.retry_events = {}
+
+    def record_retry_event(
+        self, *, event_type: str, tx_id: str, payload: dict, reason: str, ttl_seconds: int
+    ):
+        self.retry_events[tx_id] = {
+            "event_type": event_type,
+            "payload": payload,
+            "reason": reason,
+            "ttl_seconds": ttl_seconds,
+        }
+
+    def clear_retry_event(self, tx_id: str):
+        self.retry_events.pop(tx_id, None)
+
 def _make_idempotency_key(
     session_id: str, car_id: str, amount: int, currency: str
 ) -> str:
@@ -266,6 +284,11 @@ def fake_notification_publisher():
 
 
 @pytest.fixture
+def fake_payment_notify_retry_store():
+    return FakePaymentNotifyRetryStore()
+
+
+@pytest.fixture
 def process_payment_service(
     fake_token_validator,
     fake_fee_quote_store,
@@ -275,6 +298,7 @@ def process_payment_service(
     fake_pg_client,
     fake_pms_client,
     fake_notification_publisher,
+    fake_payment_notify_retry_store,
 ):
     return ProcessPaymentService(
         token_validator=fake_token_validator,
@@ -285,6 +309,7 @@ def process_payment_service(
         pg_client=fake_pg_client,
         pms_client=fake_pms_client,
         notification_publisher=fake_notification_publisher,
+        payment_notify_retry_store=fake_payment_notify_retry_store,
     )
 
 
@@ -679,6 +704,7 @@ class TestProcessPayment:
         fake_billing_key_repository,
         fake_transaction_repository,
         fake_pms_client,
+        fake_payment_notify_retry_store,
     ):
         """PMS 통보 실패 시 결제 성공은 유지되고 transaction은 success 상태를 유지한다."""
         fake_fee_quote_store.add_quote(VALID_SESSION_ID, VALID_AMOUNT, VALID_CURRENCY)
@@ -714,6 +740,45 @@ class TestProcessPayment:
  
         session = fake_parking_session_repository.get_session_by_id(VALID_SESSION_ID)
         assert session["status"] == "completed"
+        assert len(fake_payment_notify_retry_store.retry_events) == 1
+
+    def test_duplicate_success_retries_failed_pms_notification_without_recharging(
+        self,
+        process_payment_service,
+        fake_fee_quote_store,
+        fake_parking_session_repository,
+        fake_billing_key_repository,
+        fake_pg_client,
+        fake_pms_client,
+        fake_payment_notify_retry_store,
+    ):
+        fake_fee_quote_store.add_quote(VALID_SESSION_ID, VALID_AMOUNT, VALID_CURRENCY)
+        fake_parking_session_repository.add_session(
+            session_id=VALID_SESSION_ID,
+            car_id=VALID_CAR_ID,
+            lot_id=VALID_LOT_ID,
+            plate=VALID_PLATE,
+            entry_time=VALID_ENTRY_TIME,
+        )
+        fake_billing_key_repository.add_active_billing_key(VALID_CAR_ID)
+        command = ProcessPaymentCommand(
+            access_token=VALID_ACCESS_TOKEN,
+            session_id=VALID_SESSION_ID,
+            amount=VALID_AMOUNT,
+            currency=VALID_CURRENCY,
+        )
+
+        fake_pms_client.should_fail = True
+        process_payment_service.execute(command)
+        assert len(fake_payment_notify_retry_store.retry_events) == 1
+
+        fake_pms_client.should_fail = False
+        result = process_payment_service.execute(command)
+
+        assert result.status == "success"
+        assert len(fake_pg_client.payment_requests) == 1
+        assert len(fake_pms_client.notify_calls) == 1
+        assert fake_payment_notify_retry_store.retry_events == {}
  
     def test_notification_publish_called_with_correct_payload(
         self,
