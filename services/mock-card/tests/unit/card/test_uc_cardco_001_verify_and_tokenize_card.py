@@ -43,41 +43,48 @@ class FakeCardValidator:
 
 class FakeCardTokenRepository:
     def __init__(self):
+        self.users = {}
         self.tokens = {}
 
-    def get_by_user_and_card(self, user_id: str, card_number: str):
-        key = f"{user_id}:{card_number}"
+    def upsert_user(self, *, user_id: str, name: str):
+        self.users[user_id] = {"user_id": user_id, "name": name}
+
+    def get_by_user_and_encrypted_card(self, *, user_id: str, encrypted_card_num: str):
+        key = f"{user_id}:{encrypted_card_num}"
         return self.tokens.get(key)
 
-    def save_card_token(
+    def save_card_with_token(
         self,
         *,
         user_id: str,
-        card_number: str,
+        encrypted_card_num: str,
+        cvc_hmac: str,
+        exp_month: int,
+        exp_year: int,
         card_token: str,
-        last_four: str,
-        encrypted_data: str,
     ):
-        key = f"{user_id}:{card_number}"
+        key = f"{user_id}:{encrypted_card_num}"
         if key in self.tokens:
             return self.tokens[key]
 
         self.tokens[key] = {
             "user_id": user_id,
-            "card_number": card_number,
+            "encrypted_card_num": encrypted_card_num,
+            "cvc_hmac": cvc_hmac,
+            "exp_month": exp_month,
+            "exp_year": exp_year,
             "card_token": card_token,
-            "last_four": last_four,
-            "encrypted_data": encrypted_data,
             "status": "active",
         }
         return self.tokens[key]
 
 
 class FakeCardEncryptor:
-    def encrypt_card_data(
-        self, card_number: str, expiry: str, cvc: str
-    ) -> str:
-        return f"encrypted_{card_number}_{expiry}_{cvc}"
+    def encrypt_card_number(self, card_number: str) -> str:
+        return f"encrypted_{card_number}"
+
+    def hash_cvc(self, cvc: str) -> str:
+        return f"hmac_{cvc}"
 
 
 @pytest.fixture
@@ -131,14 +138,15 @@ class TestVerifyAndTokenizeCard:
         assert result.last_four == VALID_CARD_NUMBER[-4:]
 
         # 저장 확인
-        saved = fake_card_token_repository.get_by_user_and_card(
-            VALID_USER_ID, VALID_CARD_NUMBER
+        saved = fake_card_token_repository.get_by_user_and_encrypted_card(
+            user_id=VALID_USER_ID,
+            encrypted_card_num=f"encrypted_{VALID_CARD_NUMBER}",
         )
         assert saved is not None
         assert saved["card_token"] == result.card_token
-        assert saved["last_four"] == VALID_CARD_NUMBER[-4:]
         assert saved["status"] == "active"
-        assert "encrypted_" in saved["encrypted_data"]
+        assert saved["encrypted_card_num"] == f"encrypted_{VALID_CARD_NUMBER}"
+        assert saved["cvc_hmac"] == f"hmac_{VALID_CVC}"
 
     def test_expired_card_fails(
         self,

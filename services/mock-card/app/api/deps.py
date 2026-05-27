@@ -8,19 +8,16 @@ from app.infra.repositories.card_repository import SqlAlchemyCardRepository
 from app.infra.repositories.card_transaction_repository import (
     SqlAlchemyCardTransactionRepository,
 )
+from app.infra.security import MockCardEncryptor, MockCardValidator
 
 
-class NotConfiguredDependency:
-    def __getattr__(self, name):
-        raise RuntimeError("dependency_not_configured")
-
-
-def get_verify_and_tokenize_card_service() -> VerifyAndTokenizeCardService:
-    placeholder = NotConfiguredDependency()
+def get_verify_and_tokenize_card_service(
+    session: Session = Depends(get_db_session),
+) -> VerifyAndTokenizeCardService:
     return VerifyAndTokenizeCardService(
-        card_validator=placeholder,
-        card_token_repository=placeholder,
-        card_encryptor=placeholder,
+        card_validator=MockCardValidator(),
+        card_token_repository=SqlAlchemyCardRepository(session),
+        card_encryptor=MockCardEncryptor(),
     )
 
 

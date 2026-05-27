@@ -30,41 +30,38 @@ class VerifyAndTokenizeCardService:
     def execute(
         self, command: VerifyAndTokenizeCardCommand
     ) -> VerifyAndTokenizeCardResult:
-        # 카드번호, 유효기간, CVC 검증
-        is_valid = self.card_validator.validate_card(
-            command.card_number, command.expiry, command.cvc
-        )
-
-        if not is_valid:
+        if not self.card_validator.validate_card(
+            command.card_number,
+            command.expiry,
+            command.cvc,
+        ):
             raise ValueError("invalid_card")
 
-        # 같은 사용자와 카드의 중복 등록 확인
-        existing = self.card_token_repository.get_by_user_and_card(
-            command.user_id, command.card_number
+        encrypted_card_num = self.card_encryptor.encrypt_card_number(
+            command.card_number
         )
-
+        existing = self.card_token_repository.get_by_user_and_encrypted_card(
+            user_id=command.user_id,
+            encrypted_card_num=encrypted_card_num,
+        )
         if existing:
-            # 기존 token 반환
             return VerifyAndTokenizeCardResult(
                 card_token=existing["card_token"],
-                last_four=existing["last_four"],
+                last_four=command.card_number[-4:],
             )
 
-        # 카드 정보를 암호화 또는 HMAC 처리해 저장
-        encrypted_data = self.card_encryptor.encrypt_card_data(
-            command.card_number, command.expiry, command.cvc
-        )
-
-        # card_token 발급
+        expiry_month, expiry_year = command.expiry.split("/")
         card_token = f"card-token-{uuid.uuid4().hex[:12]}"
         last_four = command.card_number[-4:]
 
-        self.card_token_repository.save_card_token(
+        self.card_token_repository.upsert_user(user_id=command.user_id, name="")
+        self.card_token_repository.save_card_with_token(
             user_id=command.user_id,
-            card_number=command.card_number,
+            encrypted_card_num=encrypted_card_num,
+            cvc_hmac=self.card_encryptor.hash_cvc(command.cvc),
+            exp_month=int(expiry_month),
+            exp_year=2000 + int(expiry_year),
             card_token=card_token,
-            last_four=last_four,
-            encrypted_data=encrypted_data,
         )
 
         return VerifyAndTokenizeCardResult(
