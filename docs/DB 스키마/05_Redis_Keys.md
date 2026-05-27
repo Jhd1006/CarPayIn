@@ -238,6 +238,32 @@ quote가 만료되면 앱은 요금을 다시 조회해야 한다.
 - `created_at`: 요금 quote 생성 시각
 - `expires_at`: 요금 quote 만료 시각
 
+## pms_payment_retry:{tx_id}
+
+PMS 결제 완료 통보가 실패했지만 Car Pay-in 결제는 성공한 경우 재전송 대기 이벤트를 저장한다.
+동일 결제 요청이 다시 들어오면 PMS 통보를 재시도하고, 성공 시 해당 키를 삭제한다.
+
+TTL은 7일이다.
+
+```json
+{
+  "event_type": "pms_payment_notify",
+  "tx_id": "...",
+  "payload": {
+    "pms_session_id": "...",
+    "carpay_parking_session_id": "...",
+    "amount": 5000,
+    "currency": "KRW",
+    "approval_no": "...",
+    "idempotency_key": "..."
+  },
+  "reason": "timeout",
+  "status": "pending",
+  "created_at": "...",
+  "expires_at": "..."
+}
+```
+
 ## 최종 정리
 
 Redis는 Car Pay-in 서비스의 단기 상태 저장소이다.

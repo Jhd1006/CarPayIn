@@ -3,6 +3,9 @@ import hashlib
 import uuid
 
 
+PAYMENT_NOTIFY_RETRY_TTL_SECONDS = 7 * 24 * 60 * 60
+
+
 @dataclass(frozen=True)
 class ProcessPaymentCommand:
     access_token: str
@@ -33,6 +36,7 @@ class ProcessPaymentService:
         pg_client,
         pms_client,
         notification_publisher,
+        payment_notify_retry_store=None,
     ):
         self.token_validator = token_validator
         self.fee_quote_store = fee_quote_store
@@ -42,6 +46,7 @@ class ProcessPaymentService:
         self.pg_client = pg_client
         self.pms_client = pms_client
         self.notification_publisher = notification_publisher
+        self.payment_notify_retry_store = payment_notify_retry_store
 
     def execute(self, command: ProcessPaymentCommand) -> ProcessPaymentResult:
         # 인증 및 car_id 추출
@@ -80,6 +85,14 @@ class ProcessPaymentService:
             idempotency_key
         )
         if existing_tx:
+            if existing_tx["status"] == "success":
+                self._notify_pms_payment_complete(
+                    session=session,
+                    tx_id=existing_tx["tx_id"],
+                    approval_no=existing_tx["approval_no"],
+                    idempotency_key=idempotency_key,
+                    command=command,
+                )
             return ProcessPaymentResult(
                 status=existing_tx["status"],
                 tx_id=existing_tx["tx_id"],
@@ -130,20 +143,13 @@ class ProcessPaymentService:
                 command.session_id, "completed"
             )
 
-            # PMS에 결제 완료 통보 (실패해도 결제는 성공 유지)
-            try:
-                self.pms_client.notify_payment_complete(
-                    pms_session_id=session.get("pms_session_id", ""),
-                    carpay_parking_session_id=command.session_id,
-                    carpay_tx_id=tx_id,
-                    amount=command.amount,
-                    currency=command.currency,
-                    approval_no=approval_no,
-                    idempotency_key=idempotency_key,
-                )
-            except Exception:
-                # PMS 통보 실패는 로그만 남기고 재시도 큐에 추가 (실제 구현에서)
-                pass
+            self._notify_pms_payment_complete(
+                session=session,
+                tx_id=tx_id,
+                approval_no=approval_no,
+                idempotency_key=idempotency_key,
+                command=command,
+            )
 
             # 앱 알림 발행
             self.notification_publisher.publish_payment_notification(
@@ -174,3 +180,37 @@ class ProcessPaymentService:
                 tx_id=tx_id,
                 failed_reason=failed_reason,
             )
+
+    def _notify_pms_payment_complete(
+        self,
+        *,
+        session: dict,
+        tx_id: str,
+        approval_no: str,
+        idempotency_key: str,
+        command: ProcessPaymentCommand,
+    ) -> None:
+        payload = {
+            "pms_session_id": session.get("pms_session_id", ""),
+            "carpay_parking_session_id": command.session_id,
+            "carpay_tx_id": tx_id,
+            "amount": command.amount,
+            "currency": command.currency,
+            "approval_no": approval_no,
+            "idempotency_key": idempotency_key,
+        }
+        try:
+            self.pms_client.notify_payment_complete(**payload)
+        except Exception as exc:
+            if self.payment_notify_retry_store is not None:
+                self.payment_notify_retry_store.record_retry_event(
+                    event_type="pms_payment_notify",
+                    tx_id=tx_id,
+                    payload=payload,
+                    reason=str(exc),
+                    ttl_seconds=PAYMENT_NOTIFY_RETRY_TTL_SECONDS,
+                )
+            return
+
+        if self.payment_notify_retry_store is not None:
+            self.payment_notify_retry_store.clear_retry_event(tx_id)

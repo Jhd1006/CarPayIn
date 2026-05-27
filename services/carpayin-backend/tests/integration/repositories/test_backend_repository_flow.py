@@ -145,6 +145,10 @@ def test_all_backend_business_tables_can_store_and_load_data_from_postgres():
             == "completed"
         )
         assert (
+            parking_session_repository.get_session_by_id(parking_session_id)["exit_time"]
+            is not None
+        )
+        assert (
             app_refresh_token_repository.find_by_hash(refresh_token_hash)["status"]
             == "expired"
         )

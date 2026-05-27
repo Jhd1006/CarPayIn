@@ -42,12 +42,16 @@ def test_mock_pg_tables_can_store_and_load_data_from_postgres():
         assert stored_transaction["status"] == "pending"
 
         transaction_repository.update_transaction_status(
-            idempotency_key, "success", approval_no="APPR1234"
+            idempotency_key,
+            "success",
+            approval_no="APPR1234",
+            card_tx_id=f"integration-card-tx-{unique_id}",
         )
-        assert (
-            transaction_repository.get_by_idempotency_key(idempotency_key)["status"]
-            == "success"
+        updated_transaction = transaction_repository.get_by_idempotency_key(
+            idempotency_key
         )
+        assert updated_transaction["status"] == "success"
+        assert updated_transaction["card_tx_id"] == f"integration-card-tx-{unique_id}"
     finally:
         session.rollback()
         transaction = session.get(PGTransaction, transaction_id)

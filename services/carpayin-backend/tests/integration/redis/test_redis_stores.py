@@ -11,6 +11,7 @@ from app.infra.redis.stores import (
     RedisHyundaiAccessTokenStore,
     RedisHyundaiOAuthResultStore,
     RedisOAuthStateStore,
+    RedisPaymentNotifyRetryStore,
     RedisPreNotifyStore,
     RedisQrSessionStore,
 )
@@ -123,10 +124,12 @@ def test_card_parking_and_fee_redis_stores_persist_lifecycle(redis_client):
     order_key = f"mock_pg_card_register:{order_id}"
     pre_notify_key = f"parking_pre_notify:{lot_id}:{plate}"
     quote_key = f"parking_fee_quote:{session_id}"
+    retry_key = f"pms_payment_retry:{session_id}"
 
     card_store = RedisCardOrderStore(redis_client)
     pre_notify_store = RedisPreNotifyStore(redis_client)
     quote_store = RedisFeeQuoteStore(redis_client)
+    retry_store = RedisPaymentNotifyRetryStore(redis_client)
 
     try:
         card_store.save_pending(
@@ -165,5 +168,17 @@ def test_card_parking_and_fee_redis_stores_persist_lifecycle(redis_client):
         assert quote_store.get_quote(session_id)["amount"] == 5000
         assert quote_store.get_quote(session_id)["duration"] == 90
         assert_ttl(redis_client, quote_key, 300)
+
+        retry_store.record_retry_event(
+            event_type="pms_payment_notify",
+            tx_id=session_id,
+            payload={"pms_session_id": "pms-001"},
+            reason="timeout",
+            ttl_seconds=604800,
+        )
+        assert retry_store.get_retry_event(session_id)["status"] == "pending"
+        assert_ttl(redis_client, retry_key, 604800)
+        retry_store.clear_retry_event(session_id)
+        assert retry_store.get_retry_event(session_id) is None
     finally:
-        redis_client.delete(order_key, pre_notify_key, quote_key)
+        redis_client.delete(order_key, pre_notify_key, quote_key, retry_key)

@@ -3,7 +3,7 @@
 ## 개요
 
 PMS DB는 Mock 주차장 시스템에서 사용하는 간소화된 DB이다.
-차량 입차/출차 세션과 Car Pay-in 결제 요청 이력을 관리한다.
+입차 예정 차량의 사전등록, 차량 입차/출차 세션, Car Pay-in 결제 요청 이력을 관리한다.
 
 주차장은 UI상 여러 개처럼 보일 수 있지만, 실제 시뮬레이션에서는 하나의 Mock 주차장으로 처리한다.
 따라서 주차장 정보, 게이트 정보, 요금 정책은 DB에 저장하지 않고 서버 코드에서 하드코딩한다.
@@ -17,6 +17,26 @@ PostgreSQL에서 `gen_random_uuid()`를 사용하려면 `pgcrypto` 확장이 필
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+```
+
+## pre_registrations
+
+Car Pay-in Backend가 입차 전에 전달한 주차장/차량번호 등록 상태를 저장한다.
+LPR 입차 이벤트는 `pre_registered` 상태인 차량만 처리하며, 입차 세션이 생성되면 상태를 `consumed`로 갱신한다.
+
+```sql
+CREATE TABLE pre_registrations (
+  lot_id TEXT NOT NULL,
+  plate VARCHAR(20) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pre_registered',
+  registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  consumed_at TIMESTAMPTZ,
+  PRIMARY KEY (lot_id, plate),
+  CHECK (status IN ('pre_registered', 'consumed', 'cancelled'))
+);
+
+CREATE INDEX idx_pms_pre_registrations_status
+ON pre_registrations(status);
 ```
 
 ## parking_sessions
@@ -110,7 +130,7 @@ payment_requests.carpay_tx_id
 ## 최종 정리
 
 PMS DB는 Mock 주차장 시뮬레이션을 위한 DB이다.
-입차/출차 정보는 `parking_sessions`에서 관리하고, Car Pay-in 결제 요청 및 응답 이력은 `payment_requests`에서 관리한다.
+입차 예정 등록은 `pre_registrations`, 입차/출차 정보는 `parking_sessions`, Car Pay-in 결제 요청 및 응답 이력은 `payment_requests`에서 관리한다.
 
 주차장 정보, 게이트 정보, 요금 정책은 DB에 저장하지 않고 서버 코드에서 하드코딩한다.
 PMS는 카드 정보나 빌링키를 저장하지 않으며, 결제는 Car Pay-in 서버에 요청한다.
