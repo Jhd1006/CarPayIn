@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   carpayin-postgres:
     image: postgres:15
@@ -12,6 +10,11 @@ services:
       - "5432:5432"
     volumes:
       - carpayin_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d carpayin_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   mock-card-postgres:
     image: postgres:15
@@ -24,6 +27,11 @@ services:
       - "5433:5432"
     volumes:
       - mock_card_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d mock_card_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   mock-pg-postgres:
     image: postgres:15
@@ -36,6 +44,11 @@ services:
       - "5434:5432"
     volumes:
       - mock_pg_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d mock_pg_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   pms-postgres:
     image: postgres:15
@@ -48,6 +61,11 @@ services:
       - "5435:5432"
     volumes:
       - pms_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d pms_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -56,6 +74,111 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  carpayin-backend:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: carpayin-backend
+    container_name: carpayin-backend-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@carpayin-postgres:5432/carpayin_dev
+      REDIS_URL: redis://redis:6379/0
+      PUBLIC_BASE_URL: http://localhost:8000
+      PG_BASE_URL: http://mock-pg:8000
+      PMS_BASE_URL: http://pms:8000
+      PG_WEBHOOK_SECRET: mock-pg-webhook-secret
+      PMS_WEBHOOK_TOKEN: pms-webhook-token
+    ports:
+      - "8000:8000"
+    depends_on:
+      carpayin-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-card:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: mock-card
+    container_name: mock-card-api
+    environment:
+      MOCK_CARD_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@mock-card-postgres:5432/mock_card_dev
+      MOCK_CARD_SECURITY_SECRET: mock-card-dev-secret
+    ports:
+      - "8003:8000"
+    depends_on:
+      mock-card-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-pg:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: mock-pg
+    container_name: mock-pg-api
+    environment:
+      MOCK_PG_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev
+      MOCK_CARD_BASE_URL: http://mock-card:8000
+      CARPAYIN_BACKEND_BASE_URL: http://carpayin-backend:8000
+      PG_WEBHOOK_SECRET: mock-pg-webhook-secret
+    ports:
+      - "8002:8000"
+    depends_on:
+      mock-pg-postgres:
+        condition: service_healthy
+      mock-card:
+        condition: service_healthy
+      carpayin-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pms:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: pms
+    container_name: pms-api
+    environment:
+      PMS_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev
+      CARPAYIN_BACKEND_BASE_URL: http://carpayin-backend:8000
+      PMS_WEBHOOK_TOKEN: pms-webhook-token
+    ports:
+      - "8001:8000"
+    depends_on:
+      pms-postgres:
+        condition: service_healthy
+      carpayin-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   carpayin_postgres_data:
