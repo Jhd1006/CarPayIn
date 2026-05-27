@@ -5,8 +5,7 @@ from sqlalchemy import (
     Column, String, Integer, DateTime, ForeignKey, Text, CheckConstraint,
     Index, CHAR
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
