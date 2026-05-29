@@ -15,6 +15,21 @@ def test_card_registration_url_uses_public_base_url():
     )
 
 
+def test_card_registration_url_includes_selected_bank_name():
+    client = HttpxPgClient(
+        "http://mock-pg:8000",
+        public_base_url="http://10.0.2.2:8002",
+    )
+
+    assert (
+        client.create_card_registration_url(
+            order_id="order-001",
+            bank_name="현대카드",
+        )
+        == "http://10.0.2.2:8002/pg/card-register?order_id=order-001&card_brand=%ED%98%84%EB%8C%80%EC%B9%B4%EB%93%9C"
+    )
+
+
 def test_charge_billing_key_uses_internal_base_url(monkeypatch):
     calls = []
 
