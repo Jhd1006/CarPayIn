@@ -83,7 +83,22 @@ class TestCompleteCardRegistrationApi:
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert f'data-order-id="{VALID_ORDER_ID}"' in response.text
-        assert 'id="card-form"' in response.text
+        assert 'id="cardForm"' in response.text
+        assert 'id="brandList"' not in response.text
+        assert "onRegistrationCompleteV3" in response.text
+        assert "maxlength=\"23\"" in response.text
+        assert "maxlength=\"5\"" in response.text
+        assert "maxlength=\"4\"" in response.text
+
+    def test_pg_url_displays_preselected_card_brand(self):
+        with TestClient(app) as client:
+            response = client.get(
+                "/pg/card-register",
+                params={"order_id": VALID_ORDER_ID, "card_brand": "KB국민"},
+            )
+
+        assert response.status_code == 200
+        assert "KB국민" in response.text
 
     def test_card_verification_success_returns_billing_key(
         self,
