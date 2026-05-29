@@ -1,7 +1,8 @@
 import hashlib
 import hmac
-import os
 from datetime import datetime, timezone
+
+from app.config import settings
 
 
 class MockCardValidator:
@@ -30,7 +31,7 @@ class MockCardValidator:
 class MockCardEncryptor:
     def __init__(self, secret: str | None = None):
         self.secret = (
-            secret or os.getenv("MOCK_CARD_SECURITY_SECRET", "mock-card-dev-secret")
+            secret or settings.mock_card_security_secret
         ).encode()
 
     def encrypt_card_number(self, card_number: str) -> str:
