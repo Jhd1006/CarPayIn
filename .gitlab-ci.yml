@@ -1,9 +1,21 @@
 stages:
+  - verify
   - build
   - deploy
 
 variables:
   DOCKER_BUILDKIT: "1"
+
+validate:merge-request:
+  stage: verify
+  tags:
+    - local-deploy
+  script:
+    - Write-Host "Validating merge request pipeline"
+    - git status --short
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
 
 .build_service_image:
   image: docker:27.5.1
