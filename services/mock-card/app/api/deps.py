@@ -10,14 +10,17 @@ from app.infra.repositories.card_transaction_repository import (
 )
 from app.infra.security import MockCardEncryptor, MockCardValidator
 
+_card_validator = MockCardValidator()
+_card_encryptor = MockCardEncryptor()
+
 
 def get_verify_and_tokenize_card_service(
     session: Session = Depends(get_db_session),
 ) -> VerifyAndTokenizeCardService:
     return VerifyAndTokenizeCardService(
-        card_validator=MockCardValidator(),
+        card_validator=_card_validator,
         card_token_repository=SqlAlchemyCardRepository(session),
-        card_encryptor=MockCardEncryptor(),
+        card_encryptor=_card_encryptor,
     )
 
 

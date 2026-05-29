@@ -21,7 +21,7 @@ def test_mock_card_tables_can_store_and_load_data_from_postgres():
     idempotency_key = f"integration-card-idempotency-{unique_id}"
 
     try:
-        card_repository.upsert_user(user_id=user_id, name="Integration Card User")
+        card_repository.get_or_create_user(user_id=user_id)
         stored_token = card_repository.save_card_with_token(
             user_id=user_id,
             encrypted_card_num=encrypted_card_num,
