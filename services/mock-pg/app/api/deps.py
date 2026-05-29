@@ -26,6 +26,13 @@ carpayin_webhook_client = HttpxCarPayInWebhookClient(
 )
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_complete_card_registration_service(
     session: Session = Depends(get_db_session),
 ) -> CompleteCardRegistrationService:
@@ -33,6 +40,10 @@ def get_complete_card_registration_service(
         mock_card_client=mock_card_client,
         billing_key_repository=SqlAlchemyBillingKeyRepository(session),
         carpayin_webhook_client=carpayin_webhook_client,
+        allow_local_fallback=_env_bool(
+            "MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE",
+            False,
+        ),
     )
 
 

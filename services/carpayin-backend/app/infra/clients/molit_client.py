@@ -7,6 +7,11 @@ MOLIT(국토교통부) 자동차 소유자 확인 HTTP 클라이언트.
 import httpx
 
 
+class LocalMolitBypassClient:
+    def verify_owner(self, *, plate: str, user_id: str, car_id: str) -> bool:
+        return True
+
+
 class HttpxMolitClient:
     """httpx 기반 국토교통부 자동차 소유자 확인 HTTP 클라이언트."""
 

@@ -84,6 +84,7 @@ class TestCompleteCardRegistrationApi:
         assert "text/html" in response.headers["content-type"]
         assert f'data-order-id="{VALID_ORDER_ID}"' in response.text
         assert 'id="card-form"' in response.text
+        assert "onRegistrationCompleteV3" in response.text
 
     def test_card_verification_success_returns_billing_key(
         self,

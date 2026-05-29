@@ -10,13 +10,19 @@ import httpx
 class HttpxPgClient:
     """httpx 기반 PG HTTP 클라이언트."""
 
-    def __init__(self, base_url: str, timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str,
+        public_base_url: str | None = None,
+        timeout: float = 10.0,
+    ):
         """
         Args:
             base_url: PG 서버 base URL (예: http://mock-pg:8000)
             timeout: 요청 타임아웃(초)
         """
         self._base_url = base_url.rstrip("/")
+        self._public_base_url = (public_base_url or base_url).rstrip("/")
         self._timeout = timeout
 
     # ── UC-CARD-001: 카드 등록 URL 생성 ──────────────────────────────────
@@ -32,7 +38,7 @@ class HttpxPgClient:
             카드 등록 페이지 URL (예: http://mock-pg:8000/pg/card-register?order_id=...)
         """
         try:
-            url = f"{self._base_url}/pg/card-register?order_id={order_id}"
+            url = f"{self._public_base_url}/pg/card-register?order_id={order_id}"
             # URL 유효성 검증을 위해 PG 서버에 헬스체크 (선택적)
             return url
         except Exception as e:
