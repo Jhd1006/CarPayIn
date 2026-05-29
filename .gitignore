@@ -37,6 +37,7 @@ test-artifacts/*
 # IDE
 .vscode/
 .idea/
+.claude/
 *.iml
 *.swp
 

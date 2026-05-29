@@ -1,27 +1,38 @@
-# Car Pay-in Cloud Backend
+# carpayin-backend
 
-새 클라우드 기반 Car Pay-in backend 구현 공간이다.
+Main Car Pay In API service.
 
-기존 로컬 실험 코드는 `../../../car-pay-in`에 유지하고, 이 폴더에서는 `../../../car-pay-in/docs/use-cases/` 기준으로 테스트 먼저 작성한 뒤 기능을 구현한다.
+## Responsibilities
 
-## 구조
+- QR login session creation and polling
+- Hyundai OAuth callback handling
+- Vehicle confirmation
+- Card registration order creation and PG webhook handling
+- Parking pre-notification and PMS entry webhook handling
+- Parking fee lookup, billing-key payment, and PMS payment notification
+
+## Structure
 
 ```text
 app/
-  api/              HTTP route, request/response schema
-  application/      use case service
-  domain/           domain model, business rule, error
-  infra/            DB, Redis, external client, messaging implementation
-  config/           settings, dependency wiring
-migrations/         database migration
+  api/            FastAPI routes, schemas, and dependencies
+  application/    Use-case services
+  domain/         Domain concepts and errors
+  infra/          Database, Redis, security, and external clients
+migrations/       Alembic migrations
 tests/
-  unit/             use case and domain tests
-  integration/      repository/client/API integration tests
-  e2e/              scenario-level tests
+  unit/           Use-case and client tests
+  api/            HTTP route tests
+  integration/    Repository and Redis integration tests
 ```
 
-## 시작 유스케이스
+## Runtime
 
-1. `UC-AUTH-001. QR 로그인 세션 생성`
-2. `UC-AUTH-004. 로그인 세션 상태 조회`
-3. `UC-AUTH-005. 차량 선택 확정과 앱 토큰 발급`
+The container starts with:
+
+```text
+alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Required environment variables are defined in the root `docker-compose.yaml`
+and `.env.example`.

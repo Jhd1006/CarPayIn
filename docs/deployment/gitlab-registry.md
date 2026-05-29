@@ -61,9 +61,9 @@ To publish a version without moving `latest`, add `-NoLatest`.
 ## GitLab CI
 
 `.gitlab-ci.yml` builds and pushes all four images when a Git tag that looks
-like `0.0.1`, `0.0.2`, or `0.1.0` is pushed. After the build jobs finish, the
-`deploy:local-compose` job can deploy those registry images on a local machine
-that runs a GitLab Runner tagged `local-deploy`.
+like `0.0.1`, `0.0.2`, or `0.1.0` is pushed. The local Docker Compose deploy
+job is manual so registry publishing can pass independently from a developer
+machine being online.
 
 Create and push a release tag:
 
@@ -79,7 +79,7 @@ Each image is pushed with:
 
 ## Local GitLab Runner Deploy
 
-The automatic local deploy job assumes:
+The manual local deploy job assumes:
 
 - GitLab Runner is installed on the local deploy machine.
 - The runner uses the Shell executor on Windows PowerShell.
@@ -100,7 +100,7 @@ executor: shell
 tag: local-deploy
 ```
 
-The deploy job runs:
+When started manually from GitLab, the deploy job runs:
 
 ```powershell
 .\scripts\deploy-from-registry.ps1 -Tag $env:CI_COMMIT_TAG
@@ -146,7 +146,8 @@ GitLab provides these registry variables automatically:
 - `CI_REGISTRY_USER`
 - `CI_REGISTRY_PASSWORD`
 
-The runner must support Docker-in-Docker with privileged mode enabled.
+Docker-in-Docker is only required by the image build jobs. The local deploy job
+uses Docker Desktop through the Windows Shell runner.
 
 ## AWS Pull
 
