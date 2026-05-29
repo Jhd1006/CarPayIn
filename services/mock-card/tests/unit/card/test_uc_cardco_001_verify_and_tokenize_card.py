@@ -46,8 +46,9 @@ class FakeCardTokenRepository:
         self.users = {}
         self.tokens = {}
 
-    def upsert_user(self, *, user_id: str, name: str):
-        self.users[user_id] = {"user_id": user_id, "name": name}
+    def get_or_create_user(self, *, user_id: str):
+        if user_id not in self.users:
+            self.users[user_id] = {"user_id": user_id, "name": ""}
 
     def get_by_user_and_encrypted_card(self, *, user_id: str, encrypted_card_num: str):
         key = f"{user_id}:{encrypted_card_num}"

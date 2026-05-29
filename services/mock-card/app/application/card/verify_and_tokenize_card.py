@@ -54,7 +54,7 @@ class VerifyAndTokenizeCardService:
         card_token = f"card-token-{uuid.uuid4().hex[:12]}"
         last_four = command.card_number[-4:]
 
-        self.card_token_repository.upsert_user(user_id=command.user_id, name="")
+        self.card_token_repository.get_or_create_user(user_id=command.user_id)
         self.card_token_repository.save_card_with_token(
             user_id=command.user_id,
             encrypted_card_num=encrypted_card_num,
