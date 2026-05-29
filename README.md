@@ -1,30 +1,101 @@
-# Car Pay-in Cloud Monorepo
+# Car Pay In
 
-클라우드 배포용 Car Pay-in 서비스를 새로 개발하는 monorepo다.
+Car Pay In is a monorepo for the in-vehicle parking payment flow. It contains
+the Android client, the main backend, mock payment/card services, PMS service,
+scenario documents, local Docker Compose, and GitLab Registry deployment tools.
 
-기존 로컬 실험 코드는 `../car-pay-in`에 유지한다.
-기능 개발은 `../car-pay-in/docs/use-cases/`의 유스케이스를 기준으로 테스트부터 작성한다.
-
-## 구조
+## Repository Layout
 
 ```text
 services/
-  carpayin-backend/   Car Pay-in main backend
-  mockpg/             Mock PG service, 추후 추가
-  mockcard/           Mock Card service, 추후 추가
-  pms/                Mock Parking PMS service, 추후 추가
-packages/
-  common/             공유 코드, 추후 필요할 때 추가
+  android-app/        Android client used for local and in-car testing
+  carpayin-backend/   Main API for auth, vehicle, card, parking, and payment
+  mock-card/          Mock card company API
+  mock-pg/            Mock PG API and card registration WebView
+  pms/                Mock parking management system API
+
+docs/
+  api/                OpenAPI contract
+  DB 스키마/          Database and Redis schema documents
+  deployment/         Registry, CI/CD, and deployment notes
+  diagrams/           Mermaid sequence diagrams
+  use-cases/          Use-case level specifications
+  시나리오/           Scenario flow documents
+
+scripts/
+  build-push-images.ps1      Local GitLab Registry image build/push helper
+  deploy-from-registry.ps1   Pull registry images and run Docker Compose
+  start-local-e2e.ps1        Start local E2E dependencies
+  stop-local-e2e.ps1         Stop local E2E dependencies
 ```
 
-## 개발 흐름
+## Local Configuration
 
-1. `../car-pay-in/docs/use-cases/`에서 유스케이스를 하나 고른다.
-2. 해당 서비스의 `tests/unit/`에 테스트를 먼저 작성한다.
-3. `app/application/`에 유스케이스 구현을 추가한다.
-4. 필요해지면 `app/api/`, `app/infra/`를 연결한다.
+Copy `.env.example` to `.env` and fill local secrets before running real
+Hyundai OAuth.
 
-## 첫 개발 대상
+Required for the main local flow:
 
-- `UC-AUTH-001. QR 로그인 세션 생성`
+```text
+PUBLIC_BASE_URL
+HYUNDAI_CLIENT_ID
+HYUNDAI_CLIENT_SECRET
+PG_PUBLIC_BASE_URL
+```
 
+Do not commit `.env` or real credentials.
+
+## Local Run
+
+Start the local service stack:
+
+```powershell
+docker compose up -d --build
+```
+
+Useful ports:
+
+```text
+8000  carpayin-backend
+8001  pms
+8002  mock-pg
+8003  mock-card
+5432  carpayin-postgres
+5433  mock-card-postgres
+5434  mock-pg-postgres
+5435  pms-postgres
+6379  redis
+```
+
+## Tests
+
+Run the backend unit/API tests:
+
+```powershell
+cd services/carpayin-backend
+python -m pytest tests/unit tests/api -q --import-mode=importlib
+```
+
+Compile the Android app:
+
+```powershell
+cd services/android-app
+.\gradlew.bat :app:compileDebugKotlin
+```
+
+## CI/CD
+
+Merge requests run a lightweight validation pipeline.
+
+Pushing a semantic version tag builds and pushes runtime images to GitLab
+Container Registry:
+
+```powershell
+git tag 0.0.2
+git push origin 0.0.2
+```
+
+Images are pushed as both the semantic version tag and `latest`.
+
+See `docs/deployment/gitlab-registry.md` for registry, local runner, and AWS
+pull details.
