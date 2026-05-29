@@ -22,10 +22,10 @@ registry.gitlab.com/car-pay-in/car-pay-in-test/mock-pg:<tag>
 registry.gitlab.com/car-pay-in/car-pay-in-test/pms:<tag>
 ```
 
-Use release-style tags:
+Use semantic version tags that match the Kubernetes manifests:
 
 ```text
-v1, v2, v3, ...
+0.0.1, 0.0.2, 0.1.0, ...
 ```
 
 `latest` is also pushed for the newest release image.
@@ -39,21 +39,21 @@ Then run from the repository root:
 $env:GITLAB_REGISTRY_USER = "<gitlab-username-or-deploy-token-user>"
 $env:GITLAB_REGISTRY_TOKEN = "<token>"
 
-.\scripts\build-push-images.ps1 -Tag "v1"
+.\scripts\build-push-images.ps1 -Tag "0.0.1"
 ```
 
-This publishes both `:v1` and `:latest`.
+This publishes both `:0.0.1` and `:latest`.
 
 To publish the next version:
 
 ```powershell
-.\scripts\build-push-images.ps1 -Tag "v2"
+.\scripts\build-push-images.ps1 -Tag "0.0.2"
 ```
 
 To push only one service:
 
 ```powershell
-.\scripts\build-push-images.ps1 -Services carpayin-backend -Tag "v2"
+.\scripts\build-push-images.ps1 -Services carpayin-backend -Tag "0.0.2"
 ```
 
 To publish a version without moving `latest`, add `-NoLatest`.
@@ -61,20 +61,20 @@ To publish a version without moving `latest`, add `-NoLatest`.
 ## GitLab CI
 
 `.gitlab-ci.yml` builds and pushes all four images when a Git tag that looks
-like `v1`, `v2`, or `v1.1` is pushed. After the build jobs finish, the
+like `0.0.1`, `0.0.2`, or `0.1.0` is pushed. After the build jobs finish, the
 `deploy:local-compose` job can deploy those registry images on a local machine
 that runs a GitLab Runner tagged `local-deploy`.
 
 Create and push a release tag:
 
 ```powershell
-git tag v1
-git push origin v1
+git tag 0.0.1
+git push origin 0.0.1
 ```
 
 Each image is pushed with:
 
-- `$CI_COMMIT_TAG`, for example `v1`
+- `$CI_COMMIT_TAG`, for example `0.0.1`
 - `latest`
 
 ## Local GitLab Runner Deploy
@@ -136,7 +136,7 @@ At minimum for local Hyundai OAuth, `PUBLIC_BASE_URL`, `HYUNDAI_CLIENT_ID`, and
 You can also test the deploy step manually after pushing images:
 
 ```powershell
-.\scripts\deploy-from-registry.ps1 -Tag v1
+.\scripts\deploy-from-registry.ps1 -Tag 0.0.1
 ```
 
 GitLab provides these registry variables automatically:
@@ -162,10 +162,10 @@ docker login registry.gitlab.com \
 Then pull a specific tag:
 
 ```bash
-docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/carpayin-backend:v1
-docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/mock-card:v1
-docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/mock-pg:v1
-docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/pms:v1
+docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/carpayin-backend:0.0.1
+docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/mock-card:0.0.1
+docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/mock-pg:0.0.1
+docker pull registry.gitlab.com/car-pay-in/car-pay-in-test/pms:0.0.1
 ```
 
 For AWS production, inject runtime secrets through AWS Secrets Manager,
