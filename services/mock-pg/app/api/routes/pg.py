@@ -1,4 +1,7 @@
+from html import escape
+
 from fastapi import APIRouter, Depends, Response
+from fastapi.responses import HTMLResponse
 
 from app.api.deps import (
     get_charge_billing_key_service,
@@ -21,6 +24,53 @@ from app.application.pg.complete_card_registration import (
 
 
 router = APIRouter()
+
+
+@router.get("/pg/card-register", response_class=HTMLResponse)
+@router.get("/card-register", response_class=HTMLResponse)
+def card_registration_webview(order_id: str) -> HTMLResponse:
+    safe_order_id = escape(order_id, quote=True)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Register card</title></head>
+<body>
+  <main id="registration" data-order-id="{safe_order_id}">
+    <h1>Register card</h1>
+    <form id="card-form">
+      <label>Card number <input name="card_number" autocomplete="cc-number" required></label>
+      <label>Expiry <input name="expiry" placeholder="MM/YY" autocomplete="cc-exp" required></label>
+      <label>CVC <input name="cvc" autocomplete="cc-csc" required></label>
+      <button type="submit">Register</button>
+    </form>
+    <p id="result" role="status"></p>
+  </main>
+  <script>
+    const root = document.getElementById("registration");
+    const form = document.getElementById("card-form");
+    const result = document.getElementById("result");
+    form.addEventListener("submit", async (event) => {{
+      event.preventDefault();
+      const fields = new FormData(form);
+      const response = await fetch("/pg/card-register", {{
+        method: "POST",
+        headers: {{"Content-Type": "application/json"}},
+        body: JSON.stringify({{
+          order_id: root.dataset.orderId,
+          card_number: fields.get("card_number"),
+          expiry: fields.get("expiry"),
+          cvc: fields.get("cvc")
+        }})
+      }});
+      const body = await response.json();
+      result.textContent = body.status === "success"
+        ? "Card registration complete."
+        : "Card registration failed.";
+    }});
+  </script>
+</body>
+</html>"""
+    )
 
 
 @router.post("/pg/card-register", response_model=CardRegistrationResponse)

@@ -33,6 +33,11 @@ class CompleteCardRegistrationService:
         # 같은 order_id로 이미 생성된 billing_key 확인
         existing = self.billing_key_repository.get_by_order_id(command.order_id)
         if existing:
+            self.carpayin_webhook_client.send_card_registration_webhook(
+                order_id=command.order_id,
+                billing_key=existing["billing_key"],
+                last_four=existing["last_four"],
+            )
             return CompleteCardRegistrationResult(
                 status="success",
                 billing_key=existing["billing_key"],
@@ -41,6 +46,7 @@ class CompleteCardRegistrationService:
         # Mock Card에 카드 검증과 token 생성 요청
         try:
             card_data = self.mock_card_client.verify_and_tokenize_card(
+                user_id=command.order_id,
                 card_number=command.card_number,
                 expiry=command.expiry,
                 cvc=command.cvc,

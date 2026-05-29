@@ -25,13 +25,14 @@ class FakeMockCardClient:
         self.should_fail = False
 
     def verify_and_tokenize_card(
-        self, *, card_number: str, expiry: str, cvc: str
+        self, *, user_id: str, card_number: str, expiry: str, cvc: str
     ) -> dict:
         if self.should_fail:
             raise Exception("Card verification failed")
 
         self.verify_calls.append(
             {
+                "user_id": user_id,
                 "card_number": card_number,
                 "expiry": expiry,
                 "cvc": cvc,
@@ -117,6 +118,7 @@ class TestCompleteCardRegistration:
     def test_card_verification_success_saves_billing_key(
         self,
         complete_card_registration_service,
+        fake_mock_card_client,
         fake_billing_key_repository,
         fake_carpayin_webhook_client,
     ):
@@ -137,6 +139,7 @@ class TestCompleteCardRegistration:
         assert saved["card_token"] == VALID_CARD_TOKEN
         assert saved["last_four"] == VALID_CARD_NUMBER[-4:]
         assert saved["status"] == "active"
+        assert fake_mock_card_client.verify_calls[0]["user_id"] == VALID_ORDER_ID
 
         # 웹훅 전송 확인
         assert len(fake_carpayin_webhook_client.webhook_calls) == 1
@@ -176,8 +179,7 @@ class TestCompleteCardRegistration:
         # billing_key가 하나만 존재
         assert len(fake_billing_key_repository.billing_keys) == 1
 
-        # 웹훅은 첫 번째만 전송
-        assert len(fake_carpayin_webhook_client.webhook_calls) == 1
+        assert len(fake_carpayin_webhook_client.webhook_calls) == 2
 
     def test_card_verification_failure_does_not_send_webhook(
         self,
