@@ -18,7 +18,7 @@ from app.application.parking.register_pre_notify import RegisterPreNotifyService
 from app.application.payment.get_parking_fee import GetParkingFeeService
 from app.application.payment.process_payment import ProcessPaymentService
 from app.infra.clients.hyundai_oauth_client import HttpxHyundaiOAuthClient
-from app.infra.clients.molit_client import HttpxMolitClient
+from app.infra.clients.molit_client import HttpxMolitClient, LocalMolitBypassClient
 from app.infra.clients.pg_client import HttpxPgClient
 from app.infra.clients.pms_client import HttpxPmsClient
 from app.infra.db.session import get_db_session
@@ -59,14 +59,36 @@ from app.infra.support import (
 )
 
 
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+def _required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if (
+        not value
+        or value.startswith("your-")
+        or value == "hyundai-client-001"
+        or "hyundai-dev" in value
+    ):
+        raise RuntimeError(f"{name} environment variable is required")
+    return value
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+PUBLIC_BASE_URL = _required_env("PUBLIC_BASE_URL").rstrip("/")
 HYUNDAI_AUTHORIZE_URL = os.getenv(
     "HYUNDAI_AUTHORIZE_URL",
-    "https://accounts.hyundai.test/oauth2/authorize",
+    "https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/authorize",
 )
-HYUNDAI_CLIENT_ID = os.getenv("HYUNDAI_CLIENT_ID", "hyundai-client-001")
+HYUNDAI_CLIENT_ID = _required_env("HYUNDAI_CLIENT_ID")
+HYUNDAI_CLIENT_SECRET = _required_env("HYUNDAI_CLIENT_SECRET")
 PG_BASE_URL = os.getenv("PG_BASE_URL", "http://localhost:8002")
+PG_PUBLIC_BASE_URL = os.getenv("PG_PUBLIC_BASE_URL", PG_BASE_URL)
 PMS_BASE_URL = os.getenv("PMS_BASE_URL", "http://localhost:8001")
+MOLIT_VERIFY_ENABLED = _env_bool("MOLIT_VERIFY_ENABLED", True)
 
 
 qr_session_store = RedisQrSessionStore(redis_client)
@@ -80,21 +102,31 @@ fee_quote_store = RedisFeeQuoteStore(redis_client)
 payment_notify_retry_store = RedisPaymentNotifyRetryStore(redis_client)
 security_components = create_default_security_components()
 hyundai_oauth_client = HttpxHyundaiOAuthClient(
-    token_url=os.getenv("HYUNDAI_TOKEN_URL", "https://accounts.hyundai.test/oauth2/token"),
-    user_info_url=os.getenv("HYUNDAI_USER_INFO_URL", "https://api.hyundai.test/me"),
+    token_url=os.getenv(
+        "HYUNDAI_TOKEN_URL",
+        "https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/token",
+    ),
+    user_info_url=os.getenv(
+        "HYUNDAI_USER_INFO_URL",
+        "https://prd.kr-ccapi.hyundai.com/api/v1/user/profile",
+    ),
     vehicle_list_url=os.getenv(
         "HYUNDAI_VEHICLE_LIST_URL",
-        "https://api.hyundai.test/vehicles",
+        "https://dev.kr-ccapi.hyundai.com/api/v1/car/profile/carlist",
     ),
     client_id=HYUNDAI_CLIENT_ID,
-    client_secret=os.getenv("HYUNDAI_CLIENT_SECRET", "hyundai-dev-secret"),
-    redirect_uri=f"{PUBLIC_BASE_URL.rstrip('/')}/auth/redirect",
+    client_secret=HYUNDAI_CLIENT_SECRET,
+    redirect_uri=f"{PUBLIC_BASE_URL}/auth/redirect",
 )
-molit_client = HttpxMolitClient(
-    base_url=os.getenv("MOLIT_BASE_URL", "https://molit.test"),
-    api_key=os.getenv("MOLIT_API_KEY", "molit-dev-key"),
+molit_client = (
+    HttpxMolitClient(
+        base_url=os.getenv("MOLIT_BASE_URL", "https://molit.test"),
+        api_key=os.getenv("MOLIT_API_KEY", "molit-dev-key"),
+    )
+    if MOLIT_VERIFY_ENABLED
+    else LocalMolitBypassClient()
 )
-pg_client = HttpxPgClient(PG_BASE_URL)
+pg_client = HttpxPgClient(PG_BASE_URL, public_base_url=PG_PUBLIC_BASE_URL)
 pms_client = HttpxPmsClient(PMS_BASE_URL)
 order_id_generator = UuidOrderIdGenerator()
 plate_normalizer = PlateNormalizer()

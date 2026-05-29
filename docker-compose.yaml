@@ -90,8 +90,16 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@carpayin-postgres:5432/carpayin_dev
       REDIS_URL: redis://redis:6379/0
-      PUBLIC_BASE_URL: http://localhost:8000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL in .env}
+      HYUNDAI_AUTHORIZE_URL: ${HYUNDAI_AUTHORIZE_URL:-https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/authorize}
+      HYUNDAI_TOKEN_URL: ${HYUNDAI_TOKEN_URL:-https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/token}
+      HYUNDAI_USER_INFO_URL: ${HYUNDAI_USER_INFO_URL:-https://prd.kr-ccapi.hyundai.com/api/v1/user/profile}
+      HYUNDAI_VEHICLE_LIST_URL: ${HYUNDAI_VEHICLE_LIST_URL:-https://dev.kr-ccapi.hyundai.com/api/v1/car/profile/carlist}
+      HYUNDAI_CLIENT_ID: ${HYUNDAI_CLIENT_ID:?Set HYUNDAI_CLIENT_ID in .env}
+      HYUNDAI_CLIENT_SECRET: ${HYUNDAI_CLIENT_SECRET:?Set HYUNDAI_CLIENT_SECRET in .env}
       PG_BASE_URL: http://mock-pg:8000
+      PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
+      MOLIT_VERIFY_ENABLED: ${MOLIT_VERIFY_ENABLED:-false}
       PMS_BASE_URL: http://pms:8000
       PG_WEBHOOK_SECRET: mock-pg-webhook-secret
       PMS_WEBHOOK_TOKEN: pms-webhook-token
@@ -141,6 +149,7 @@ services:
       MOCK_CARD_BASE_URL: http://mock-card:8000
       CARPAYIN_BACKEND_BASE_URL: http://carpayin-backend:8000
       PG_WEBHOOK_SECRET: mock-pg-webhook-secret
+      MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE: ${MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE:-true}
     ports:
       - "8002:8000"
     depends_on:
