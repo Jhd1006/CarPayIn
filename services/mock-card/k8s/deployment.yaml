@@ -13,9 +13,11 @@ spec:
       labels:
         app: mock-card
     spec:
+      imagePullSecrets:
+          - name: gitlab-registry
       containers:
         - name: mock-card
-          image: PLACEHOLDER_IMAGE  # Dockerfile 완성 후 채울 것
+          image: registry.gitlab.com/car-pay-in/car-pay-in-test/mock-card:0.0.1
           ports:
             - containerPort: 8000
           envFrom:
