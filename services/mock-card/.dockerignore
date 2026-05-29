@@ -1,0 +1,29 @@
+# Python 컴파일 캐시 (app/ 내부 중첩 경로 포함)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# 테스트
+tests/
+.pytest_cache/
+
+# 가상 환경
+.venv/
+venv/
+env/
+
+# 환경 변수 파일
+.env
+*.env
+
+# Git
+.git/
+.gitignore
+
+# 문서
+README.md
+
+# IDE
+.vscode/
+.idea/

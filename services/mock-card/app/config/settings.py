@@ -10,10 +10,6 @@ class Settings(BaseSettings):
     # Security
     mock_card_security_secret: str = "mock-card-dev-secret"
 
-    # App
-    app_env: str = "development"
-    log_level: str = "INFO"
-
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

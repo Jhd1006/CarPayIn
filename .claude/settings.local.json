@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/unit tests/api -q --import-mode=importlib)",
+      "Bash(python -m pytest tests/unit tests/api -v --import-mode=importlib)",
+      "Bash(python -m pytest tests/integration -v --import-mode=importlib)"
+    ]
+  }
+}
