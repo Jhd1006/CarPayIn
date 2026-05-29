@@ -1,0 +1,7 @@
+## Copy this file to local.properties and fill in local machine values.
+## local.properties is ignored by git.
+
+CARPAYIN_BACKEND_BASE_URL=http://10.0.2.2:8000
+CARPAYIN_QR_BASE_URL=https://your-ngrok-domain.ngrok-free.app
+CARPAYIN_MQTT_BROKER_URL=tcp://10.0.2.2:1883
+CARPAYIN_EMULATOR_LOCALHOST_REWRITE=true

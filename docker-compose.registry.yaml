@@ -1,0 +1,20 @@
+services:
+  carpayin-backend:
+    build: null
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/car-pay-in/car-pay-in-test}/carpayin-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  mock-card:
+    build: null
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/car-pay-in/car-pay-in-test}/mock-card:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  mock-pg:
+    build: null
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/car-pay-in/car-pay-in-test}/mock-pg:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  pms:
+    build: null
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/car-pay-in/car-pay-in-test}/pms:${IMAGE_TAG:-latest}
+    pull_policy: always

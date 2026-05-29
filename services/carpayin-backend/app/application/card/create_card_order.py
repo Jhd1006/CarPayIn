@@ -55,7 +55,12 @@ class CardOrderStore(Protocol):
 
 
 class PgClient(Protocol):
-    def create_card_registration_url(self, *, order_id: str) -> str:
+    def create_card_registration_url(
+        self,
+        *,
+        order_id: str,
+        bank_name: str | None = None,
+    ) -> str:
         ...
 
 
@@ -146,7 +151,10 @@ class CreateCardOrderService:
         )
 
         # 8. PG 카드 등록 URL 생성
-        pg_url = self._pg_client.create_card_registration_url(order_id=order_id)
+        pg_url = self._pg_client.create_card_registration_url(
+            order_id=order_id,
+            bank_name=command.bank_name,
+        )
 
         # 9. 결과 반환
         return CreateCardOrderResult(

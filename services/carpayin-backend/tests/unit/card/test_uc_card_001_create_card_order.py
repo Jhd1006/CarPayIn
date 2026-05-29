@@ -74,8 +74,13 @@ class FakePgClient:
         self._should_fail = should_fail
         self.create_calls: list[dict] = []
 
-    def create_card_registration_url(self, *, order_id: str) -> str:
-        self.create_calls.append({"order_id": order_id})
+    def create_card_registration_url(
+        self,
+        *,
+        order_id: str,
+        bank_name: str | None = None,
+    ) -> str:
+        self.create_calls.append({"order_id": order_id, "bank_name": bank_name})
         if self._should_fail:
             raise RuntimeError("PG URL 생성 실패")
         return self._pg_url
@@ -220,6 +225,7 @@ class TestCreateCardOrder:
 
         assert len(fake_pg_client.create_calls) == 1
         assert fake_pg_client.create_calls[0]["order_id"] == VALID_ORDER_ID
+        assert fake_pg_client.create_calls[0]["bank_name"] == VALID_BANK_NAME
 
     def test_valid_request_persists_verified_plate(
         self,
