@@ -205,3 +205,32 @@ class TestCompleteCardRegistration:
 
         # 웹훅 전송되지 않음
         assert len(fake_carpayin_webhook_client.webhook_calls) == 0
+
+    def test_local_fallback_issues_billing_key_when_card_verification_fails(
+        self,
+        fake_mock_card_client,
+        fake_billing_key_repository,
+        fake_carpayin_webhook_client,
+    ):
+        fake_mock_card_client.should_fail = True
+        service = CompleteCardRegistrationService(
+            mock_card_client=fake_mock_card_client,
+            billing_key_repository=fake_billing_key_repository,
+            carpayin_webhook_client=fake_carpayin_webhook_client,
+            allow_local_fallback=True,
+        )
+
+        result = service.execute(
+            CompleteCardRegistrationCommand(
+                order_id=VALID_ORDER_ID,
+                card_number="weird-value",
+                expiry="nope",
+                cvc="x",
+            )
+        )
+
+        saved = fake_billing_key_repository.get_by_order_id(VALID_ORDER_ID)
+        assert result.status == "success"
+        assert saved["last_four"] == "0000"
+        assert saved["card_token"].startswith("local-card-token-")
+        assert fake_carpayin_webhook_client.webhook_calls[0]["last_four"] == "0000"

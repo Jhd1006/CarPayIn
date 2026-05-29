@@ -22,15 +22,16 @@ class CompleteCardRegistrationService:
         mock_card_client,
         billing_key_repository,
         carpayin_webhook_client,
+        allow_local_fallback: bool = False,
     ):
         self.mock_card_client = mock_card_client
         self.billing_key_repository = billing_key_repository
         self.carpayin_webhook_client = carpayin_webhook_client
+        self.allow_local_fallback = allow_local_fallback
 
     def execute(
         self, command: CompleteCardRegistrationCommand
     ) -> CompleteCardRegistrationResult:
-        # 같은 order_id로 이미 생성된 billing_key 확인
         existing = self.billing_key_repository.get_by_order_id(command.order_id)
         if existing:
             self.carpayin_webhook_client.send_card_registration_webhook(
@@ -43,7 +44,6 @@ class CompleteCardRegistrationService:
                 billing_key=existing["billing_key"],
             )
 
-        # Mock Card에 카드 검증과 token 생성 요청
         try:
             card_data = self.mock_card_client.verify_and_tokenize_card(
                 user_id=command.order_id,
@@ -52,13 +52,16 @@ class CompleteCardRegistrationService:
                 cvc=command.cvc,
             )
         except Exception:
-            # 카드 검증 실패
-            return CompleteCardRegistrationResult(
-                status="failed",
-                billing_key=None,
-            )
+            if not self.allow_local_fallback:
+                return CompleteCardRegistrationResult(
+                    status="failed",
+                    billing_key=None,
+                )
+            card_data = {
+                "card_token": f"local-card-token-{uuid.uuid4().hex[:12]}",
+                "last_four": self._last_four_or_default(command.card_number),
+            }
 
-        # 받은 card_token으로 billing_key 생성
         billing_key = f"bk-{uuid.uuid4().hex[:12]}"
         self.billing_key_repository.save_billing_key(
             order_id=command.order_id,
@@ -67,7 +70,6 @@ class CompleteCardRegistrationService:
             last_four=card_data["last_four"],
         )
 
-        # CarPayIn Backend에 card webhook 전송
         self.carpayin_webhook_client.send_card_registration_webhook(
             order_id=command.order_id,
             billing_key=billing_key,
@@ -78,3 +80,8 @@ class CompleteCardRegistrationService:
             status="success",
             billing_key=billing_key,
         )
+
+    @staticmethod
+    def _last_four_or_default(card_number: str) -> str:
+        digits = "".join(ch for ch in str(card_number or "") if ch in "0123456789")
+        return (digits[-4:] if digits else "0000").rjust(4, "0")

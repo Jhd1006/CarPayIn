@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 차량 정보 (VIN / GEAR / IGNITION_STATE) -->
+    <uses-permission android:name="android.car.permission.CAR_INFO"/>
+    <uses-permission android:name="pleos.car.permission.CAR_INFO"/>
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN"/>
+
+    <!-- 네트워크 (MQTT 브로커 / 백엔드 REST API) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- 위치 (동적 지오펜스 — GeofenceManager) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+
+    <!-- Foreground Service (백그라운드 주차 감시) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+
+    <!-- 알림 (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!--
+        required="false" : 일반 Android 에뮬레이터에서도 설치/실행 가능
+        실 AAOS 기기 배포 시 required="true" 로 변경
+    -->
+    <uses-feature
+        android:name="android.hardware.type.automotive"
+        android:required="false" />
+
+    <application
+        android:label="Car PayIn"
+        android:theme="@style/Theme.CarPayIn"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: Mock 백엔드 http:// 허용 (실서버 https 전환 시 제거) -->
+
+        <!-- 메인 화면 -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 마이현대 OAuth QR 연동 화면 -->
+        <activity
+            android:name=".ui.RegistrationActivity"
+            android:exported="false" />
+
+        <!-- Mock PG WebView 카드 등록 화면 (최초 1회) -->
+        <activity
+            android:name=".ui.CardRegistrationActivity"
+            android:exported="false" />
+
+        <!-- 백그라운드 주차 감시 서비스 -->
+        <service
+            android:name=".service.CarPayInService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+    </application>
+
+</manifest>
