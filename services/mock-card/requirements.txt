@@ -2,8 +2,6 @@ fastapi>=0.136.3,<0.137.0
 starlette>=0.52.1,<0.53.0
 uvicorn[standard]
 pydantic-settings
-redis
-httpx
 psycopg[binary]
 SQLAlchemy
 alembic>=1.14,<2.0
