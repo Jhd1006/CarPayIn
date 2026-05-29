@@ -28,8 +28,12 @@ router = APIRouter()
 
 @router.get("/pg/card-register", response_class=HTMLResponse)
 @router.get("/card-register", response_class=HTMLResponse)
-def card_registration_webview(order_id: str) -> HTMLResponse:
+def card_registration_webview(
+    order_id: str,
+    card_brand: str = "현대카드",
+) -> HTMLResponse:
     safe_order_id = escape(order_id, quote=True)
+    safe_card_brand = escape(card_brand or "현대카드", quote=True)
     html = """<!doctype html>
 <html lang="ko">
 <head>
@@ -131,30 +135,6 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
       position: relative;
       z-index: 1;
     }
-    .brands {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-      scrollbar-width: none;
-    }
-    .brands::-webkit-scrollbar { display: none; }
-    .brand-pill {
-      background: #fff;
-      border: 1px solid #dce5f0;
-      border-radius: 8px;
-      color: #4e5968;
-      flex: 0 0 auto;
-      font-size: 12px;
-      font-weight: 700;
-      height: 34px;
-      padding: 0 13px;
-    }
-    .brand-pill.active {
-      border-color: transparent;
-      color: #fff;
-    }
     .field { margin-bottom: 12px; }
     .row { display: grid; grid-template-columns: 1fr 104px; gap: 10px; }
     label {
@@ -226,7 +206,12 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
       margin-bottom: 16px;
       width: 72px;
     }
-    .result-title { color: #1b64da; font-size: 20px; font-weight: 900; margin-bottom: 8px; }
+    .result-title {
+      color: #1b64da;
+      font-size: 20px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
     .result-sub { color: #6b7684; font-size: 13px; }
   </style>
 </head>
@@ -234,7 +219,7 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
   <main class="screen" id="registerView" data-order-id="__ORDER_ID__">
     <section class="shell">
       <h1 class="title">카드 등록</h1>
-      <p class="sub">Mock PG · 카드 정보는 PG 화면에서만 처리됩니다.</p>
+      <p class="sub"><span id="selectedBrandLabel">__CARD_BRAND__</span> · 카드 정보는 PG 화면에서만 처리됩니다.</p>
 
       <div class="preview" id="cardPreview">
         <div class="brand-row">
@@ -247,24 +232,25 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
         <div class="expiry-preview" id="previewExpiry">MM/YY</div>
       </div>
 
-      <div class="brands" id="brandList"></div>
-
       <form id="cardForm" novalidate>
         <div class="field">
           <label for="cardNumber">카드번호</label>
           <input id="cardNumber" name="card_number" autocomplete="cc-number"
-                 placeholder="4111 1111 1111 1111" inputmode="text">
+                 placeholder="4111 1111 1111 1111" inputmode="numeric"
+                 maxlength="23" pattern="[0-9 ]*">
         </div>
         <div class="row">
           <div class="field">
             <label for="cardExpiry">유효기간</label>
             <input id="cardExpiry" name="expiry" autocomplete="cc-exp"
-                   placeholder="12/30" inputmode="text">
+                   placeholder="MM/YY" inputmode="numeric"
+                   maxlength="5" pattern="[0-9/]*">
           </div>
           <div class="field">
             <label for="cardCvc">CVC</label>
             <input id="cardCvc" name="cvc" autocomplete="cc-csc"
-                   placeholder="123" inputmode="text">
+                   placeholder="123" inputmode="numeric"
+                   maxlength="4" pattern="[0-9]*">
           </div>
         </div>
         <div class="actions">
@@ -272,7 +258,7 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
           <button class="secondary" type="button" id="demoBtn">테스트 카드 입력</button>
         </div>
       </form>
-      <p class="fine" id="statusText">로컬 데모에서는 가짜 입력값도 테스트 결제수단으로 등록됩니다.</p>
+      <p class="fine" id="statusText">카드번호, 유효기간, CVC 형식에 맞게 입력해 주세요.</p>
     </section>
   </main>
 
@@ -283,98 +269,134 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
   </section>
 
   <script>
-    var brands = [
-      { name: "현대카드", short: "HYUNDAI", bg: "#3182F6", color: "#FFFFFF", network: "VISA" },
-      { name: "KB국민", short: "KB", bg: "#B8874A", color: "#FFF7E8", network: "MASTER" },
-      { name: "신한카드", short: "SHINHAN", bg: "#E24B4B", color: "#FFF2F2", network: "VISA" },
-      { name: "삼성카드", short: "SAMSUNG", bg: "#2563EB", color: "#EAF3FF", network: "MASTER" },
-      { name: "롯데카드", short: "LOTTE", bg: "#D23F5B", color: "#FFF1F4", network: "VISA" },
-      { name: "우리카드", short: "WOORI", bg: "#0B7FAB", color: "#E8F7FF", network: "MASTER" },
-      { name: "하나카드", short: "HANA", bg: "#0F8F68", color: "#E8FFF6", network: "VISA" }
+    var selectedBrandName = "__CARD_BRAND__";
+    var brandStyles = [
+      { keys: ["현대카드", "HYUNDAI"], short: "HYUNDAI", bg: "#3182F6", network: "VISA" },
+      { keys: ["KB국민", "KB"], short: "KB", bg: "#B8874A", network: "MASTER" },
+      { keys: ["신한카드", "SHINHAN"], short: "SHINHAN", bg: "#E24B4B", network: "VISA" },
+      { keys: ["삼성카드", "SAMSUNG"], short: "SAMSUNG", bg: "#2563EB", network: "MASTER" },
+      { keys: ["롯데카드", "LOTTE"], short: "LOTTE", bg: "#D23F5B", network: "VISA" },
+      { keys: ["우리카드", "WOORI"], short: "WOORI", bg: "#0B7FAB", network: "MASTER" },
+      { keys: ["하나카드", "HANA"], short: "HANA", bg: "#0F8F68", network: "VISA" }
     ];
-    var selectedBrand = brands[0];
+    var selectedBrand = resolveBrand(selectedBrandName);
 
     function $(id) { return document.getElementById(id); }
     function digitsOnly(value) { return String(value || "").replace(/\\D/g, ""); }
     function formatCardNumber(digits) {
       return digits.replace(/(.{4})/g, "$1 ").trim();
     }
+    function formatCardNumberInput(value) {
+      return formatCardNumber(digitsOnly(value).slice(0, 19));
+    }
     function lastFour(value) {
       var digits = digitsOnly(value);
       if (!digits) return "0000";
       return ("0000" + digits.slice(-4)).slice(-4);
     }
-    function normalizeExpiry(value) {
-      var text = String(value || "").trim();
-      var digits = digitsOnly(text);
-      if (!text) return "12/30";
-      if (/^\\d{4}$/.test(digits)) return digits.slice(0, 2) + "/" + digits.slice(2);
-      return text;
+    function resolveBrand(name) {
+      var raw = String(name || "카드");
+      var upper = raw.toUpperCase();
+      for (var i = 0; i < brandStyles.length; i++) {
+        var style = brandStyles[i];
+        for (var j = 0; j < style.keys.length; j++) {
+          if (upper.indexOf(style.keys[j].toUpperCase()) >= 0) {
+            return { name: raw, short: style.short, bg: style.bg, network: style.network };
+          }
+        }
+      }
+      return { name: raw, short: "CARD", bg: "#3182F6", network: "VISA" };
     }
-    function renderBrands() {
-      var list = $("brandList");
-      list.innerHTML = "";
-      brands.forEach(function(brand) {
-        var button = document.createElement("button");
-        button.type = "button";
-        button.className = "brand-pill" + (brand === selectedBrand ? " active" : "");
-        button.textContent = brand.name;
-        if (brand === selectedBrand) button.style.background = brand.bg;
-        button.onclick = function() { selectBrand(brand); };
-        list.appendChild(button);
-      });
-    }
-    function selectBrand(brand) {
-      selectedBrand = brand;
-      $("cardPreview").style.background = brand.bg;
-      $("previewBrand").textContent = brand.short;
-      $("previewNetwork").textContent = brand.network;
-      renderBrands();
+    function applyBrand() {
+      $("selectedBrandLabel").textContent = selectedBrand.name;
+      $("cardPreview").style.background = selectedBrand.bg;
+      $("previewBrand").textContent = selectedBrand.short;
+      $("previewNetwork").textContent = selectedBrand.network;
     }
     function refreshPreview() {
       var digits = digitsOnly($("cardNumber").value).slice(0, 19);
       $("previewNumber").textContent = formatCardNumber((digits + "0000000000000000").slice(0, 16));
       $("previewExpiry").textContent = $("cardExpiry").value.trim() || "MM/YY";
     }
-    $("cardNumber").addEventListener("input", refreshPreview);
-    $("cardExpiry").addEventListener("input", function() {
-      var raw = $("cardExpiry").value;
-      var digits = digitsOnly(raw).slice(0, 4);
-      if (/^[\\d/\\s-]*$/.test(raw) && digits.length >= 3) {
-        $("cardExpiry").value = digits.slice(0, 2) + "/" + digits.slice(2);
+    function showError(message) {
+      $("statusText").textContent = message;
+      $("statusText").style.color = "#E5484D";
+    }
+    function showInfo(message) {
+      $("statusText").textContent = message;
+      $("statusText").style.color = "#6B7684";
+    }
+    function expiryError(expiry) {
+      if (!/^\\d{2}\\/\\d{2}$/.test(expiry)) return "유효기간은 MM/YY 형식으로 입력해 주세요.";
+      var month = Number(expiry.slice(0, 2));
+      var year = 2000 + Number(expiry.slice(3, 5));
+      if (month < 1 || month > 12) return "유효기간 월은 01부터 12까지만 가능합니다.";
+      var now = new Date();
+      var currentYear = now.getFullYear();
+      var currentMonth = now.getMonth() + 1;
+      if (year < currentYear || (year === currentYear && month < currentMonth)) {
+        return "이미 만료된 유효기간입니다.";
       }
+      return "";
+    }
+    function validateInputs(cardDigits, expiry, cvc) {
+      if (cardDigits.length < 13 || cardDigits.length > 19) {
+        return "카드번호는 숫자 13~19자리로 입력해 주세요.";
+      }
+      var expiryMessage = expiryError(expiry);
+      if (expiryMessage) return expiryMessage;
+      if (!/^\\d{3,4}$/.test(cvc)) return "CVC는 숫자 3~4자리로 입력해 주세요.";
+      return "";
+    }
+    $("cardNumber").addEventListener("input", function() {
+      $("cardNumber").value = formatCardNumberInput($("cardNumber").value);
       refreshPreview();
+    });
+    $("cardExpiry").addEventListener("input", function() {
+      var digits = digitsOnly($("cardExpiry").value).slice(0, 4);
+      $("cardExpiry").value = digits.length > 2
+        ? digits.slice(0, 2) + "/" + digits.slice(2)
+        : digits;
+      refreshPreview();
+    });
+    $("cardCvc").addEventListener("input", function() {
+      $("cardCvc").value = digitsOnly($("cardCvc").value).slice(0, 4);
     });
     $("demoBtn").addEventListener("click", function() {
       $("cardNumber").value = "4111 1111 1111 1111";
       $("cardExpiry").value = "12/30";
       $("cardCvc").value = "123";
+      showInfo("테스트 카드 정보가 입력되었습니다.");
       refreshPreview();
     });
     $("cardForm").addEventListener("submit", async function(event) {
       event.preventDefault();
       var button = $("submitBtn");
-      var status = $("statusText");
-      var cardNumber = $("cardNumber").value.trim() || "0000";
-      var expiry = normalizeExpiry($("cardExpiry").value);
-      var cvc = $("cardCvc").value.trim() || "000";
+      var cardDigits = digitsOnly($("cardNumber").value);
+      var expiry = $("cardExpiry").value.trim();
+      var cvc = digitsOnly($("cardCvc").value);
+      var validationMessage = validateInputs(cardDigits, expiry, cvc);
+      if (validationMessage) {
+        showError(validationMessage);
+        return;
+      }
       button.disabled = true;
       button.textContent = "처리 중...";
-      status.textContent = "PG에서 결제수단을 등록하고 있습니다.";
+      showInfo("PG에서 결제수단을 등록하고 있습니다.");
       try {
         var response = await fetch("/pg/card-register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             order_id: $("registerView").dataset.orderId,
-            card_number: cardNumber,
+            card_number: cardDigits,
             expiry: expiry,
             cvc: cvc
           })
         });
         var body = await response.json();
         if (body.status !== "success") throw new Error("registration_failed");
-        var four = lastFour(cardNumber);
+        var four = lastFour(cardDigits);
         $("registerView").style.display = "none";
         $("successView").style.display = "flex";
         $("successSub").textContent = selectedBrand.name + " ****" + four + " 등록 완료";
@@ -382,17 +404,22 @@ def card_registration_webview(order_id: str) -> HTMLResponse:
           window.Android.onRegistrationCompleteV3($("registerView").dataset.orderId, four);
         }
       } catch (error) {
-        status.textContent = "등록 실패. 다시 시도해 주세요.";
+        showError("등록 실패. 다시 시도해 주세요.");
         button.disabled = false;
         button.textContent = "등록하기";
       }
     });
-    selectBrand(brands[0]);
+    applyBrand();
     refreshPreview();
   </script>
 </body>
 </html>"""
-    return HTMLResponse(html.replace("__ORDER_ID__", safe_order_id))
+    return HTMLResponse(
+        html.replace("__ORDER_ID__", safe_order_id).replace(
+            "__CARD_BRAND__",
+            safe_card_brand,
+        )
+    )
 
 
 @router.post("/pg/card-register", response_model=CardRegistrationResponse)

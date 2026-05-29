@@ -4,6 +4,8 @@ PG(Payment Gateway) HTTP 클라이언트.
 유닛 테스트의 FakePgClient와 동일한 인터페이스를 구현한다.
 """
 
+from urllib.parse import urlencode
+
 import httpx
 
 
@@ -27,7 +29,12 @@ class HttpxPgClient:
 
     # ── UC-CARD-001: 카드 등록 URL 생성 ──────────────────────────────────
 
-    def create_card_registration_url(self, *, order_id: str) -> str:
+    def create_card_registration_url(
+        self,
+        *,
+        order_id: str,
+        bank_name: str | None = None,
+    ) -> str:
         """
         카드 등록 페이지 URL을 생성한다.
 
@@ -38,7 +45,10 @@ class HttpxPgClient:
             카드 등록 페이지 URL (예: http://mock-pg:8000/pg/card-register?order_id=...)
         """
         try:
-            url = f"{self._public_base_url}/pg/card-register?order_id={order_id}"
+            query = {"order_id": order_id}
+            if bank_name:
+                query["card_brand"] = bank_name
+            url = f"{self._public_base_url}/pg/card-register?{urlencode(query)}"
             # URL 유효성 검증을 위해 PG 서버에 헬스체크 (선택적)
             return url
         except Exception as e:
