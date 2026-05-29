@@ -68,13 +68,17 @@ class FakePreNotifyStore:
     def __init__(self):
         self.pre_notifies = {}
 
-    def save_incoming(self, *, lot_id: str, plate: str, car_id: str):
+    def save_incoming(
+        self, *, lot_id: str, plate: str, car_id: str, user_id: str, ttl_seconds: int
+    ):
         key = f"{lot_id}:{plate}"
         self.pre_notifies[key] = {
             "lot_id": lot_id,
             "plate": plate,
             "car_id": car_id,
+            "user_id": user_id,
             "status": "incoming",
+            "ttl_seconds": ttl_seconds,
         }
 
 
@@ -173,6 +177,7 @@ class TestRegisterPreNotify:
         assert key in fake_pre_notify_store.pre_notifies
         assert fake_pre_notify_store.pre_notifies[key]["status"] == "incoming"
         assert fake_pre_notify_store.pre_notifies[key]["car_id"] == VALID_CAR_ID
+        assert fake_pre_notify_store.pre_notifies[key]["user_id"] == VALID_USER_ID
 
         # PMS 호출 확인
         assert len(fake_pms_client.pre_register_calls) == 1

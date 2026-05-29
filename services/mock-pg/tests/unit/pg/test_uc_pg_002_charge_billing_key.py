@@ -17,6 +17,7 @@ VALID_AMOUNT = 5000
 VALID_CURRENCY = "KRW"
 VALID_IDEMPOTENCY_KEY = "idem-key-001"
 VALID_APPROVAL_NO = "APPR123456"
+VALID_CARD_TX_ID = "card-tx-001"
 
 
 class FakeBillingKeyRepository:
@@ -51,6 +52,7 @@ class FakeTransactionRepository:
         currency: str,
         status: str,
         approval_no: str = None,
+        failed_reason: str = None,
     ):
         if idempotency_key in self.transactions:
             return self.transactions[idempotency_key]
@@ -63,16 +65,24 @@ class FakeTransactionRepository:
             "currency": currency,
             "status": status,
             "approval_no": approval_no,
+            "failed_reason": failed_reason,
         }
         return self.transactions[idempotency_key]
 
     def update_transaction_status(
-        self, idempotency_key: str, status: str, approval_no: str = None
+        self,
+        idempotency_key: str,
+        status: str,
+        approval_no: str = None,
+        card_tx_id: str = None,
+        failed_reason: str = None,
     ):
         if idempotency_key in self.transactions:
             self.transactions[idempotency_key]["status"] = status
             if approval_no:
                 self.transactions[idempotency_key]["approval_no"] = approval_no
+            self.transactions[idempotency_key]["card_tx_id"] = card_tx_id
+            self.transactions[idempotency_key]["failed_reason"] = failed_reason
 
 
 class FakeMockCardClient:
@@ -96,6 +106,8 @@ class FakeMockCardClient:
         )
 
         return {
+            "status": "success",
+            "tx_id": VALID_CARD_TX_ID,
             "approval_no": VALID_APPROVAL_NO,
         }
 
@@ -166,6 +178,7 @@ class TestChargeBillingKey:
         assert tx is not None
         assert tx["status"] == "success"
         assert tx["approval_no"] == VALID_APPROVAL_NO
+        assert tx["card_tx_id"] == VALID_CARD_TX_ID
 
         # 응답 확인
         assert result.status == "success"

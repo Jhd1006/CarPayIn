@@ -57,8 +57,15 @@ class FakeCardOrderStore:
     def __init__(self):
         self.pending_orders: dict[str, dict] = {}
 
-    def save_pending(self, *, order_id: str) -> None:
-        self.pending_orders[order_id] = {"status": "pending"}
+    def save_pending(
+        self, *, order_id: str, user_id: str, car_id: str, ttl_seconds: int
+    ) -> None:
+        self.pending_orders[order_id] = {
+            "status": "pending",
+            "user_id": user_id,
+            "car_id": car_id,
+            "ttl_seconds": ttl_seconds,
+        }
 
 
 class FakePgClient:
@@ -155,6 +162,8 @@ class TestCreateCardOrder:
 
         assert VALID_ORDER_ID in fake_card_order_store.pending_orders
         assert fake_card_order_store.pending_orders[VALID_ORDER_ID]["status"] == "pending"
+        assert fake_card_order_store.pending_orders[VALID_ORDER_ID]["user_id"] == VALID_USER_ID
+        assert fake_card_order_store.pending_orders[VALID_ORDER_ID]["car_id"] == VALID_CAR_ID
 
     def test_valid_request_returns_order_id_and_pg_url(
         self,
@@ -211,6 +220,23 @@ class TestCreateCardOrder:
 
         assert len(fake_pg_client.create_calls) == 1
         assert fake_pg_client.create_calls[0]["order_id"] == VALID_ORDER_ID
+
+    def test_valid_request_persists_verified_plate(
+        self,
+        create_card_order_service,
+        fake_vehicle_repo,
+    ):
+        command = CreateCardOrderCommand(
+            user_id=VALID_USER_ID,
+            car_id=VALID_CAR_ID,
+            plate=VALID_PLATE,
+            bank_name=VALID_BANK_NAME,
+            agree_terms=True,
+        )
+
+        create_card_order_service.execute(command)
+
+        assert fake_vehicle_repo.updated_plates[VALID_CAR_ID] == VALID_PLATE
 
     # ── 실패 케이스 ──
     #

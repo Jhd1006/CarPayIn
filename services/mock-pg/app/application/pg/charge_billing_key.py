@@ -44,7 +44,14 @@ class ChargeBillingKeyService:
         billing_key_data = self.billing_key_repository.get_billing_key(
             command.billing_key
         )
-        if not billing_key_data or billing_key_data["status"] != "active":
+        if not billing_key_data:
+            return ChargeBillingKeyResult(
+                status="failed",
+                tx_id=f"tx-{uuid.uuid4().hex[:12]}",
+                approval_no=None,
+            )
+
+        if billing_key_data["status"] != "active":
             tx_id = f"tx-{uuid.uuid4().hex[:12]}"
             self.transaction_repository.create_transaction(
                 tx_id=tx_id,
@@ -53,6 +60,7 @@ class ChargeBillingKeyService:
                 amount=command.amount,
                 currency=command.currency,
                 status="failed",
+                failed_reason="inactive_billing_key",
             )
             return ChargeBillingKeyResult(
                 status="failed",
@@ -83,10 +91,26 @@ class ChargeBillingKeyService:
                 idempotency_key=command.idempotency_key,
             )
 
+            if approval_data.get("status", "success") != "success":
+                self.transaction_repository.update_transaction_status(
+                    command.idempotency_key,
+                    "failed",
+                    card_tx_id=approval_data.get("tx_id"),
+                    failed_reason="card_payment_failed",
+                )
+                return ChargeBillingKeyResult(
+                    status="failed",
+                    tx_id=tx_id,
+                    approval_no=None,
+                )
+
             # 승인 성공 - transaction success로 업데이트
             approval_no = approval_data["approval_no"]
             self.transaction_repository.update_transaction_status(
-                command.idempotency_key, "success", approval_no=approval_no
+                command.idempotency_key,
+                "success",
+                approval_no=approval_no,
+                card_tx_id=approval_data.get("tx_id"),
             )
 
             return ChargeBillingKeyResult(
@@ -95,10 +119,12 @@ class ChargeBillingKeyService:
                 approval_no=approval_no,
             )
 
-        except Exception:
+        except Exception as exc:
             # 승인 실패 - transaction failed로 업데이트
             self.transaction_repository.update_transaction_status(
-                command.idempotency_key, "failed"
+                command.idempotency_key,
+                "failed",
+                failed_reason=str(exc),
             )
 
             return ChargeBillingKeyResult(

@@ -6,12 +6,29 @@ from sqlalchemy import (
     Index
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func, text
 import uuid
 
 Base = declarative_base()
+
+
+class PreRegistration(Base):
+    __tablename__ = 'pre_registrations'
+
+    lot_id = Column(Text, primary_key=True)
+    plate = Column(String(20), primary_key=True)
+    status = Column(Text, nullable=False, default='pre_registered')
+    registered_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    consumed_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pre_registered', 'consumed', 'cancelled')",
+            name='ck_pms_pre_registrations_status',
+        ),
+        Index('idx_pms_pre_registrations_status', 'status'),
+    )
 
 
 class PMSParkingSession(Base):
