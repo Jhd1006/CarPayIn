@@ -93,10 +93,10 @@ if (-not $Tag) {
     }
 }
 if (-not $Tag) {
-    throw "Set -Tag with a release tag such as v1 or v2."
+    throw "Set -Tag with a release tag such as 0.0.1 or 0.0.2."
 }
-if ($Tag -notmatch "^v[0-9]+(\.[0-9]+)*$") {
-    throw "Tag must look like v1, v2, or v1.1. Received: $Tag"
+if ($Tag -notmatch "^[0-9]+\.[0-9]+\.[0-9]+$") {
+    throw "Tag must look like 0.0.1 or 0.0.2. Received: $Tag"
 }
 
 if (-not $RegistryUser) {

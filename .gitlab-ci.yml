@@ -35,7 +35,7 @@ validate:merge-request:
     - docker push "$IMAGE:$VERSION_TAG"
     - docker push "$IMAGE:latest"
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+(\.[0-9]+)*$/'
+    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
 
 build:carpayin-backend:
   extends: .build_service_image
@@ -76,4 +76,4 @@ deploy:local-compose:
     - Remove-Item Env:\DOCKER_TLS_CERTDIR -ErrorAction SilentlyContinue
     - powershell -ExecutionPolicy Bypass -File scripts\deploy-from-registry.ps1 -Tag $env:CI_COMMIT_TAG
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+(\.[0-9]+)*$/'
+    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
