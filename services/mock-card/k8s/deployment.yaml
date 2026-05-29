@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-card
+  namespace: mock-card
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-card
+  template:
+    metadata:
+      labels:
+        app: mock-card
+    spec:
+      containers:
+        - name: mock-card
+          image: PLACEHOLDER_IMAGE  # Dockerfile 완성 후 채울 것
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: mock-card-env
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-card
+  namespace: mock-card
+spec:
+  selector:
+    app: mock-card
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mock-card
+  namespace: mock-card
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mock-card
+                port:
+                  number: 80
