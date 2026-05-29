@@ -1,14 +1,12 @@
-import os
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import settings
 
-DATABASE_URL = os.getenv(
-    "MOCK_CARD_DATABASE_URL",
-    "postgresql+psycopg://dev_user:dev_pass@localhost:5433/mock_card_dev",
-)
+
+DATABASE_URL = settings.mock_card_database_url
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
