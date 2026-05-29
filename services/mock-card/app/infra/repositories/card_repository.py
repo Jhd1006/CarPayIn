@@ -8,13 +8,11 @@ class SqlAlchemyCardRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def upsert_user(self, *, user_id: str, name: str) -> None:
+    def get_or_create_user(self, *, user_id: str) -> None:
         user = self.session.get(User, user_id)
         if user is None:
-            self.session.add(User(user_id=user_id, name=name))
-        else:
-            user.name = name
-        self.session.commit()
+            self.session.add(User(user_id=user_id, name=""))
+            self.session.commit()
 
     def save_card_with_token(
         self,
