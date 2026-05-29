@@ -6,6 +6,9 @@ from app.api.routes.card import router as card_router
 
 app = FastAPI(title="Mock Card")
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
