@@ -14,5 +14,8 @@ async def value_error_handler(request: Request, exc: ValueError):
         content={"code": "BAD_REQUEST", "message": str(exc)},
     )
 
+@app.get("/health")
+def health_check() -> dict:
+    return {"status": "ok"}
 
 app.include_router(pg_router)
