@@ -17,12 +17,30 @@ from app.infra.repositories.transaction_repository import (
 )
 
 
+def _requires_explicit_env() -> bool:
+    return os.getenv("APP_ENV", "local").strip().lower() in {
+        "aws",
+        "staging",
+        "prod",
+        "production",
+    }
+
+
+def _env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return default
+
+
 mock_card_client = HttpxMockCardClient(
-    base_url=os.getenv("MOCK_CARD_BASE_URL", "http://localhost:8003"),
+    base_url=_env_or_default("MOCK_CARD_BASE_URL", "http://localhost:8003"),
 )
 carpayin_webhook_client = HttpxCarPayInWebhookClient(
-    base_url=os.getenv("CARPAYIN_BACKEND_BASE_URL", "http://localhost:8000"),
-    webhook_secret=os.getenv("PG_WEBHOOK_SECRET", "mock-pg-webhook-secret"),
+    base_url=_env_or_default("CARPAYIN_BACKEND_BASE_URL", "http://localhost:8000"),
+    webhook_secret=_env_or_default("PG_WEBHOOK_SECRET", "mock-pg-webhook-secret"),
 )
 
 

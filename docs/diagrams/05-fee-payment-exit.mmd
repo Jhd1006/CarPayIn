@@ -9,6 +9,9 @@ sequenceDiagram
     participant PGDB as Mock PG DB
     participant Card as Mock Card
     participant CardDB as Mock Card DB
+    participant SQS as Amazon SQS
+    participant Lambda as Payment Notification Lambda
+    participant IoT as AWS IoT Core
 
     App->>App: Detect ignition ON and parked=true
     App->>Backend: GET /fee/{session_id}
@@ -39,6 +42,11 @@ sequenceDiagram
     PG-->>Backend: Return pg_tx_id and approval_no
 
     Backend->>DB: UPDATE transactions with status=success
+    Backend->>DB: INSERT payment_notification_outbox status=pending
     Backend->>DB: UPDATE parking_sessions with status=completed
     Backend->>PMS: Notify paid
     Backend-->>App: Return payment complete and parked=false
+    Backend->>SQS: Send payment.completed from outbox
+    SQS->>Lambda: Trigger payment notification handler
+    Lambda->>IoT: Publish payment.completed
+    IoT-->>App: Payment completed notification

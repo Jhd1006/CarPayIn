@@ -78,6 +78,24 @@ def _env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _requires_explicit_env() -> bool:
+    return os.getenv("APP_ENV", "local").strip().lower() in {
+        "aws",
+        "staging",
+        "prod",
+        "production",
+    }
+
+
+def _env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return default
+
+
 PUBLIC_BASE_URL = _required_env("PUBLIC_BASE_URL").rstrip("/")
 HYUNDAI_AUTHORIZE_URL = os.getenv(
     "HYUNDAI_AUTHORIZE_URL",
@@ -85,9 +103,9 @@ HYUNDAI_AUTHORIZE_URL = os.getenv(
 )
 HYUNDAI_CLIENT_ID = _required_env("HYUNDAI_CLIENT_ID")
 HYUNDAI_CLIENT_SECRET = _required_env("HYUNDAI_CLIENT_SECRET")
-PG_BASE_URL = os.getenv("PG_BASE_URL", "http://localhost:8002")
-PG_PUBLIC_BASE_URL = os.getenv("PG_PUBLIC_BASE_URL", PG_BASE_URL)
-PMS_BASE_URL = os.getenv("PMS_BASE_URL", "http://localhost:8001")
+PG_BASE_URL = _env_or_default("PG_BASE_URL", "http://localhost:8002").rstrip("/")
+PG_PUBLIC_BASE_URL = os.getenv("PG_PUBLIC_BASE_URL", PG_BASE_URL).rstrip("/")
+PMS_BASE_URL = _env_or_default("PMS_BASE_URL", "http://localhost:8001").rstrip("/")
 MOLIT_VERIFY_ENABLED = _env_bool("MOLIT_VERIFY_ENABLED", True)
 
 
@@ -120,8 +138,8 @@ hyundai_oauth_client = HttpxHyundaiOAuthClient(
 )
 molit_client = (
     HttpxMolitClient(
-        base_url=os.getenv("MOLIT_BASE_URL", "https://molit.test"),
-        api_key=os.getenv("MOLIT_API_KEY", "molit-dev-key"),
+        base_url=_env_or_default("MOLIT_BASE_URL", "https://molit.test"),
+        api_key=_env_or_default("MOLIT_API_KEY", "molit-dev-key"),
     )
     if MOLIT_VERIFY_ENABLED
     else LocalMolitBypassClient()
