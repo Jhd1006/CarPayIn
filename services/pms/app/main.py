@@ -19,5 +19,8 @@ async def value_error_handler(request: Request, exc: ValueError):
         },
     )
 
-
+@app.get("/health")
+def health_check() -> dict:
+    return {"status": "ok"}
+    
 app.include_router(pms_router)
