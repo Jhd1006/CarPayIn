@@ -3,15 +3,15 @@ services:
     image: postgres:15
     container_name: carpayin-postgres
     environment:
-      POSTGRES_DB: carpayin_dev
-      POSTGRES_USER: dev_user
-      POSTGRES_PASSWORD: dev_pass
+      POSTGRES_DB: ${CARPAYIN_POSTGRES_DB:-carpayin_dev}
+      POSTGRES_USER: ${CARPAYIN_POSTGRES_USER:-dev_user}
+      POSTGRES_PASSWORD: ${CARPAYIN_POSTGRES_PASSWORD:-dev_pass}
     ports:
       - "5432:5432"
     volumes:
       - carpayin_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev_user -d carpayin_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${CARPAYIN_POSTGRES_USER:-dev_user} -d ${CARPAYIN_POSTGRES_DB:-carpayin_dev}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -20,15 +20,15 @@ services:
     image: postgres:15
     container_name: mock-card-postgres
     environment:
-      POSTGRES_DB: mock_card_dev
-      POSTGRES_USER: dev_user
-      POSTGRES_PASSWORD: dev_pass
+      POSTGRES_DB: ${MOCK_CARD_POSTGRES_DB:-mock_card_dev}
+      POSTGRES_USER: ${MOCK_CARD_POSTGRES_USER:-dev_user}
+      POSTGRES_PASSWORD: ${MOCK_CARD_POSTGRES_PASSWORD:-dev_pass}
     ports:
       - "5433:5432"
     volumes:
       - mock_card_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev_user -d mock_card_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${MOCK_CARD_POSTGRES_USER:-dev_user} -d ${MOCK_CARD_POSTGRES_DB:-mock_card_dev}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -37,15 +37,15 @@ services:
     image: postgres:15
     container_name: mock-pg-postgres
     environment:
-      POSTGRES_DB: mock_pg_dev
-      POSTGRES_USER: dev_user
-      POSTGRES_PASSWORD: dev_pass
+      POSTGRES_DB: ${MOCK_PG_POSTGRES_DB:-mock_pg_dev}
+      POSTGRES_USER: ${MOCK_PG_POSTGRES_USER:-dev_user}
+      POSTGRES_PASSWORD: ${MOCK_PG_POSTGRES_PASSWORD:-dev_pass}
     ports:
       - "5434:5432"
     volumes:
       - mock_pg_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev_user -d mock_pg_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${MOCK_PG_POSTGRES_USER:-dev_user} -d ${MOCK_PG_POSTGRES_DB:-mock_pg_dev}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -54,15 +54,15 @@ services:
     image: postgres:15
     container_name: pms-postgres
     environment:
-      POSTGRES_DB: pms_dev
-      POSTGRES_USER: dev_user
-      POSTGRES_PASSWORD: dev_pass
+      POSTGRES_DB: ${PMS_POSTGRES_DB:-pms_dev}
+      POSTGRES_USER: ${PMS_POSTGRES_USER:-dev_user}
+      POSTGRES_PASSWORD: ${PMS_POSTGRES_PASSWORD:-dev_pass}
     ports:
       - "5435:5432"
     volumes:
       - pms_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev_user -d pms_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${PMS_POSTGRES_USER:-dev_user} -d ${PMS_POSTGRES_DB:-pms_dev}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -86,8 +86,9 @@ services:
       dockerfile: Dockerfile
     container_name: carpayin-backend-api
     environment:
-      DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@carpayin-postgres:5432/carpayin_dev
-      REDIS_URL: redis://redis:6379/0
+      APP_ENV: ${APP_ENV:-local}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@carpayin-postgres:5432/carpayin_dev}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL in .env}
       HYUNDAI_AUTHORIZE_URL: ${HYUNDAI_AUTHORIZE_URL:-https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/authorize}
       HYUNDAI_TOKEN_URL: ${HYUNDAI_TOKEN_URL:-https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/token}
@@ -95,12 +96,17 @@ services:
       HYUNDAI_VEHICLE_LIST_URL: ${HYUNDAI_VEHICLE_LIST_URL:-https://dev.kr-ccapi.hyundai.com/api/v1/car/profile/carlist}
       HYUNDAI_CLIENT_ID: ${HYUNDAI_CLIENT_ID:?Set HYUNDAI_CLIENT_ID in .env}
       HYUNDAI_CLIENT_SECRET: ${HYUNDAI_CLIENT_SECRET:?Set HYUNDAI_CLIENT_SECRET in .env}
-      PG_BASE_URL: http://mock-pg:8000
+      PG_BASE_URL: ${PG_BASE_URL:-http://mock-pg:8000}
       PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
       MOLIT_VERIFY_ENABLED: ${MOLIT_VERIFY_ENABLED:-false}
-      PMS_BASE_URL: http://pms:8000
-      PG_WEBHOOK_SECRET: mock-pg-webhook-secret
-      PMS_WEBHOOK_TOKEN: pms-webhook-token
+      MOLIT_BASE_URL: ${MOLIT_BASE_URL:-}
+      MOLIT_API_KEY: ${MOLIT_API_KEY:-}
+      PMS_BASE_URL: ${PMS_BASE_URL:-http://pms:8000}
+      APP_TOKEN_SECRET: ${APP_TOKEN_SECRET:-carpayin-dev-token-secret}
+      APP_REFRESH_TOKEN_HASH_SECRET: ${APP_REFRESH_TOKEN_HASH_SECRET:-}
+      HYUNDAI_TOKEN_ENCRYPTION_SECRET: ${HYUNDAI_TOKEN_ENCRYPTION_SECRET:-hyundai-dev-token-secret}
+      PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
+      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
     ports:
       - "8000:8000"
     depends_on:
@@ -120,8 +126,9 @@ services:
       dockerfile: Dockerfile
     container_name: mock-card-api
     environment:
-      MOCK_CARD_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@mock-card-postgres:5432/mock_card_dev
-      MOCK_CARD_SECURITY_SECRET: mock-card-dev-secret
+      APP_ENV: ${APP_ENV:-local}
+      MOCK_CARD_DATABASE_URL: ${MOCK_CARD_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@mock-card-postgres:5432/mock_card_dev}
+      MOCK_CARD_SECURITY_SECRET: ${MOCK_CARD_SECURITY_SECRET:-mock-card-dev-secret}
     ports:
       - "8003:8000"
     depends_on:
@@ -139,10 +146,11 @@ services:
       dockerfile: Dockerfile
     container_name: mock-pg-api
     environment:
-      MOCK_PG_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev
-      MOCK_CARD_BASE_URL: http://mock-card:8000
-      CARPAYIN_BACKEND_BASE_URL: http://carpayin-backend:8000
-      PG_WEBHOOK_SECRET: mock-pg-webhook-secret
+      APP_ENV: ${APP_ENV:-local}
+      MOCK_PG_DATABASE_URL: ${MOCK_PG_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev}
+      MOCK_CARD_BASE_URL: ${MOCK_CARD_BASE_URL:-http://mock-card:8000}
+      CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
+      PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
       MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE: ${MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE:-true}
     ports:
       - "8002:8000"
@@ -165,9 +173,11 @@ services:
       dockerfile: Dockerfile
     container_name: pms-api
     environment:
-      PMS_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev
-      CARPAYIN_BACKEND_BASE_URL: http://carpayin-backend:8000
-      PMS_WEBHOOK_TOKEN: pms-webhook-token
+      APP_ENV: ${APP_ENV:-local}
+      PMS_DATABASE_URL: ${PMS_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev}
+      CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
+      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
+      PMS_FEE_PER_30_MINUTES: ${PMS_FEE_PER_30_MINUTES:-500}
     ports:
       - "8001:8000"
     depends_on:

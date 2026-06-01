@@ -111,6 +111,7 @@ class FakeBillingKeyRepository:
 class FakeTransactionRepository:
     def __init__(self):
         self.transactions = {}
+        self.payment_notifications = {}
 
     def get_transaction_by_idempotency_key(self, idempotency_key: str):
         return self.transactions.get(idempotency_key)
@@ -139,6 +140,37 @@ class FakeTransactionRepository:
                 self.transactions[idempotency_key]["approval_no"] = approval_no
             if failed_reason:
                 self.transactions[idempotency_key]["failed_reason"] = failed_reason
+
+    def mark_success_and_enqueue_payment_notification(
+        self,
+        *,
+        idempotency_key: str,
+        pg_tx_id: str | None,
+        approval_no: str,
+        destination: str,
+        payload: dict,
+    ):
+        self.update_transaction_status(
+            idempotency_key,
+            "success",
+            pg_tx_id=pg_tx_id,
+            approval_no=approval_no,
+        )
+        tx = self.transactions[idempotency_key]
+        key = (tx["tx_id"], "payment.completed")
+        self.payment_notifications.setdefault(
+            key,
+            {
+                "tx_id": tx["tx_id"],
+                "session_id": tx["session_id"],
+                "car_id": VALID_CAR_ID,
+                "event_type": "payment.completed",
+                "channel": "iot",
+                "destination": destination,
+                "payload": payload,
+                "status": "pending",
+            },
+        )
 
 class FakePgClient:
     def __init__(self):
@@ -544,6 +576,19 @@ class TestProcessPayment:
         )
         assert tx["status"] == "success"
         assert tx["approval_no"] == VALID_APPROVAL_NO
+        notifications = list(fake_transaction_repository.payment_notifications.values())
+        assert len(notifications) == 1
+        notification = notifications[0]
+        assert notification["status"] == "pending"
+        assert notification["event_type"] == "payment.completed"
+        assert notification["channel"] == "iot"
+        assert notification["destination"] == f"carpayin/cars/{VALID_CAR_ID}/payments"
+        assert notification["payload"]["tx_id"] == tx["tx_id"]
+        assert notification["payload"]["session_id"] == VALID_SESSION_ID
+        assert notification["payload"]["car_id"] == VALID_CAR_ID
+        assert notification["payload"]["amount"] == VALID_AMOUNT
+        assert notification["payload"]["currency"] == VALID_CURRENCY
+        assert notification["payload"]["approval_no"] == VALID_APPROVAL_NO
 
         # parking session completed 확인
         session = fake_parking_session_repository.get_session_by_id(VALID_SESSION_ID)

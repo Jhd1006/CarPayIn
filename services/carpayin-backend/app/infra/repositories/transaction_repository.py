@@ -3,7 +3,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.infra.db.models import ParkingSession, Transaction
+from app.infra.db.models import (
+    ParkingSession,
+    PaymentNotificationOutbox,
+    Transaction,
+)
 
 
 class SqlAlchemyTransactionRepository:
@@ -68,6 +72,49 @@ class SqlAlchemyTransactionRepository:
         transaction.pg_tx_id = pg_tx_id
         transaction.approval_no = approval_no
         transaction.failed_reason = failed_reason
+        self.session.commit()
+
+    def mark_success_and_enqueue_payment_notification(
+        self,
+        *,
+        idempotency_key: str,
+        pg_tx_id: str | None,
+        approval_no: str,
+        destination: str,
+        payload: dict,
+    ) -> None:
+        statement = select(Transaction).where(
+            Transaction.idempotency_key == idempotency_key
+        )
+        transaction = self.session.scalar(statement)
+        if transaction is None:
+            raise LookupError("transaction_not_found")
+
+        transaction.status = "success"
+        transaction.pg_tx_id = pg_tx_id
+        transaction.approval_no = approval_no
+        transaction.failed_reason = None
+
+        existing_notification = self.session.scalar(
+            select(PaymentNotificationOutbox).where(
+                PaymentNotificationOutbox.tx_id == transaction.tx_id,
+                PaymentNotificationOutbox.event_type == "payment.completed",
+            )
+        )
+        if existing_notification is None:
+            self.session.add(
+                PaymentNotificationOutbox(
+                    tx_id=transaction.tx_id,
+                    session_id=transaction.session_id,
+                    car_id=transaction.car_id,
+                    event_type="payment.completed",
+                    channel="iot",
+                    destination=destination,
+                    payload=payload,
+                    status="pending",
+                )
+            )
+
         self.session.commit()
 
     @staticmethod
