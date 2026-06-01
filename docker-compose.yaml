@@ -82,10 +82,8 @@ services:
 
   carpayin-backend:
     build:
-      context: ./services
+      context: ./services/carpayin-backend
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: carpayin-backend
     container_name: carpayin-backend-api
     environment:
       DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@carpayin-postgres:5432/carpayin_dev
@@ -118,10 +116,8 @@ services:
 
   mock-card:
     build:
-      context: ./services
+      context: ./services/mock-card
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: mock-card
     container_name: mock-card-api
     environment:
       MOCK_CARD_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@mock-card-postgres:5432/mock_card_dev
@@ -139,10 +135,8 @@ services:
 
   mock-pg:
     build:
-      context: ./services
+      context: ./services/mock-pg
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: mock-pg
     container_name: mock-pg-api
     environment:
       MOCK_PG_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev
@@ -167,10 +161,8 @@ services:
 
   pms:
     build:
-      context: ./services
+      context: ./services/pms
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: pms
     container_name: pms-api
     environment:
       PMS_DATABASE_URL: postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev
