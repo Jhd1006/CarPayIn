@@ -205,6 +205,69 @@ ON transactions(pg_tx_id);
 - `failed_reason`: 실패 사유이므로 `TEXT`
 - `created_at`, `updated_at`: `TIMESTAMPTZ`
 
+## payment_notification_outbox
+
+결제 성공 이후 앱으로 전달해야 하는 결제 완료 알림 이벤트를 저장한다.
+Amazon SQS, Lambda, AWS IoT Core는 전달 경로이고, 이 테이블은 "보내야 할 알림"의 source of truth 역할을 한다.
+
+`transactions`가 `success`로 확정될 때 같은 DB transaction 안에서 outbox row를 만든다.
+이후 backend publisher 또는 별도 worker가 `pending` 이벤트를 조회해 SQS로 전송하고, Lambda/IoT Core 발송 상태에 따라 `published`, `delivered`, `failed`, `dead` 상태로 갱신한다.
+
+```sql
+CREATE TABLE payment_notification_outbox (
+  notification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tx_id UUID NOT NULL,
+  session_id UUID NOT NULL,
+  car_id TEXT NOT NULL,
+  event_type TEXT NOT NULL DEFAULT 'payment.completed',
+  channel TEXT NOT NULL DEFAULT 'iot',
+  destination TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  published_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  failed_reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ,
+  FOREIGN KEY (tx_id) REFERENCES transactions(tx_id),
+  FOREIGN KEY (session_id) REFERENCES parking_sessions(session_id),
+  FOREIGN KEY (car_id) REFERENCES vehicles(car_id),
+  UNIQUE (tx_id, event_type),
+  CHECK (event_type IN ('payment.completed')),
+  CHECK (channel IN ('iot')),
+  CHECK (status IN ('pending', 'publishing', 'published', 'delivered', 'failed', 'dead')),
+  CHECK (attempts >= 0),
+  CHECK (max_attempts > 0)
+);
+
+CREATE INDEX idx_payment_notification_outbox_status_next_attempt
+ON payment_notification_outbox(status, next_attempt_at);
+
+CREATE INDEX idx_payment_notification_outbox_car_id
+ON payment_notification_outbox(car_id);
+
+CREATE INDEX idx_payment_notification_outbox_session_id
+ON payment_notification_outbox(session_id);
+```
+
+필드 기준:
+
+- `notification_id`: 알림 이벤트 자체의 ID
+- `tx_id`: 어떤 결제에 대한 알림인지 나타내는 `transactions.tx_id`
+- `session_id`: 어떤 주차 세션 결제인지 나타내는 `parking_sessions.session_id`
+- `car_id`: 어떤 차량/앱으로 전달할 알림인지 나타내는 차량 ID
+- `event_type`: 현재는 결제 완료 이벤트인 `payment.completed`
+- `channel`: 현재는 IoT 알림 채널인 `iot`
+- `destination`: IoT topic 또는 알림 대상 식별자. 예: `carpayin/cars/{car_id}/payments`
+- `payload`: SQS/Lambda/IoT Core로 전달할 알림 본문 JSON
+- `status`: `pending`, `publishing`, `published`, `delivered`, `failed`, `dead`
+- `attempts`, `max_attempts`, `next_attempt_at`: 재시도 제어 정보
+- `published_at`, `delivered_at`, `failed_reason`: 전달 결과 추적 정보
+- `created_at`, `updated_at`: 생성/갱신 시각
+
 ## app_refresh_tokens
 
 AAOS 앱 refresh token 정보를 저장한다.

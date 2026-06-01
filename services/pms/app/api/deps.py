@@ -21,9 +21,27 @@ from app.infra.repositories.pms_session_repository import (
 )
 
 
+def _requires_explicit_env() -> bool:
+    return os.getenv("APP_ENV", "local").strip().lower() in {
+        "aws",
+        "staging",
+        "prod",
+        "production",
+    }
+
+
+def _env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return default
+
+
 carpayin_webhook_client = HttpxCarPayInWebhookClient(
-    base_url=os.getenv("CARPAYIN_BACKEND_BASE_URL", "http://localhost:8000"),
-    webhook_token=os.getenv("PMS_WEBHOOK_TOKEN", "pms-webhook-token"),
+    base_url=_env_or_default("CARPAYIN_BACKEND_BASE_URL", "http://localhost:8000"),
+    webhook_token=_env_or_default("PMS_WEBHOOK_TOKEN", "pms-webhook-token"),
 )
 fee_calculator = SimpleFeeCalculator(
     amount_per_30_minutes=int(os.getenv("PMS_FEE_PER_30_MINUTES", "500")),

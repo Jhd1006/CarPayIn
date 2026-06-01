@@ -5,7 +5,7 @@ from sqlalchemy import (
     Column, String, Integer, DateTime, ForeignKey, Text, CheckConstraint,
     Index, UniqueConstraint, CHAR
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func, text
 import uuid
@@ -123,6 +123,7 @@ class Transaction(Base):
     # Relationships
     parking_session = relationship('ParkingSession', back_populates='transactions')
     vehicle = relationship('Vehicle', back_populates='transactions')
+    payment_notifications = relationship('PaymentNotificationOutbox', back_populates='transaction')
     
     # Constraints and Indexes
     __table_args__ = (
@@ -133,6 +134,46 @@ class Transaction(Base):
         Index('idx_transactions_car_id', 'car_id'),
         Index('idx_transactions_billing_key', 'billing_key'),
         Index('idx_transactions_pg_tx_id', 'pg_tx_id'),
+    )
+
+
+class PaymentNotificationOutbox(Base):
+    """Payment notification event stored before broker/IoT delivery."""
+    __tablename__ = 'payment_notification_outbox'
+
+    notification_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text('gen_random_uuid()'))
+    tx_id = Column(UUID(as_uuid=True), ForeignKey('transactions.tx_id'), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey('parking_sessions.session_id'), nullable=False)
+    car_id = Column(Text, ForeignKey('vehicles.car_id'), nullable=False)
+    event_type = Column(Text, nullable=False, default='payment.completed', server_default='payment.completed')
+    channel = Column(Text, nullable=False, default='iot', server_default='iot')
+    destination = Column(Text, nullable=False)
+    payload = Column(JSONB, nullable=False)
+    status = Column(Text, nullable=False, default='pending', server_default='pending')
+    attempts = Column(Integer, nullable=False, default=0, server_default=text('0'))
+    max_attempts = Column(Integer, nullable=False, default=5, server_default=text('5'))
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    failed_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    transaction = relationship('Transaction', back_populates='payment_notifications')
+
+    __table_args__ = (
+        UniqueConstraint('tx_id', 'event_type', name='uniq_payment_notification_outbox_tx_event'),
+        CheckConstraint("event_type IN ('payment.completed')", name='ck_payment_notification_outbox_event_type'),
+        CheckConstraint("channel IN ('iot')", name='ck_payment_notification_outbox_channel'),
+        CheckConstraint(
+            "status IN ('pending', 'publishing', 'published', 'delivered', 'failed', 'dead')",
+            name='ck_payment_notification_outbox_status',
+        ),
+        CheckConstraint('attempts >= 0', name='ck_payment_notification_outbox_attempts'),
+        CheckConstraint('max_attempts > 0', name='ck_payment_notification_outbox_max_attempts'),
+        Index('idx_payment_notification_outbox_status_next_attempt', 'status', 'next_attempt_at'),
+        Index('idx_payment_notification_outbox_car_id', 'car_id'),
+        Index('idx_payment_notification_outbox_session_id', 'session_id'),
     )
 
 
