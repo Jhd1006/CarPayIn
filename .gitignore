@@ -34,6 +34,13 @@ local.properties
 test-artifacts/*
 !test-artifacts/.gitkeep
 
+# Docker/local compose artifacts
+docker-compose.override.yml
+docker-compose.override.yaml
+*.local.yml
+*.local.yaml
+*.tar
+
 # IDE
 .vscode/
 .idea/
