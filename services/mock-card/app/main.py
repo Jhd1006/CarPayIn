@@ -6,10 +6,6 @@ from app.api.routes.card import router as card_router
 
 app = FastAPI(title="Mock Card")
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
-
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(
@@ -17,5 +13,8 @@ async def value_error_handler(request: Request, exc: ValueError):
         content={"code": "BAD_REQUEST", "message": str(exc)},
     )
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 app.include_router(card_router)
