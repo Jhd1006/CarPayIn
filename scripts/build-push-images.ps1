@@ -2,7 +2,7 @@ param(
     [string]$RegistryImage = "",
     [string]$Registry = "",
     [string]$Tag = "",
-    [string[]]$Services = @("carpayin-backend", "mock-card", "mock-pg", "pms"),
+    [string[]]$Services = @("carpayin-backend", "mock-pg", "pms"),
     [switch]$PushLatest,
     [switch]$NoLatest,
     [string]$RegistryUser = "",
@@ -125,13 +125,18 @@ $RegistryToken | docker login $Registry -u $RegistryUser --password-stdin
 
 foreach ($service in $Services) {
     $image = "$RegistryImage/$service"
-    Write-Host "Building $image`:$Tag from SERVICE_NAME=$service"
+    $serviceDir = Join-Path "services" $service
+    $dockerfile = Join-Path $serviceDir "Dockerfile"
+    if (-not (Test-Path $dockerfile)) {
+        throw "Dockerfile not found for service '$service': $dockerfile"
+    }
+
+    Write-Host "Building $image`:$Tag from $dockerfile"
     docker build `
         --pull `
-        -f services/Dockerfile `
-        --build-arg "SERVICE_NAME=$service" `
+        -f $dockerfile `
         -t "$image`:$Tag" `
-        services
+        $serviceDir
 
     Write-Host "Pushing $image`:$Tag"
     docker push "$image`:$Tag"
