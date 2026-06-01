@@ -13,7 +13,12 @@ val localProperties = Properties().apply {
 }
 
 fun localConfig(name: String, defaultValue: String): String =
-    (localProperties.getProperty(name) ?: defaultValue).replace("\\", "\\\\").replace("\"", "\\\"")
+    (
+        localProperties.getProperty(name)
+            ?: providers.gradleProperty(name).orNull
+            ?: System.getenv(name)
+            ?: defaultValue
+    ).replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace  = "com.example.carpayin"

@@ -179,8 +179,26 @@ class PmsAuthValidator:
             raise ValueError("pms_auth_failed")
 
 
+def _requires_explicit_env() -> bool:
+    return os.getenv("APP_ENV", "local").strip().lower() in {
+        "aws",
+        "staging",
+        "prod",
+        "production",
+    }
+
+
+def _secret_env(name: str, dev_default: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return dev_default
+
+
 def create_default_security_components() -> dict:
-    token_secret = os.getenv("APP_TOKEN_SECRET", "carpayin-dev-token-secret")
+    token_secret = _secret_env("APP_TOKEN_SECRET", "carpayin-dev-token-secret")
     token_codec = SignedTokenCodec(token_secret)
     return {
         "temp_access_token_issuer": TempAccessTokenIssuer(token_codec),
@@ -189,15 +207,15 @@ def create_default_security_components() -> dict:
         "app_access_token_issuer": AppAccessTokenIssuer(token_codec),
         "app_access_token_validator": AppAccessTokenValidator(token_codec),
         "refresh_token_hasher": RefreshTokenHasher(
-            os.getenv("APP_REFRESH_TOKEN_HASH_SECRET", token_secret)
+            os.getenv("APP_REFRESH_TOKEN_HASH_SECRET", "").strip() or token_secret
         ),
         "refresh_token_encryptor": RefreshTokenEncryptor(
-            os.getenv("HYUNDAI_TOKEN_ENCRYPTION_SECRET", "hyundai-dev-token-secret")
+            _secret_env("HYUNDAI_TOKEN_ENCRYPTION_SECRET", "hyundai-dev-token-secret")
         ),
         "card_webhook_signature_verifier": WebhookSignatureVerifier(
-            os.getenv("PG_WEBHOOK_SECRET", "mock-pg-webhook-secret")
+            _secret_env("PG_WEBHOOK_SECRET", "mock-pg-webhook-secret")
         ),
         "pms_auth_validator": PmsAuthValidator(
-            os.getenv("PMS_WEBHOOK_TOKEN", "pms-webhook-token")
+            _secret_env("PMS_WEBHOOK_TOKEN", "pms-webhook-token")
         ),
     }

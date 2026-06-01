@@ -133,11 +133,18 @@ class ProcessPaymentService:
                 )
 
             approval_no = pg_result["approval_no"]
-            self.transaction_repository.update_transaction_status(
-                idempotency_key,
-                "success",
+            notification_payload = self._build_payment_notification_payload(
+                session=session,
+                tx_id=tx_id,
+                car_id=car_id,
+                approval_no=approval_no,
+                command=command,
+            )
+            self._mark_payment_success(
+                idempotency_key=idempotency_key,
                 pg_tx_id=pg_result.get("pg_tx_id"),
                 approval_no=approval_no,
+                notification_payload=notification_payload,
             )
             self.parking_session_repository.update_session_status(
                 command.session_id, "completed"
@@ -153,13 +160,13 @@ class ProcessPaymentService:
 
             # 앱 알림 발행
             self.notification_publisher.publish_payment_notification(
-                session_id=command.session_id,
-                car_id=car_id,
-                lot_id=session["lot_id"],
-                tx_id=tx_id,
-                amount=command.amount,
-                currency=command.currency,
-                approval_no=approval_no,
+                session_id=notification_payload["session_id"],
+                car_id=notification_payload["car_id"],
+                lot_id=notification_payload["lot_id"],
+                tx_id=notification_payload["tx_id"],
+                amount=notification_payload["amount"],
+                currency=notification_payload["currency"],
+                approval_no=notification_payload["approval_no"],
             )
 
             return ProcessPaymentResult(
@@ -214,3 +221,51 @@ class ProcessPaymentService:
 
         if self.payment_notify_retry_store is not None:
             self.payment_notify_retry_store.clear_retry_event(tx_id)
+
+    def _build_payment_notification_payload(
+        self,
+        *,
+        session: dict,
+        tx_id: str,
+        car_id: str,
+        approval_no: str,
+        command: ProcessPaymentCommand,
+    ) -> dict:
+        return {
+            "event_type": "payment.completed",
+            "tx_id": tx_id,
+            "session_id": command.session_id,
+            "car_id": car_id,
+            "lot_id": session["lot_id"],
+            "amount": command.amount,
+            "currency": command.currency,
+            "approval_no": approval_no,
+        }
+
+    def _mark_payment_success(
+        self,
+        *,
+        idempotency_key: str,
+        pg_tx_id: str | None,
+        approval_no: str,
+        notification_payload: dict,
+    ) -> None:
+        if hasattr(
+            self.transaction_repository,
+            "mark_success_and_enqueue_payment_notification",
+        ):
+            self.transaction_repository.mark_success_and_enqueue_payment_notification(
+                idempotency_key=idempotency_key,
+                pg_tx_id=pg_tx_id,
+                approval_no=approval_no,
+                destination=f"carpayin/cars/{notification_payload['car_id']}/payments",
+                payload=notification_payload,
+            )
+            return
+
+        self.transaction_repository.update_transaction_status(
+            idempotency_key,
+            "success",
+            pg_tx_id=pg_tx_id,
+            approval_no=approval_no,
+        )
