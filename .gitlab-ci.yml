@@ -45,7 +45,7 @@ test:pms:
 .build_ecr_service:
   stage: build
   image:
-    name: public.ecr.aws/aws-cli/aws-cli:2
+    name: public.ecr.aws/aws-cli/aws-cli:latest
     entrypoint: [""]
   services:
     - name: docker:27.5.1-dind
@@ -98,7 +98,7 @@ build:ecr:pms:
 deploy:ecs:carpayin-backend:
   stage: deploy
   image:
-    name: public.ecr.aws/aws-cli/aws-cli:2
+    name: public.ecr.aws/aws-cli/aws-cli:latest
     entrypoint: [""]
   needs:
     - build:ecr:carpayin-backend
