@@ -145,6 +145,9 @@ timestep = int(robot.getBasicTimeStep())
 gps = robot.getDevice("gps")
 gps.enable(timestep)
 
+keyboard = robot.getKeyboard()
+keyboard.enable(timestep)
+
 try:
     left_steer  = robot.getDevice("left_steer")
     right_steer = robot.getDevice("right_steer")
@@ -194,11 +197,20 @@ while robot.step(timestep) != -1:
     if _lpr_triggered and (now - _last_lpr_time) > _cooldown_s:
         _lpr_triggered = False
 
-    # 3. 모터 구동 비활성화 — 수동 조작 모드
-    # (자동 주행이 필요하면 아래 주석 해제)
-    # if HAS_MOTORS:
-    #     if dist > 2.0:
-    #         steer_toward_parking(gps, left_steer, right_steer, left_wheel, right_wheel)
-    #     else:
-    #         left_wheel.setVelocity(0.0)
-    #         right_wheel.setVelocity(0.0)
+    # 3. 키보드 수동 조작
+    if HAS_MOTORS:
+        key = keyboard.getKey()
+        speed = 0.0
+        steer = 0.0
+        if key == keyboard.UP:
+            speed = DEFAULT_SPEED
+        elif key == keyboard.DOWN:
+            speed = -DEFAULT_SPEED
+        if key == keyboard.LEFT or key == (keyboard.UP + keyboard.LEFT) or key == (keyboard.DOWN + keyboard.LEFT):
+            steer = -0.3
+        elif key == keyboard.RIGHT or key == (keyboard.UP + keyboard.RIGHT) or key == (keyboard.DOWN + keyboard.RIGHT):
+            steer = 0.3
+        left_steer.setPosition(steer)
+        right_steer.setPosition(steer)
+        left_wheel.setVelocity(speed)
+        right_wheel.setVelocity(speed)
