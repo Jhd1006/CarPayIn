@@ -17,9 +17,12 @@ def _load_env_file(path: pathlib.Path) -> None:
                 os.environ[key] = value
 
 
-# services/webots/.env 를 우선 로드 (OS 환경변수보다 낮은 우선순위)
-_webots_dir = pathlib.Path(__file__).resolve().parent / "services" / "webots"
-_load_env_file(_webots_dir / ".env")
+# .env 탐색 순서:
+# 1. shared_config.py 와 같은 폴더 (Webots controllers 폴더에 복사된 경우)
+# 2. services/webots/.env (프로젝트 루트에서 실행하는 경우)
+_here = pathlib.Path(__file__).resolve().parent
+_load_env_file(_here / ".env")
+_load_env_file(_here / "services" / "webots" / ".env")
 
 
 def get_config(key: str, default: str = "") -> str:
