@@ -32,9 +32,10 @@ VIN          = get_config("WEBOTS_VIN", "TESTVIN001")
 PLATE        = get_config("WEBOTS_PLATE", "123가4567")
 LOT_ID       = get_config("WEBOTS_LOT_ID", "LOT_TEST_01")
 
-# 에뮬레이터가 다른 PC에 있을 때 설정 (예: "192.168.0.10:5555")
+# 에뮬레이터가 다른 PC에 있을 때: ADB_HOST에 노트북 IP 입력
 # 비어 있으면 로컬 ADB 사용
-ADB_TARGET   = get_config("ADB_TARGET", "")
+ADB_HOST     = get_config("ADB_HOST", "")
+ADB_PORT     = get_config("ADB_PORT", "5037")
 
 PARKING_LOT_X, PARKING_LOT_Z = 53.33, 3.67
 LPR_THRESHOLD        = 4.0
@@ -161,7 +162,7 @@ while robot.step(timestep) != -1:
     # 1. 안드로이드 에뮬레이터 GPS 주입 (내비게이션용)
     if now - last_gps_send_time >= 1.0:
         try:
-            adb_cmd = f"adb -s {ADB_TARGET} emu geo fix {lng} {lat}" if ADB_TARGET else f"adb emu geo fix {lng} {lat}"
+            adb_cmd = f"adb -H {ADB_HOST} -P {ADB_PORT} emu geo fix {lng} {lat}" if ADB_HOST else f"adb emu geo fix {lng} {lat}"
             subprocess.Popen(adb_cmd, shell=True)
             push_sim_location(lat, lng)
             last_gps_send_time = now
