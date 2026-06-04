@@ -1,0 +1,24 @@
+[디바이스] left_steer / 타입: Motor
+[디바이스] left_steer_sensor / 타입: PositionSensor
+[디바이스] left_front_wheel / 타입: Motor
+[디바이스] left_front_sensor / 타입: PositionSensor
+[디바이스] left_front_brake / 타입: Brake
+[디바이스] right_steer / 타입: Motor
+[디바이스] right_steer_sensor / 타입: PositionSensor
+[디바이스] right_front_wheel / 타입: Motor
+[디바이스] right_front_sensor / 타입: PositionSensor
+[디바이스] right_front_brake / 타입: Brake
+[디바이스] left_rear_sensor / 타입: PositionSensor
+[디바이스] left_rear_brake / 타입: Brake
+[디바이스] right_rear_sensor / 타입: PositionSensor
+[디바이스] right_rear_brake / 타입: Brake
+[디바이스] engine_speaker / 타입: Speaker
+[디바이스] gps / 타입: GPS
+[디바이스] front_lights / 타입: LED
+[디바이스] right_indicators / 타입: LED
+[디바이스] left_indicators / 타입: LED
+[디바이스] antifog_lights / 타입: LED
+[디바이스] brake_lights / 타입: LED
+[디바이스] rear_lights / 타입: LED
+[디바이스] backwards_lights / 타입: LED
+[차량] 컨트롤러 시작
