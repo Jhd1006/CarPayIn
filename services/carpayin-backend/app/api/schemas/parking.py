@@ -1,6 +1,32 @@
 from pydantic import BaseModel
 
 
+class ParkingLotResponse(BaseModel):
+    id: str
+    name: str
+    lat: float
+    lng: float
+
+
+class ParkingLotsResponse(BaseModel):
+    lots: list[ParkingLotResponse]
+
+
+class SimLocationRequest(BaseModel):
+    lat: float
+    lng: float
+    speed_kph: float = 0.0
+    source: str = "webots"
+
+
+class SimLocationResponse(BaseModel):
+    lat: float
+    lng: float
+    speed_kph: float = 0.0
+    source: str = "webots"
+    updated_at: str
+
+
 class PreNotifyRequest(BaseModel):
     car_id: str
     lot_id: str

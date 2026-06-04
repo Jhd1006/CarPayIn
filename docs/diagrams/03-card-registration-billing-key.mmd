@@ -18,7 +18,9 @@ sequenceDiagram
     MOLIT-->>Backend: Return matched result
 
     Backend->>Redis: Save mock_pg_card_register:{order_id}
-    Backend-->>App: Return PG WebView URL
+    Backend->>PG: POST /pg/internal/card-registration/sessions
+    PG-->>Backend: Return public WebView URL
+    Backend-->>App: Return order_id and PG WebView URL
 
     App->>PG: Open card registration WebView
     User->>PG: Enter card number, expiry, and CVC

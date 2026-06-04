@@ -78,9 +78,16 @@ class FakePgClient:
         self,
         *,
         order_id: str,
+        car_id: str = "",
+        plate: str = "",
         bank_name: str | None = None,
     ) -> str:
-        self.create_calls.append({"order_id": order_id, "bank_name": bank_name})
+        self.create_calls.append({
+            "order_id": order_id,
+            "car_id": car_id,
+            "plate": plate,
+            "bank_name": bank_name,
+        })
         if self._should_fail:
             raise RuntimeError("PG URL 생성 실패")
         return self._pg_url
@@ -225,6 +232,8 @@ class TestCreateCardOrder:
 
         assert len(fake_pg_client.create_calls) == 1
         assert fake_pg_client.create_calls[0]["order_id"] == VALID_ORDER_ID
+        assert fake_pg_client.create_calls[0]["car_id"] == VALID_CAR_ID
+        assert fake_pg_client.create_calls[0]["plate"] == VALID_PLATE
         assert fake_pg_client.create_calls[0]["bank_name"] == VALID_BANK_NAME
 
     def test_valid_request_persists_verified_plate(

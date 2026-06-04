@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.deps import (
@@ -7,8 +9,12 @@ from app.api.deps import (
 from app.api.schemas.parking import (
     EntryWebhookRequest,
     EntryWebhookResponse,
+    ParkingLotResponse,
+    ParkingLotsResponse,
     PreNotifyRequest,
     PreNotifyResponse,
+    SimLocationRequest,
+    SimLocationResponse,
 )
 from app.application.parking.handle_entry_webhook import (
     HandleEntryWebhookCommand,
@@ -21,6 +27,41 @@ from app.application.parking.register_pre_notify import (
 
 
 router = APIRouter(tags=["Parking"])
+
+PARTNER_PARKING_LOTS = [
+    ParkingLotResponse(
+        id="LOT_TEST_01",
+        name="테스트 주차장",
+        lat=37.493087,
+        lng=127.049750,
+    ),
+    ParkingLotResponse(
+        id="LOT_GANGNAM_01",
+        name="강남 아이파킹",
+        lat=37.4979,
+        lng=127.0276,
+    ),
+    ParkingLotResponse(
+        id="LOT_SEOCHO_01",
+        name="서초 아이파킹",
+        lat=37.4837,
+        lng=127.0324,
+    ),
+    ParkingLotResponse(
+        id="LOT_YEONGDEUNGPO_01",
+        name="영등포 아이파킹",
+        lat=37.5258,
+        lng=126.8962,
+    ),
+]
+
+_sim_location = SimLocationResponse(
+    lat=37.493087,
+    lng=127.049750,
+    speed_kph=0.0,
+    source="default",
+    updated_at=datetime.now(timezone.utc).isoformat(),
+)
 
 
 def extract_bearer_token(authorization: str | None) -> str:
@@ -43,6 +84,29 @@ def extract_bearer_token(authorization: str | None) -> str:
             },
         )
     return token
+
+
+@router.get("/parking/lots", response_model=ParkingLotsResponse)
+def get_parking_lots() -> ParkingLotsResponse:
+    return ParkingLotsResponse(lots=PARTNER_PARKING_LOTS)
+
+
+@router.post("/sim/location", response_model=SimLocationResponse)
+def update_sim_location(request: SimLocationRequest) -> SimLocationResponse:
+    global _sim_location
+    _sim_location = SimLocationResponse(
+        lat=request.lat,
+        lng=request.lng,
+        speed_kph=request.speed_kph,
+        source=request.source,
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    return _sim_location
+
+
+@router.get("/sim/location", response_model=SimLocationResponse)
+def get_sim_location() -> SimLocationResponse:
+    return _sim_location
 
 
 @router.post("/pre-notify", response_model=PreNotifyResponse)

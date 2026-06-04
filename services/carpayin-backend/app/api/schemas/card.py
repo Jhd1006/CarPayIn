@@ -12,6 +12,7 @@ class CardOrderRequest(BaseModel):
 class CardOrderResponse(BaseModel):
     order_id: str
     pg_url: str
+    webview_url: str | None = None
 
 
 class CardWebhookRequest(BaseModel):

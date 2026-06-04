@@ -36,6 +36,14 @@ object GeofenceManager {
         val lng: Double
     )
 
+    data class VehicleLocation(
+        val lat: Double,
+        val lng: Double,
+        val speedKph: Float,
+        val provider: String,
+        val updatedAtMs: Long
+    )
+
     /**
      * 앱 초기화 시 백엔드에서 내려받아 캐싱하는 제휴 주차장 목록.
      * TODO: ApiManager.fetchParkingLots() 연동 후 이 목록을 교체
@@ -57,12 +65,16 @@ object GeofenceManager {
     fun updateParkingLots(lots: List<ParkingLot>) {
         cachedParkingLots = lots
         Log.d(TAG, "주차장 목록 업데이트: ${lots.size}개")
+        onParkingLotsUpdated?.invoke(lots)
     }
 
     // ── 상태 ─────────────────────────────────────────────────────────────────
 
     private var locationManager: LocationManager? = null
     private val detectedLots = mutableSetOf<String>()  // 세션 내 중복 감지 방지
+    @Volatile
+    var lastVehicleLocation: VehicleLocation? = null
+        private set
 
     /**
      * 콜백: 지오펜스 진입 or 내비 목적지 설정
@@ -71,6 +83,8 @@ object GeofenceManager {
      * @param triggerType "GEOFENCE" | "NAVI"
      */
     var onParkingLotApproach: ((lotId: String, lotName: String, triggerType: String) -> Unit)? = null
+    var onVehicleLocationUpdated: ((VehicleLocation) -> Unit)? = null
+    var onParkingLotsUpdated: ((List<ParkingLot>) -> Unit)? = null
 
     // ── 시작 / 중지 ───────────────────────────────────────────────────────────
 
@@ -109,6 +123,7 @@ object GeofenceManager {
         override fun onLocationChanged(location: Location) {
             // 차량 속도에 따라 반경 동적 결정
             val speedKph = location.speed * 3.6f
+            updateVehicleLocation(location, speedKph)
             val radius = dynamicRadius(speedKph)
             checkGeofence(location, radius, speedKph)
         }
@@ -147,6 +162,18 @@ object GeofenceManager {
                 onParkingLotApproach?.invoke(lot.id, lot.name, "GEOFENCE")
             }
         }
+    }
+
+    private fun updateVehicleLocation(location: Location, speedKph: Float) {
+        val current = VehicleLocation(
+            lat = location.latitude,
+            lng = location.longitude,
+            speedKph = speedKph,
+            provider = location.provider ?: "gps",
+            updatedAtMs = System.currentTimeMillis()
+        )
+        lastVehicleLocation = current
+        onVehicleLocationUpdated?.invoke(current)
     }
 
     // ── NaviHelper SDK 연동 포인트 ────────────────────────────────────────────
@@ -203,9 +230,11 @@ object GeofenceManager {
                     val loc = android.location.Location("sim").apply {
                         latitude  = lat
                         longitude = lng
-                        speed     = 0f
+                        speed     = (json.optDouble("speed_kph", 0.0) / 3.6).toFloat()
                     }
-                    checkGeofence(loc, dynamicRadius(0f), 0f)
+                    val speedKph = loc.speed * 3.6f
+                    updateVehicleLocation(loc, speedKph)
+                    checkGeofence(loc, dynamicRadius(speedKph), speedKph)
                     Log.d(TAG, "[시뮬레이션] lat=${"%.6f".format(lat)} lng=${"%.6f".format(lng)}")
                 } catch (e: Exception) {
                     Log.w(TAG, "시뮬레이션 위치 조회 실패: ${e.message}")

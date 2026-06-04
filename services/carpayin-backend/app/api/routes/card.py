@@ -43,6 +43,7 @@ def create_card_order(
     return CardOrderResponse(
         order_id=result.order_id,
         pg_url=result.pg_url,
+        webview_url=result.pg_url,
     )
 
 

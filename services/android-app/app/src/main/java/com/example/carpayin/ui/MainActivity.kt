@@ -590,7 +590,13 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
                 navigatingLotId = lot.id
                 populateParkingLots()
-                NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
+                val navigationStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
+                if (!navigationStarted) {
+                    navigatingLotId = null
+                    populateParkingLots()
+                    Toast.makeText(this, "Pleos 내비게이션을 실행할 수 없습니다", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
 
                 val plate = ParkingStateManager.getPlateNumber(this)
                 val token = ParkingStateManager.getAccessToken(this)

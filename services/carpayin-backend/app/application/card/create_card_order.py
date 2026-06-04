@@ -59,6 +59,8 @@ class PgClient(Protocol):
         self,
         *,
         order_id: str,
+        car_id: str = "",
+        plate: str = "",
         bank_name: str | None = None,
     ) -> str:
         ...
@@ -150,9 +152,11 @@ class CreateCardOrderService:
             ttl_seconds=CARD_ORDER_TTL_SECONDS,
         )
 
-        # 8. PG 카드 등록 URL 생성
+        # 8. PG internal API로 카드 등록 WebView URL 요청
         pg_url = self._pg_client.create_card_registration_url(
             order_id=order_id,
+            car_id=command.car_id,
+            plate=normalized_plate,
             bank_name=command.bank_name,
         )
 
