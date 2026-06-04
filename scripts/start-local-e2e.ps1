@@ -13,9 +13,13 @@ $ErrorActionPreference = "Stop"
 
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $Root "docker-compose.yaml"
+$EnvLocalFile = Join-Path $Root ".env.local"
 $EnvFile = Join-Path $Root ".env"
 $EnvExampleFile = Join-Path $Root ".env.example"
 $AndroidLocalProperties = Join-Path $Root "services\android-app\local.properties"
+
+# .env.local이 있으면 로컬 전용 설정 파일을 우선 사용 (.env는 AWS 값 그대로 유지)
+$ActiveEnvFile = if (Test-Path -LiteralPath $EnvLocalFile) { $EnvLocalFile } else { $EnvFile }
 
 function Write-Step([string] $Message) {
     Write-Host ""
@@ -162,6 +166,10 @@ function Get-NgrokStaticArg([string] $NgrokPath, [string] $Url) {
 }
 
 function Ensure-EnvFile() {
+    if (Test-Path -LiteralPath $EnvLocalFile) {
+        Write-Ok "Using .env.local for local development (.env is preserved for AWS)"
+        return
+    }
     if (-not (Test-Path -LiteralPath $EnvFile)) {
         if (Test-Path -LiteralPath $EnvExampleFile) {
             if ($DryRun) {
@@ -189,6 +197,7 @@ function Update-AndroidLocalProperties([string] $Url) {
     if (-not [string]::IsNullOrWhiteSpace($Url)) {
         Set-DotEnvValue -Path $AndroidLocalProperties -Key "CARPAYIN_QR_BASE_URL" -Value $Url
     }
+    Set-DotEnvValue -Path $AndroidLocalProperties -Key "CARPAYIN_MQTT_BROKER_URL" -Value "tcp://10.0.2.2:1883"
     Set-DotEnvValue -Path $AndroidLocalProperties -Key "CARPAYIN_EMULATOR_LOCALHOST_REWRITE" -Value "true"
 }
 
@@ -267,7 +276,7 @@ Write-Step "Preparing local E2E environment"
 Set-Location $Root
 Ensure-EnvFile
 
-$envValues = Read-DotEnv $EnvFile
+$envValues = Read-DotEnv $ActiveEnvFile
 $desiredPublicUrl = $PublicBaseUrl
 if (-not $desiredPublicUrl) {
     $desiredPublicUrl = Get-EnvValue $envValues "PUBLIC_BASE_URL" ""
@@ -287,7 +296,7 @@ $activePublicUrl = $desiredPublicUrl
 if (-not $NoNgrok) {
     $activePublicUrl = Start-NgrokIfNeeded $desiredPublicUrl
     if ($activePublicUrl) {
-        Set-DotEnvValue -Path $EnvFile -Key "PUBLIC_BASE_URL" -Value $activePublicUrl
+        Set-DotEnvValue -Path $ActiveEnvFile -Key "PUBLIC_BASE_URL" -Value $activePublicUrl
         if (-not $desiredPublicUrl -or $desiredPublicUrl -match "your-ngrok-domain") {
             Write-Warn "Dynamic ngrok URL detected. Hyundai developer center Redirect/Callback URLs must be updated to this URL before real OAuth works."
         }
@@ -304,7 +313,7 @@ if ($activePublicUrl) {
 
 if (-not $NoDocker) {
     Write-Step "Starting Docker Compose services"
-    $composeArgs = @("compose", "-f", $ComposeFile, "up", "-d")
+    $composeArgs = @("compose", "-f", $ComposeFile, "--env-file", $ActiveEnvFile, "up", "-d")
     if (-not $NoRebuild) {
         $composeArgs += "--build"
     }

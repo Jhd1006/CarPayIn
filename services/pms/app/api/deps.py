@@ -10,6 +10,7 @@ from app.application.pms.register_pre_notify import RegisterPreNotifyService
 from app.infra.clients import HttpxCarPayInWebhookClient
 from app.infra.db.session import get_db_session
 from app.infra.fees import SimpleFeeCalculator
+from app.infra.mqtt import build_barrier_publisher
 from app.infra.repositories.payment_request_repository import (
     SqlAlchemyPaymentRequestRepository,
 )
@@ -46,6 +47,7 @@ carpayin_webhook_client = HttpxCarPayInWebhookClient(
 fee_calculator = SimpleFeeCalculator(
     amount_per_30_minutes=int(os.getenv("PMS_FEE_PER_30_MINUTES", "500")),
 )
+barrier_publisher = build_barrier_publisher()
 
 
 def get_register_pre_notify_service(
@@ -80,4 +82,5 @@ def get_record_payment_complete_service(
 ) -> RecordPaymentCompleteService:
     return RecordPaymentCompleteService(
         payment_request_repository=SqlAlchemyPaymentRequestRepository(session),
+        barrier_publisher=barrier_publisher,
     )

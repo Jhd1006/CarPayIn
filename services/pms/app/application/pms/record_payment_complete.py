@@ -18,8 +18,9 @@ class RecordPaymentCompleteResult:
 
 
 class RecordPaymentCompleteService:
-    def __init__(self, payment_request_repository):
+    def __init__(self, payment_request_repository, barrier_publisher):
         self.payment_request_repository = payment_request_repository
+        self.barrier_publisher = barrier_publisher
 
     def execute(
         self, command: RecordPaymentCompleteCommand
@@ -30,7 +31,6 @@ class RecordPaymentCompleteService:
         )
 
         if existing:
-            # 기존 결과 반환
             return RecordPaymentCompleteResult(status=existing["status"])
 
         # PMS DB payment_requests에 success 이력 저장
@@ -43,5 +43,8 @@ class RecordPaymentCompleteService:
             currency=command.currency,
             approval_no=command.approval_no,
         )
+
+        # 결제 확인 완료 → 출구 차단기 개방 명령 발행
+        self.barrier_publisher.open_exit(pms_session_id=command.pms_session_id)
 
         return RecordPaymentCompleteResult(status="success")
