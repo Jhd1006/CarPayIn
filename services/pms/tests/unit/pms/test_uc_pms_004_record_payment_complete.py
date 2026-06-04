@@ -20,6 +20,14 @@ VALID_APPROVAL_NO = "APPR123456"
 VALID_IDEMPOTENCY_KEY = "idem-key-001"
 
 
+class FakeBarrierPublisher:
+    def __init__(self):
+        self.opened = []
+
+    def open_exit(self, *, pms_session_id: str = "") -> None:
+        self.opened.append(pms_session_id)
+
+
 class FakePaymentRequestRepository:
     def __init__(self):
         self.payment_requests = {}
@@ -60,9 +68,15 @@ def fake_payment_request_repository():
 
 
 @pytest.fixture
-def record_payment_complete_service(fake_payment_request_repository):
+def fake_barrier_publisher():
+    return FakeBarrierPublisher()
+
+
+@pytest.fixture
+def record_payment_complete_service(fake_payment_request_repository, fake_barrier_publisher):
     return RecordPaymentCompleteService(
         payment_request_repository=fake_payment_request_repository,
+        barrier_publisher=fake_barrier_publisher,
     )
 
 
@@ -102,6 +116,50 @@ class TestRecordPaymentComplete:
 
         # 응답 확인
         assert result.status == "success"
+
+    def test_barrier_open_exit_called_on_new_payment(
+        self,
+        record_payment_complete_service,
+        fake_barrier_publisher,
+    ):
+        """신규 결제 완료 시 출구 차단기 개방 명령이 발행된다."""
+        command = RecordPaymentCompleteCommand(
+            pms_session_id=VALID_PMS_SESSION_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
+            amount=VALID_AMOUNT,
+            currency=VALID_CURRENCY,
+            approval_no=VALID_APPROVAL_NO,
+            idempotency_key=VALID_IDEMPOTENCY_KEY,
+        )
+
+        record_payment_complete_service.execute(command)
+
+        assert len(fake_barrier_publisher.opened) == 1
+        assert fake_barrier_publisher.opened[0] == VALID_PMS_SESSION_ID
+
+    def test_barrier_not_called_on_duplicate_payment(
+        self,
+        record_payment_complete_service,
+        fake_payment_request_repository,
+        fake_barrier_publisher,
+    ):
+        """중복 idempotency_key 재요청에는 차단기 명령을 발행하지 않는다."""
+        command = RecordPaymentCompleteCommand(
+            pms_session_id=VALID_PMS_SESSION_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
+            amount=VALID_AMOUNT,
+            currency=VALID_CURRENCY,
+            approval_no=VALID_APPROVAL_NO,
+            idempotency_key=VALID_IDEMPOTENCY_KEY,
+        )
+
+        record_payment_complete_service.execute(command)
+        fake_barrier_publisher.opened.clear()
+        record_payment_complete_service.execute(command)  # 중복 요청
+
+        assert len(fake_barrier_publisher.opened) == 0
 
     def test_duplicate_idempotency_key_returns_existing_result(
         self,

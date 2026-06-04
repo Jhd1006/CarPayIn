@@ -195,6 +195,9 @@ services:
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
       PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
       PMS_FEE_PER_30_MINUTES: ${PMS_FEE_PER_30_MINUTES:-500}
+      MQTT_HOST: ${MQTT_HOST:-mqtt}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_ENABLED: ${MQTT_ENABLED:-true}
     ports:
       - "8001:8000"
     depends_on:
@@ -202,6 +205,8 @@ services:
         condition: service_healthy
       carpayin-backend:
         condition: service_healthy
+      mqtt:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
       interval: 5s
