@@ -176,11 +176,15 @@ while robot.step(timestep) != -1:
     if now - last_gps_send_time >= 1.0:
         try:
             adb_cmd = f"adb -H {ADB_HOST} -P {ADB_PORT} emu geo fix {lng} {lat}" if ADB_HOST else f"adb emu geo fix {lng} {lat}"
-            subprocess.Popen(adb_cmd, shell=True)
+            result = subprocess.run(adb_cmd, shell=True, capture_output=True, text=True, timeout=3)
+            if result.returncode != 0:
+                print(f"[ADB 오류] {result.stderr.strip()}")
+            else:
+                print(f"[GPS] lat={lat:.6f} lng={lng:.6f}")
             push_sim_location(lat, lng)
             last_gps_send_time = now
-        except:
-            pass
+        except Exception as e:
+            print(f"[ADB 예외] {e}")
 
     # 2. LPR 트리거 (4m 이내)
     if dist <= LPR_THRESHOLD and (now - _last_lpr_time) > _cooldown_s and not _lpr_triggered:
@@ -190,10 +194,11 @@ while robot.step(timestep) != -1:
     if _lpr_triggered and (now - _last_lpr_time) > _cooldown_s:
         _lpr_triggered = False
 
-    # 3. 모터 구동
-    if HAS_MOTORS:
-        if dist > 2.0:
-            steer_toward_parking(gps, left_steer, right_steer, left_wheel, right_wheel)
-        else:
-            left_wheel.setVelocity(0.0)
-            right_wheel.setVelocity(0.0)
+    # 3. 모터 구동 비활성화 — 수동 조작 모드
+    # (자동 주행이 필요하면 아래 주석 해제)
+    # if HAS_MOTORS:
+    #     if dist > 2.0:
+    #         steer_toward_parking(gps, left_steer, right_steer, left_wheel, right_wheel)
+    #     else:
+    #         left_wheel.setVelocity(0.0)
+    #         right_wheel.setVelocity(0.0)
