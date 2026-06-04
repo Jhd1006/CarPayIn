@@ -1,0 +1,21 @@
+# 1. 코드 클론 (홈 폴더에)
+cd ~
+git clone https://github.com/[레포주소].git carpayin
+
+# 2. vehicle_driver 컨트롤러 복사
+cp ~/carpayin/services/webots/vehicle_controller.py \
+   ~/Desktop/Car\ Pay-in/controllers/vehicle_driver/vehicle_driver.py
+
+cp ~/carpayin/shared_config.py \
+   ~/Desktop/Car\ Pay-in/controllers/vehicle_driver/
+
+cp ~/carpayin/services/webots/.env \
+   ~/Desktop/Car\ Pay-in/controllers/vehicle_driver/
+
+# 3. barrier_controller 복사
+cp ~/carpayin/services/webots/barrier_controller.py \
+   ~/Desktop/Car\ Pay-in/controllers/barrier_controller/barrier_controller.py
+
+# 4. adb 설치 + 노트북 연결
+sudo apt install -y adb
+adb connect 192.168.203.82:5555
