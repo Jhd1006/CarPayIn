@@ -126,12 +126,17 @@ def get_distance_to_parking(gps: GPS) -> float:
     wx, _, wz = gps.getValues()
     return math.sqrt((wx - PARKING_LOT_X)**2 + (wz - PARKING_LOT_Z)**2)
 
-def steer_toward_parking(gps: GPS, left_motor, right_motor):
+def steer_toward_parking(gps: GPS, left_steer, right_steer, left_wheel, right_wheel):
     wx, _, wz = gps.getValues()
-    target_angle = math.atan2(PARKING_LOT_Z - wz, PARKING_LOT_X - wx)
-    steer = max(-1.0, min(1.0, 0.5 * target_angle))
-    left_motor.setVelocity(DEFAULT_SPEED * (1.0 - steer))
-    right_motor.setVelocity(DEFAULT_SPEED * (1.0 + steer))
+    # 현재 진행 방향 기준 목표 각도 계산
+    dx = PARKING_LOT_X - wx
+    dz = PARKING_LOT_Z - wz
+    target_angle = math.atan2(dx, dz)
+    steer_angle = max(-0.5, min(0.5, 0.8 * target_angle))
+    left_steer.setPosition(steer_angle)
+    right_steer.setPosition(steer_angle)
+    left_wheel.setVelocity(DEFAULT_SPEED)
+    right_wheel.setVelocity(DEFAULT_SPEED)
 
 # ── 메인 ─────────────────────────────────────────────────────────────
 robot = Robot()
@@ -141,11 +146,19 @@ gps = robot.getDevice("gps")
 gps.enable(timestep)
 
 try:
-    left_motor, right_motor = robot.getDevice("left wheel motor"), robot.getDevice("right wheel motor")
-    left_motor.setPosition(float("inf"))
-    right_motor.setPosition(float("inf"))
+    left_steer  = robot.getDevice("left_steer")
+    right_steer = robot.getDevice("right_steer")
+    left_wheel  = robot.getDevice("left_front_wheel")
+    right_wheel = robot.getDevice("right_front_wheel")
+    left_steer.setPosition(0.0)
+    right_steer.setPosition(0.0)
+    left_wheel.setPosition(float("inf"))
+    right_wheel.setPosition(float("inf"))
+    left_wheel.setVelocity(0.0)
+    right_wheel.setVelocity(0.0)
     HAS_MOTORS = True
-except:
+except Exception as e:
+    print(f"[경고] 모터 초기화 실패: {e}")
     HAS_MOTORS = False
 
 threading.Thread(target=register_with_backend, daemon=True).start()
@@ -180,7 +193,7 @@ while robot.step(timestep) != -1:
     # 3. 모터 구동
     if HAS_MOTORS:
         if dist > 2.0:
-            steer_toward_parking(gps, left_motor, right_motor)
+            steer_toward_parking(gps, left_steer, right_steer, left_wheel, right_wheel)
         else:
-            left_motor.setVelocity(0.0)
-            right_motor.setVelocity(0.0)
+            left_wheel.setVelocity(0.0)
+            right_wheel.setVelocity(0.0)
