@@ -175,16 +175,16 @@ while robot.step(timestep) != -1:
     # 1. 안드로이드 에뮬레이터 GPS 주입 (내비게이션용)
     if now - last_gps_send_time >= 1.0:
         try:
-            adb_cmd = f"adb -H {ADB_HOST} -P {ADB_PORT} emu geo fix {lng} {lat}" if ADB_HOST else f"adb emu geo fix {lng} {lat}"
-            result = subprocess.run(adb_cmd, shell=True, capture_output=True, text=True, timeout=3)
-            if result.returncode != 0:
-                print(f"[ADB 오류] {result.stderr.strip()}")
+            if ADB_HOST:
+                # 노트북의 GPS 프록시 서버로 전송 (프록시가 adb emu geo fix 실행)
+                _post_json(f"http://{ADB_HOST}:5600", {"lat": lat, "lng": lng})
             else:
-                print(f"[GPS] lat={lat:.6f} lng={lng:.6f}")
+                subprocess.Popen(f"adb emu geo fix {lng} {lat}", shell=True)
+            print(f"[GPS] lat={lat:.6f} lng={lng:.6f}")
             push_sim_location(lat, lng)
             last_gps_send_time = now
         except Exception as e:
-            print(f"[ADB 예외] {e}")
+            print(f"[GPS 오류] {e}")
 
     # 2. LPR 트리거 (4m 이내)
     if dist <= LPR_THRESHOLD and (now - _last_lpr_time) > _cooldown_s and not _lpr_triggered:
