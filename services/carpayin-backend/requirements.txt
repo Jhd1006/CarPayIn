@@ -4,6 +4,7 @@ uvicorn[standard]
 pydantic-settings
 redis
 httpx
+paho-mqtt
 cryptography
 psycopg[binary]
 SQLAlchemy

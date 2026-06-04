@@ -1,6 +1,9 @@
 from html import escape
+import os
+from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 
 from app.api.deps import (
@@ -12,6 +15,8 @@ from app.api.schemas.pg import (
     BillingPaymentResponse,
     CardRegistrationRequest,
     CardRegistrationResponse,
+    CardRegistrationSessionRequest,
+    CardRegistrationSessionResponse,
 )
 from app.application.pg.charge_billing_key import (
     ChargeBillingKeyCommand,
@@ -24,6 +29,47 @@ from app.application.pg.complete_card_registration import (
 
 
 router = APIRouter()
+
+
+def _pg_public_base_url(request: Request) -> str:
+    configured = os.getenv("PG_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get(
+        "x-forwarded-host",
+        request.headers.get("host", request.url.netloc),
+    )
+    return f"{proto}://{host}".rstrip("/")
+
+
+@router.post(
+    "/pg/internal/card-registration/sessions",
+    response_model=CardRegistrationSessionResponse,
+)
+@router.post(
+    "/internal/card-registration/sessions",
+    response_model=CardRegistrationSessionResponse,
+)
+def create_card_registration_session(
+    request: Request,
+    payload: CardRegistrationSessionRequest,
+) -> CardRegistrationSessionResponse:
+    if not payload.order_id.strip():
+        raise HTTPException(status_code=400, detail="order_id_required")
+
+    expires_at = datetime.utcnow() + timedelta(minutes=30)
+    query = {"order_id": payload.order_id}
+    if payload.card_brand:
+        query["card_brand"] = payload.card_brand
+    webview_url = f"{_pg_public_base_url(request)}/pg/card-register?{urlencode(query)}"
+
+    return CardRegistrationSessionResponse(
+        order_id=payload.order_id,
+        webview_url=webview_url,
+        pg_url=webview_url,
+        expires_at=expires_at.isoformat(),
+    )
 
 
 @router.get("/pg/card-register", response_class=HTMLResponse)

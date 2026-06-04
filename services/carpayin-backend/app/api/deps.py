@@ -53,9 +53,9 @@ from app.infra.repositories.user_repository import SqlAlchemyUserRepository
 from app.infra.repositories.vehicle_repository import SqlAlchemyVehicleRepository
 from app.infra.security import create_default_security_components
 from app.infra.support import (
-    LoggingNotificationPublisher,
     PlateNormalizer,
     UuidOrderIdGenerator,
+    build_notification_publisher,
 )
 
 
@@ -104,7 +104,12 @@ HYUNDAI_AUTHORIZE_URL = os.getenv(
 HYUNDAI_CLIENT_ID = _required_env("HYUNDAI_CLIENT_ID")
 HYUNDAI_CLIENT_SECRET = _required_env("HYUNDAI_CLIENT_SECRET")
 PG_BASE_URL = _env_or_default("PG_BASE_URL", "http://localhost:8002").rstrip("/")
-PG_PUBLIC_BASE_URL = os.getenv("PG_PUBLIC_BASE_URL", PG_BASE_URL).rstrip("/")
+PG_INTERNAL_BASE_URL = _env_or_default("PG_INTERNAL_BASE_URL", PG_BASE_URL).rstrip("/")
+PG_PUBLIC_BASE_URL = _env_or_default("PG_PUBLIC_BASE_URL", PG_BASE_URL).rstrip("/")
+CARD_WEBHOOK_URL = _env_or_default(
+    "CARD_WEBHOOK_URL",
+    f"{PUBLIC_BASE_URL}/card/webhook",
+).rstrip("/")
 PMS_BASE_URL = _env_or_default("PMS_BASE_URL", "http://localhost:8001").rstrip("/")
 MOLIT_VERIFY_ENABLED = _env_bool("MOLIT_VERIFY_ENABLED", True)
 
@@ -144,11 +149,15 @@ molit_client = (
     if MOLIT_VERIFY_ENABLED
     else LocalMolitBypassClient()
 )
-pg_client = HttpxPgClient(PG_BASE_URL, public_base_url=PG_PUBLIC_BASE_URL)
+pg_client = HttpxPgClient(
+    PG_INTERNAL_BASE_URL,
+    public_base_url=PG_PUBLIC_BASE_URL,
+    card_webhook_url=CARD_WEBHOOK_URL,
+)
 pms_client = HttpxPmsClient(PMS_BASE_URL)
 order_id_generator = UuidOrderIdGenerator()
 plate_normalizer = PlateNormalizer()
-notification_publisher = LoggingNotificationPublisher()
+notification_publisher = build_notification_publisher()
 
 
 def get_current_user(

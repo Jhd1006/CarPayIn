@@ -206,19 +206,21 @@ Car Pay-in DB:
 }
 ```
 
-8. 백엔드는 앱에 Mock PG WebView URL을 반환한다.
-9. 앱은 WebView로 Mock PG 카드 등록 화면을 연다.
-10. 사용자는 WebView에서 카드번호, 유효기간, CVC를 입력한다.
-11. Mock PG는 카드 정보를 Mock Card에 보내 검증한다.
-12. Mock Card는 카드 정보를 검증하고, 카드 원본 대신 `card_token`을 만든다.
-13. Mock Card DB에는 카드 token과 카드 검증 결과가 저장된다.
-14. Mock PG는 `card_token`을 기반으로 `billing_key`를 만들고 Mock PG DB의 `billing_keys`에 저장한다.
-15. Mock PG는 카드 등록 완료 웹훅을 Car Pay-in Backend로 보낸다.
-16. 백엔드는 웹훅의 HMAC을 검증해서 신뢰할 수 있는 PG 요청인지 확인한다.
-17. 백엔드는 Redis의 `mock_pg_card_register:{order_id}`를 조회해서 이 order가 어떤 차량의 요청인지 확인한다.
-18. 백엔드는 `vehicle_billing_keys`에 차량별 billing key와 카드 뒤 4자리를 저장하거나 갱신한다.
-19. 백엔드는 사용이 끝난 `mock_pg_card_register:{order_id}`를 Redis에서 삭제한다.
-20. PG는 앱 WebView에 카드 등록 완료를 알려주고, 앱은 `registered=true` 상태로 전환한다.
+8. 백엔드는 PG internal API에 `order_id`를 보내 Mock PG WebView URL 생성을 요청한다.
+9. Mock PG는 `order_id`가 포함된 public WebView URL을 반환한다.
+10. 백엔드는 앱에 `order_id`와 Mock PG WebView URL을 반환한다.
+11. 앱은 WebView로 Mock PG 카드 등록 화면을 연다.
+12. 사용자는 WebView에서 카드번호, 유효기간, CVC를 입력한다.
+13. Mock PG는 카드 정보를 Mock Card에 보내 검증한다.
+14. Mock Card는 카드 정보를 검증하고, 카드 원본 대신 `card_token`을 만든다.
+15. Mock Card DB에는 카드 token과 카드 검증 결과가 저장된다.
+16. Mock PG는 `card_token`을 기반으로 `billing_key`를 만들고 Mock PG DB의 `billing_keys`에 저장한다.
+17. Mock PG는 카드 등록 완료 웹훅을 Car Pay-in Backend로 보낸다.
+18. 백엔드는 웹훅의 HMAC을 검증해서 신뢰할 수 있는 PG 요청인지 확인한다.
+19. 백엔드는 Redis의 `mock_pg_card_register:{order_id}`를 조회해서 이 order가 어떤 차량의 요청인지 확인한다.
+20. 백엔드는 `vehicle_billing_keys`에 차량별 billing key와 카드 뒤 4자리를 저장하거나 갱신한다.
+21. 백엔드는 사용이 끝난 `mock_pg_card_register:{order_id}`를 Redis에서 삭제한다.
+22. PG는 앱 WebView에 카드 등록 완료를 알려주고, 앱은 `registered=true` 상태로 전환한다.
 
 ## 이 단계가 끝나면 남는 데이터
 
@@ -240,7 +242,7 @@ Mock Card DB:
 
 ## 발표 멘트
 
-세 번째 단계는 차량에 결제수단을 연결하는 과정입니다. 앱은 번호판과 카드사를 백엔드에 보내고, 백엔드는 차량 등록 상태와 소유주 검증을 먼저 수행합니다. 검증이 끝나면 Redis에 카드 등록 order를 저장하고 PG WebView URL을 내려줍니다. 사용자의 카드 입력은 Car Pay-in을 거치지 않고 Mock PG와 Mock Card에서 처리됩니다. 최종적으로 Car Pay-in은 카드 원본이 아니라 PG가 발급한 `billing_key`만 `vehicle_billing_keys`에 저장합니다.
+세 번째 단계는 차량에 결제수단을 연결하는 과정입니다. 앱은 번호판과 카드사를 백엔드에 보내고, 백엔드는 차량 등록 상태와 소유주 검증을 먼저 수행합니다. 검증이 끝나면 Redis에 카드 등록 order를 저장하고 PG internal API에서 WebView URL을 받아 앱에 내려줍니다. 사용자의 카드 입력은 Car Pay-in을 거치지 않고 Mock PG와 Mock Card에서 처리됩니다. 최종적으로 Car Pay-in은 카드 원본이 아니라 PG가 발급한 `billing_key`만 `vehicle_billing_keys`에 저장합니다.
 
 
 ---

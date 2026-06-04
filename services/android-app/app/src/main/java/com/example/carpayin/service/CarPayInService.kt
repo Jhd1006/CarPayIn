@@ -45,6 +45,7 @@ class CarPayInService : Service() {
         const val NOTIF_SERVICE   = 1
         const val NOTIF_PARKING   = 2
         const val NOTIF_PAYMENT   = 3
+        const val NOTIF_PRE_REGISTER = 4
 
         private const val FEE_POLL_MS   = 60_000L
         private const val MQTT_WATCH_MS = 30_000L
@@ -239,6 +240,14 @@ class CarPayInService : Service() {
                 runCatching {
                     ApiManager.sendPreNotification(carId, plate, lotId, triggerType, token)
                     Log.d(TAG, "사전 알림 전송 완료: $lotId ($triggerType)")
+                    handler.post {
+                        updateServiceNotif("$lotName 사전 등록 완료")
+                        showEventNotif(
+                            NOTIF_PRE_REGISTER,
+                            "제휴 주차장 접근",
+                            "$lotName 사전 등록이 완료되었습니다"
+                        )
+                    }
                 }.onFailure {
                     Log.e(TAG, "사전 알림 실패: ${it.message}")
                 }

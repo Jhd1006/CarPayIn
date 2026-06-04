@@ -16,7 +16,7 @@ API:
 출력:
 
 - `order_id`
-- PG WebView `pg_url`
+- PG WebView `pg_url` / `webview_url`
 
 사전 조건:
 
@@ -34,8 +34,8 @@ API:
 - MOLIT API로 차량번호와 소유자/차량 매칭을 검증한다.
 - `order_id`를 생성한다.
 - Redis `mock_pg_card_register:{order_id}`를 pending으로 저장한다.
-- Mock PG 카드 등록 WebView URL을 생성 또는 요청한다.
-- `order_id`, `pg_url`을 반환한다.
+- PG internal API에 `order_id` 기반 카드 등록 WebView URL 생성을 요청한다.
+- `order_id`, `pg_url`, `webview_url`을 반환한다.
 
 Redis 변경:
 
@@ -48,7 +48,7 @@ DB 변경:
 외부 호출:
 
 - MOLIT owner check
-- Mock PG card registration URL 생성 또는 요청
+- Mock PG internal card registration session 생성 요청
 
 실패 케이스:
 
@@ -61,7 +61,7 @@ DB 변경:
 
 먼저 작성할 테스트:
 
-- 유효한 요청이면 order를 Redis에 저장하고 pg_url을 반환한다.
+- 유효한 요청이면 order를 Redis에 저장하고 pg_url/webview_url을 반환한다.
 - 약관 미동의면 400을 반환한다.
 - MOLIT 검증 실패면 order를 만들지 않는다.
 - 차량이 없으면 404를 반환한다.

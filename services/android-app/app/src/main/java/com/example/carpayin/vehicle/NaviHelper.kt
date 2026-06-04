@@ -1,6 +1,9 @@
 package com.example.carpayin.vehicle
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 
 /**
@@ -82,18 +85,26 @@ object NaviHelper {
         lng: Double,
         lotName: String,
         lotId: String
-    ) {
+    ): Boolean {
         Log.d(TAG, "목적지 설정: $lotName ($lat, $lng)")
 
         val started = tryPleosSdk(lat, lng, lotName)
-        if (!started) {
-            Log.w(TAG, "Pleos SDK 미동작 — 내비게이션 시작 불가 (에뮬레이터 확인 필요)")
+        val fallbackStarted = if (!started) {
+            Log.w(TAG, "Pleos SDK 직접 호출 실패 — AAOS 기본 내비 intent 시도")
+            tryAaosNavigationIntent(context, lat, lng, lotName)
+        } else {
+            false
         }
 
-        // UI 콜백은 SDK 성공 여부와 무관하게 호출 (화면 강조 표시용)
-        onNavigationStarted?.invoke(lotName, lat, lng)
+        val launched = started || fallbackStarted
+        if (launched) {
+            onNavigationStarted?.invoke(lotName, lat, lng)
+        } else {
+            Log.w(TAG, "Pleos/AAOS 내비게이션 실행 실패")
+        }
 
-        Log.d(TAG, "목적지 설정 완료: $lotName")
+        Log.d(TAG, "목적지 설정 완료: $lotName launched=$launched")
+        return launched
     }
 
     /**
@@ -167,6 +178,35 @@ object NaviHelper {
         }
 
         return true
+    }
+
+    private fun tryAaosNavigationIntent(
+        context: Context,
+        lat: Double,
+        lng: Double,
+        poiName: String
+    ): Boolean {
+        val encodedName = Uri.encode(poiName)
+        val candidates = listOf(
+            "google.navigation:q=$lat,$lng",
+            "geo:$lat,$lng?q=$lat,$lng($encodedName)"
+        )
+
+        for (uri in candidates) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                Log.d(TAG, "AAOS 기본 내비 intent 실행: $uri")
+                return true
+            } catch (e: ActivityNotFoundException) {
+                Log.w(TAG, "내비 intent 처리 앱 없음: $uri")
+            } catch (e: Exception) {
+                Log.w(TAG, "내비 intent 실행 실패: ${e.message}")
+            }
+        }
+        return false
     }
 
     /** 경로 시작 콜백 등록 (SDK 내부 리스너) */

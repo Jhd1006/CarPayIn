@@ -80,6 +80,15 @@ services:
       timeout: 3s
       retries: 10
 
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: carpayin-mqtt
+    command: ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
   carpayin-backend:
     build:
       context: ./services/carpayin-backend
@@ -97,7 +106,9 @@ services:
       HYUNDAI_CLIENT_ID: ${HYUNDAI_CLIENT_ID:?Set HYUNDAI_CLIENT_ID in .env}
       HYUNDAI_CLIENT_SECRET: ${HYUNDAI_CLIENT_SECRET:?Set HYUNDAI_CLIENT_SECRET in .env}
       PG_BASE_URL: ${PG_BASE_URL:-http://mock-pg:8000}
+      PG_INTERNAL_BASE_URL: ${PG_INTERNAL_BASE_URL:-http://mock-pg:8000}
       PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
+      CARD_WEBHOOK_URL: ${CARD_WEBHOOK_URL:-http://carpayin-backend:8000/card/webhook}
       MOLIT_VERIFY_ENABLED: ${MOLIT_VERIFY_ENABLED:-false}
       MOLIT_BASE_URL: ${MOLIT_BASE_URL:-}
       MOLIT_API_KEY: ${MOLIT_API_KEY:-}
@@ -107,6 +118,9 @@ services:
       HYUNDAI_TOKEN_ENCRYPTION_SECRET: ${HYUNDAI_TOKEN_ENCRYPTION_SECRET:-hyundai-dev-token-secret}
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
       PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
+      MQTT_ENABLED: ${MQTT_ENABLED:-true}
+      MQTT_HOST: ${MQTT_HOST:-mqtt}
+      MQTT_PORT: ${MQTT_PORT:-1883}
     ports:
       - "8000:8000"
     depends_on:
@@ -114,6 +128,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mqtt:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
       interval: 5s
@@ -150,6 +166,7 @@ services:
       MOCK_PG_DATABASE_URL: ${MOCK_PG_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev}
       MOCK_CARD_BASE_URL: ${MOCK_CARD_BASE_URL:-http://mock-card:8000}
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
+      PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
       MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE: ${MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE:-true}
     ports:

@@ -203,6 +203,10 @@ components:
           type: string
           description: PG 카드 등록 웹뷰 URL
           example: "https://pg.example.com/card-register?order_id=order_xyz789"
+        webview_url:
+          type: string
+          description: 앱이 WebView로 열 PG 카드 등록 URL
+          example: "https://pg.example.com/card-register?order_id=order_xyz789"
 
     CardWebhookRequest:
       type: object
@@ -473,6 +477,43 @@ components:
           type: string
 
     # ── Mock PG ───────────────────────────────
+    PgCardRegistrationSessionRequest:
+      type: object
+      required: [order_id]
+      properties:
+        order_id:
+          type: string
+          example: "order_xyz789"
+        car_id:
+          type: string
+          example: "car_001"
+        plate:
+          type: string
+          example: "12가3456"
+        card_brand:
+          type: string
+          example: "현대카드"
+        callback_url:
+          type: string
+          example: "http://carpayin-backend:8000/card/webhook"
+
+    PgCardRegistrationSessionResponse:
+      type: object
+      required: [order_id, webview_url, pg_url]
+      properties:
+        order_id:
+          type: string
+          example: "order_xyz789"
+        webview_url:
+          type: string
+          example: "https://pg.example.com/pg/card-register?order_id=order_xyz789"
+        pg_url:
+          type: string
+          example: "https://pg.example.com/pg/card-register?order_id=order_xyz789"
+        expires_at:
+          type: string
+          example: "2026-06-04T12:30:00"
+
     PgCardRegistrationRequest:
       type: object
       required: [order_id, card_number, expiry, cvc]
@@ -861,8 +902,8 @@ paths:
            key: mock_pg_card_register:{order_id}
            value: { order_id, user_id, car_id, status: "pending", created_at, expires_at }
            ```
-        7. Mock PG에 카드 등록 웹뷰 생성 요청
-        8. PG 카드 등록 URL 반환
+        7. PG internal API에 카드 등록 WebView URL 생성 요청
+        8. order_id와 PG 카드 등록 webview_url 반환
       security:
         - BearerAuth: []
       requestBody:
@@ -903,7 +944,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
-          description: Mock PG 카드 등록 URL 생성 실패
+          description: PG WebView URL 생성 실패
           content:
             application/json:
               schema:
@@ -926,7 +967,7 @@ paths:
            - 카드 변경: UPDATE (billing_key, card_last_four, status=active, updated_at)
         5. Redis 카드 등록 세션 완료 처리 또는 삭제
         
-        **멱등성**: order_id UNIQUE(Mock PG) + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
+        **멱등성**: Redis의 order_id 상태 + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
       requestBody:
         required: true
         content:
@@ -1327,6 +1368,32 @@ paths:
   # ══════════════════════════════════════════
   # Mock PG 연동 API (Car Pay-in Backend → Mock PG)
   # ══════════════════════════════════════════
+  /pg/internal/card-registration/sessions:
+    post:
+      tags: [MockPG]
+      summary: 카드 등록 WebView URL 생성 요청 (Car Pay-in → PG)
+      description: |
+        Car Pay-in Backend가 order_id를 만든 뒤 PG internal ALB로 호출한다.
+        PG는 카드 정보를 받지 않고, order_id가 포함된 public WebView URL만 생성해 반환한다.
+
+        실제 요청 URL: `POST {PG_INTERNAL_BASE_URL}/pg/internal/card-registration/sessions`
+
+        반환된 `webview_url`은 AAOS 앱이 WebView로 연다.
+        사용자가 입력한 카드번호, 유효기간, CVC는 WebView 안에서 PG public ALB로 직접 전송된다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PgCardRegistrationSessionRequest'
+      responses:
+        '200':
+          description: PG WebView URL 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PgCardRegistrationSessionResponse'
+
   /pg/card-register:
     post:
       tags: [MockPG]
