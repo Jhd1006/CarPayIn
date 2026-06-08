@@ -92,6 +92,12 @@ class CarPayInService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (isRunning) return START_STICKY
+        // OS가 START_STICKY 서비스를 null intent로 재시작할 때 carId가 없으면 안전하게 종료
+        if (intent == null && ParkingStateManager.getHyundaiCarId(this).isEmpty()) {
+            Log.w(TAG, "null intent 재시작 + carId 없음 → 서비스 종료")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         isRunning = true
 
         val notif = buildServiceNotif("CarPayIn 주차 감시 중")

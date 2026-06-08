@@ -14,7 +14,7 @@ object TransactionStore {
 
     private const val PREF_KEY = "transactions"
     private const val MAX_RECORDS = 20
-    private val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.KOREA)
+    private val dateFormat = ThreadLocal.withInitial { SimpleDateFormat("MM/dd HH:mm", Locale.KOREA) }
 
     data class Transaction(
         val transactionId: String,
@@ -67,7 +67,7 @@ object TransactionStore {
             .edit().remove(PREF_KEY).apply()
     }
 
-    fun formatDate(timestamp: Long): String = dateFormat.format(Date(timestamp))
+    fun formatDate(timestamp: Long): String = dateFormat.get()!!.format(Date(timestamp))
 
     fun formatAmount(amount: Int): String = "%,d원".format(amount)
 }

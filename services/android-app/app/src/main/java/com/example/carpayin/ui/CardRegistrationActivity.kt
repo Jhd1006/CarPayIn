@@ -158,14 +158,10 @@ class CardRegistrationActivity : Activity() {
                 .normalize(raw.replace("\\s|-|\\.|·".toRegex(), ""), java.text.Normalizer.Form.NFC)
 
             if (!PLATE_REGEX.matches(plate)) {
-                android.app.AlertDialog.Builder(this)
-                    .setTitle("번호판 형식 오류")
-                    .setMessage("번호판 형식이 올바르지 않습니다.\n\n예) 12가3456  또는  123가4567\n\n입력값: \"$plate\"")
-                    .setPositiveButton("확인") { dialog, _ ->
-                        dialog.dismiss()
-                        etPlateNumber.requestFocus()
-                    }
-                    .show()
+                showAaosMessageDialog(
+                    title   = "번호판 형식 오류",
+                    message = "번호판 형식이 올바르지 않습니다.\n\n예) 12가3456  또는  123가4567\n\n입력값: \"$plate\""
+                ) { etPlateNumber.requestFocus() }
                 return@setOnClickListener
             }
             if (raw != plate) etPlateNumber.setText(plate)
@@ -283,6 +279,63 @@ class CardRegistrationActivity : Activity() {
 
         overlay.addView(card)
         overlay.setOnClickListener { dismissOverlay() }
+        card.setOnClickListener { }
+        decorView.addView(overlay)
+    }
+
+    /** AlertDialog 대신 decorView overlay 사용 — AAOS 패널 소유권 유지 */
+    private fun showAaosMessageDialog(title: String, message: String, onConfirm: () -> Unit = {}) {
+        val decorView = window.decorView as android.widget.FrameLayout
+        val overlay = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt()); elevation = 1000f
+        }
+        fun dismiss() { runOnUiThread { decorView.removeView(overlay) } }
+
+        val card = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = roundedBackground(0xFFFFFFFF.toInt())
+            setPadding(dp(24), dp(20), dp(24), dp(8))
+            val lp = android.widget.FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.72).toInt(),
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.gravity = android.view.Gravity.CENTER; layoutParams = lp
+        }
+        card.addView(android.widget.TextView(this).apply {
+            text = title; setTextColor(0xFF191F28.toInt()); textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(10) }
+        })
+        card.addView(android.widget.TextView(this).apply {
+            text = message; setTextColor(0xFF4E5968.toInt()); textSize = 14f
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(8) }
+        })
+        card.addView(android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.END
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            addView(android.widget.Button(this@CardRegistrationActivity).apply {
+                text = "확인"; textSize = 14f; setTextColor(0xFF1B64DA.toInt())
+                setBackgroundColor(android.graphics.Color.TRANSPARENT); minHeight = dp(48)
+                setPadding(dp(8), 0, dp(8), 0)
+                setOnClickListener { dismiss(); onConfirm() }
+            })
+        })
+        overlay.addView(card)
+        overlay.setOnClickListener { dismiss(); onConfirm() }
         card.setOnClickListener { }
         decorView.addView(overlay)
     }

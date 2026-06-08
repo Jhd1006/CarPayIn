@@ -153,6 +153,7 @@ class MainActivity : AppCompatActivity() {
         // takePanelControl()은 Pleos IPC 호출 → 메인 스레드에서 실행 시 500ms+ 블로킹
         val appContext = applicationContext
         Thread {
+            NaviHelper.takePanelControl(appContext)   // ← 패널 소유권 먼저 취득 (없으면 모든 터치가 nav app으로 흘러감)
             NaviHelper.init(appContext)               // Pleos 라우팅 SDK 초기화
             VehicleDataManager.init(appContext)
             val realVin = VehicleDataManager.readVin(appContext)
@@ -255,7 +256,10 @@ class MainActivity : AppCompatActivity() {
             this,
             if (selected) R.drawable.bg_button_primary else R.drawable.bg_button_secondary
         )
-        button.setTextColor(0xFFFFFFFF.toInt())
+        button.setTextColor(
+            if (selected) 0xFFFFFFFF.toInt()
+            else ContextCompat.getColor(this, R.color.button_on_secondary)
+        )
     }
 
     private fun showUnregisteredState() {
