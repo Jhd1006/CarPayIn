@@ -32,7 +32,10 @@
 
     <application
         android:label="Car PayIn"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.CarPayIn"
+        android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true">
         <!-- usesCleartextTraffic: Mock 백엔드 http:// 허용 (실서버 https 전환 시 제거) -->
 

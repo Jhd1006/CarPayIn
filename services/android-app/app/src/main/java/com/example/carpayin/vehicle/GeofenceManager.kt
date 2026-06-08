@@ -48,13 +48,12 @@ object GeofenceManager {
      * 앱 초기화 시 백엔드에서 내려받아 캐싱하는 제휴 주차장 목록.
      * TODO: ApiManager.fetchParkingLots() 연동 후 이 목록을 교체
      *
-     * [실측 차단기 GPS]
-     *   Webots 좌표: x=53.33, y=3.67
-     *   실제 GPS:    lat=37.493087, lng=127.049750
+     * [Pleos 기본 내비 테스트 위치]
+     *   42dot: lat=37.48544722, lng=127.03636666
      */
     var cachedParkingLots: List<ParkingLot> = listOf(
-        // 실제 테스트 주차장 (차단기 GPS 실측값)
-        ParkingLot("LOT_TEST_01",         "테스트 주차장",    37.493087, 127.049750),
+        // Pleos NaviHelper 공식 예제와 같은 42dot 위치
+        ParkingLot("LOT_TEST_01",         "42dot 테스트 주차장", 37.48544722, 127.03636666),
         // Mock 데이터
         ParkingLot("LOT_GANGNAM_01",      "강남 아이파킹",    37.4979,   127.0276),
         ParkingLot("LOT_SEOCHO_01",       "서초 아이파킹",    37.4837,   127.0324),
@@ -242,6 +241,11 @@ object GeofenceManager {
                 Thread.sleep(3000)
             }
         }.also { it.isDaemon = true; it.start() }
+    }
+
+    fun clearDetectedLots() {
+        detectedLots.clear()
+        Log.d(TAG, "지오펜스 감지 캐시 초기화 (결제 완료 후 재방문 대비)")
     }
 
     fun stop() {

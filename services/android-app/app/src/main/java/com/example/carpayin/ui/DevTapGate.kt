@@ -25,7 +25,7 @@ object DevTapGate {
             resetTapCount[0] += 1
             if (resetTapCount[0] >= TAP_TARGET) {
                 resetTapCount[0] = 0
-                showPinDialog(activity, onUnlocked)
+                onUnlocked()
             } else {
                 handler.postDelayed(resetRunnable, TAP_WINDOW_MS)
             }

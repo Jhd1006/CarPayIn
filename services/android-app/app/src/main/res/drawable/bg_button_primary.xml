@@ -1,8 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:angle="0"
-        android:startColor="#1B64DA"
-        android:endColor="#0B4DB8" />
-    <corners android:radius="8dp" />
-</shape>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33FFFFFF">
+    <item>
+        <selector>
+            <item android:state_pressed="true">
+                <shape>
+                    <gradient
+                        android:angle="0"
+                        android:startColor="#1456C2"
+                        android:endColor="#0940A0" />
+                    <corners android:radius="8dp" />
+                </shape>
+            </item>
+            <item android:state_focused="true">
+                <shape>
+                    <gradient
+                        android:angle="0"
+                        android:startColor="#1456C2"
+                        android:endColor="#0940A0" />
+                    <corners android:radius="8dp" />
+                    <stroke android:width="2dp" android:color="#FFFFFF" />
+                </shape>
+            </item>
+            <item>
+                <shape>
+                    <gradient
+                        android:angle="0"
+                        android:startColor="#1B64DA"
+                        android:endColor="#0B4DB8" />
+                    <corners android:radius="8dp" />
+                </shape>
+            </item>
+        </selector>
+    </item>
+</ripple>

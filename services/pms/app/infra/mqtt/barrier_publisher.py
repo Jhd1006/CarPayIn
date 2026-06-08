@@ -31,7 +31,7 @@ class MqttBarrierPublisher(BarrierPublisher):
 
     def open_exit(self, *, pms_session_id: str = "") -> None:
         super().open_exit(pms_session_id=pms_session_id)
-        self._publish({"gate": "exit", "action": "open"})
+        self._publish({"gate": "exit", "action": "open", "pms_session_id": pms_session_id})
 
     def _publish(self, payload: dict) -> None:
         if not self._enabled:

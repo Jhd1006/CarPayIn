@@ -333,11 +333,7 @@ class RegistrationActivity : Activity() {
 
     private fun launchOAuthPending() {
         handler.postDelayed({
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                action = MainActivity.ACTION_SHOW_OAUTH_PENDING
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra(MainActivity.EXTRA_SHOW_OAUTH_PENDING, true)
-            })
+            setResult(RESULT_OK)
             finish()
         }, 800)
     }

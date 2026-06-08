@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+import logging
 import uuid
+
+_logger = logging.getLogger("mock_pg.complete_card_registration")
 
 
 @dataclass(frozen=True)
@@ -70,11 +73,17 @@ class CompleteCardRegistrationService:
             last_four=card_data["last_four"],
         )
 
-        self.carpayin_webhook_client.send_card_registration_webhook(
-            order_id=command.order_id,
-            billing_key=billing_key,
-            last_four=card_data["last_four"],
-        )
+        try:
+            self.carpayin_webhook_client.send_card_registration_webhook(
+                order_id=command.order_id,
+                billing_key=billing_key,
+                last_four=card_data["last_four"],
+            )
+        except Exception as exc:
+            _logger.warning(
+                "carpayin_webhook_failed_but_billing_key_created: %s (order_id=%s)",
+                exc, command.order_id,
+            )
 
         return CompleteCardRegistrationResult(
             status="success",

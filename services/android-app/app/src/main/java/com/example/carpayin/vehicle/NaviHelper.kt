@@ -7,78 +7,134 @@ import android.net.Uri
 import android.util.Log
 
 /**
- * Pleos NaviHelper SDK 래퍼
+ * Pleos 우측 패널 소유권 관리 + 내비게이션 목적지 설정.
  *
- * Pleos Connect 에뮬레이터의 NaviHelper SDK를 통해
- * AAOS 내비게이션에 목적지를 설정하고 경로 안내를 시작합니다.
+ * ─ 왜 패널 소유권이 필요한가 ─────────────────────────────────────────────
+ *   Pleos AAOS 에뮬레이터는 우측 패널을 nav app(ai.umos.maps...)이 소유한다.
+ *   nav app이 ANR→재시작 루프를 돌 때마다 새 task ID(더 높은 번호)가 생기고,
+ *   InputSink는 "높은 task ID = 터치 우선순위" 규칙으로 동작해
+ *   CarPayIn 화면의 모든 터치를 nav app 쪽으로 흘려버린다.
+ *   takePanelControl()을 앱 시작 시 한 번 호출하면 Pleos가 CarPayIn을
+ *   패널 소유자로 등록해 task ID와 무관하게 터치가 전달된다.
  *
- * ─ SDK 초기화 흐름 ─────────────────────────────────────────────────────────
- *   1. NaviHelper.init(context)            — Activity.onCreate 또는 Service.onCreate
- *   2. NaviHelper.setDestination(...)      — 주차장 탭 시 호출
- *   3. NaviHelper.setOnRouteStartedListener — 경로 안내 시작 콜백 수신
- *   4. NaviHelper.release()                — Activity/Service 종료 시
- *
- * ─ Pleos SDK 실제 클래스 경로 ─────────────────────────────────────────────
- *   ai.pleos.playground.navi.NaviHelper
- *   (build.gradle: implementation("ai.pleos.playground:Vehicle:2.0.3"))
- *
- * ─ SDK 미연동 시 동작 ────────────────────────────────────────────────────
- *   에뮬레이터에 NaviHelper SDK가 없거나 초기화 실패 시
- *   onNavigationStarted 콜백은 호출되지 않고 로그만 출력합니다.
+ * ─ 사용 흐름 ─────────────────────────────────────────────────────────────
+ *   1. NaviHelper.takePanelControl(context)  — MainActivity.onCreate
+ *   2. NaviHelper.init(context)              — 내비 SDK 초기화 (선택)
+ *   3. NaviHelper.setDestination(...)        — 주차장 탭 시
+ *   4. NaviHelper.releasePanelControl()      — MainActivity.onDestroy
  */
 object NaviHelper {
 
     private const val TAG = "NaviHelper"
 
-    // Pleos NaviHelper SDK 실제 클래스 경로
-    private const val NAVI_CLASS = "ai.pleos.playground.navi.NaviHelper"
+    // Pleos NaviHelper SDK 실제 클래스 (공식 패키지)
+    private const val NAVI_CLASS = "ai.pleos.playground.navi.helper.NaviHelper"
+
+    // 패널 소유권 관리 (동일 SDK, 구분을 위해 별칭 유지)
+    private const val OFFICIAL_CLASS = NAVI_CLASS
 
     private var naviInstance: Any? = null
     private var isInitialized = false
 
-    /** 목적지 설정 완료 → 내비게이션 시작 콜백 */
-    var onNavigationStarted: ((lotName: String, lat: Double, lng: Double) -> Unit)? = null
+    private var panelInstance: Any? = null
+    private var isPanelControlActive = false
 
-    /** 경로 안내 종료 콜백 (목적지 도착 또는 안내 취소) */
+    var onNavigationStarted: ((lotName: String, lat: Double, lng: Double) -> Unit)? = null
     var onNavigationEnded: (() -> Unit)? = null
 
-    // ── 초기화 ───────────────────────────────────────────────────────────────
+    // ── 패널 소유권 ───────────────────────────────────────────────────────────
 
     /**
-     * NaviHelper SDK 초기화.
-     * Pleos Connect 에뮬레이터 환경에서만 실제 SDK가 동작합니다.
+     * Pleos 우측 패널 입력을 CarPayIn으로 가져온다.
+     * 앱 시작 시 한 번만 호출 — 절대 반복 호출하지 말 것.
      */
+    fun takePanelControl(context: Context) {
+        if (isPanelControlActive) return
+        val appCtx = context.applicationContext
+        // 1차: 공식 helper 클래스 (ai.pleos.playground.navi.helper.NaviHelper)
+        if (tryTakePanelControl(appCtx, OFFICIAL_CLASS)) return
+        // 2차: 라우팅 클래스 동일 인스턴스에서 패널 소유 메서드 탐색
+        tryTakePanelControl(appCtx, NAVI_CLASS)
+    }
+
+    private fun tryTakePanelControl(appCtx: Context, className: String): Boolean {
+        try {
+            val clazz = Class.forName(className)
+            val ctor  = clazz.getConstructor(Context::class.java)
+            val inst  = ctor.newInstance(appCtx)
+            // initialize() no-arg 먼저, 없으면 initialize(Context) 시도
+            val invoked = runCatching { clazz.getMethod("initialize").invoke(inst); true }.getOrElse {
+                runCatching { clazz.getMethod("initialize", Context::class.java).invoke(inst, appCtx); true }.getOrDefault(false)
+            }
+            if (invoked) {
+                panelInstance = inst
+                isPanelControlActive = true
+                Log.d(TAG, "Panel control taken via $className")
+                return true
+            }
+        } catch (e: ClassNotFoundException) {
+            Log.d(TAG, "$className not found — skipping")
+        } catch (e: Exception) {
+            Log.w(TAG, "takePanelControl($className) failed: ${e.message}")
+        }
+        return false
+    }
+
+    /**
+     * onResume 등에서 내비 앱 재시작 후 패널 소유권을 강제 재취득할 때 사용.
+     */
+    fun reacquirePanelControl(context: Context) {
+        isPanelControlActive = false
+        panelInstance = null
+        takePanelControl(context)
+    }
+
+    /**
+     * 패널 소유권 반납. 앱 완전 종료(onDestroy) 시 한 번만 호출.
+     */
+    fun releasePanelControl() {
+        if (!isPanelControlActive) return
+        try {
+            panelInstance?.let { inst ->
+                inst.javaClass.getMethod("release").invoke(inst)
+            }
+            Log.d(TAG, "Panel control released")
+        } catch (e: Exception) {
+            Log.w(TAG, "releasePanelControl failed: ${e.message}")
+        }
+        panelInstance = null
+        isPanelControlActive = false
+    }
+
+    // ── 내비게이션 SDK 초기화 ─────────────────────────────────────────────────
+
     fun init(context: Context) {
         if (isInitialized) return
         try {
-            val clazz    = Class.forName(NAVI_CLASS)
-            val getInstance = clazz.getMethod("getInstance", Context::class.java)
-            naviInstance = getInstance.invoke(null, context)
+            val clazz = Class.forName(NAVI_CLASS)
+            // SDK는 getInstance(Context) 정적 메서드가 아닌 생성자(Context)를 사용
+            val ctor = clazz.getConstructor(Context::class.java)
+            naviInstance = ctor.newInstance(context.applicationContext)
+            clazz.getMethod("initialize").invoke(naviInstance)
             registerRouteCallback()
             isInitialized = true
             Log.d(TAG, "NaviHelper SDK 초기화 성공")
+            // ── SDK 메서드 목록 덤프 (목적지 설정 API 탐색용) ──────────────────
+            naviInstance?.javaClass?.declaredMethods
+                ?.sortedBy { it.name }
+                ?.forEach { m ->
+                    val params = m.parameterTypes.joinToString(", ") { it.simpleName }
+                    Log.d(TAG, "SDK method: ${m.name}($params)")
+                }
         } catch (e: ClassNotFoundException) {
-            Log.w(TAG, "NaviHelper SDK 없음 — Pleos Connect 에뮬레이터에서만 동작합니다")
+            Log.w(TAG, "NaviHelper SDK 없음 — Pleos Connect 에뮬레이터에서만 동작")
         } catch (e: Exception) {
-            Log.w(TAG, "NaviHelper 초기화 실패: ${e.message}")
+            Log.w(TAG, "NaviHelper init 실패: ${e.message}")
         }
     }
 
-    // ── 목적지 설정 & 내비게이션 시작 ────────────────────────────────────────
+    // ── 목적지 설정 ───────────────────────────────────────────────────────────
 
-    /**
-     * 제휴 주차장을 내비게이션 목적지로 설정합니다.
-     *
-     * @param lat      목적지 위도
-     * @param lng      목적지 경도
-     * @param lotName  주차장 이름 (내비 화면에 표시될 POI 이름)
-     * @param lotId    주차장 ID (사전 알림 연동용)
-     *
-     * Pleos NaviHelper SDK 내부 동작:
-     *   1. setDestination() → Pleos 내비게이션 엔진에 목적지 전달
-     *   2. startNavigation() → 경로 계산 + TBT(Turn-By-Turn) 안내 시작
-     *   3. 인포테인먼트 화면에 지도 + 경로가 자동으로 표시됨
-     */
     fun setDestination(
         context: Context,
         lat: Double,
@@ -86,172 +142,84 @@ object NaviHelper {
         lotName: String,
         lotId: String
     ): Boolean {
-        Log.d(TAG, "목적지 설정: $lotName ($lat, $lng)")
-
+        // tryAaosNavigationIntent 폴백은 사용하지 않는다.
+        // 외부 앱(Google Maps 등)을 FLAG_ACTIVITY_NEW_TASK로 실행하면
+        // 해당 앱의 task ID가 CarPayIn보다 높아져 패널 터치 소유권이 탈취된다.
+        // Pleos SDK 내비가 실패하면 에러를 반환하고 UI에서 토스트로 처리한다.
         val started = tryPleosSdk(lat, lng, lotName)
-        val fallbackStarted = if (!started) {
-            Log.w(TAG, "Pleos SDK 직접 호출 실패 — AAOS 기본 내비 intent 시도")
-            tryAaosNavigationIntent(context, lat, lng, lotName)
-        } else {
-            false
-        }
-
-        val launched = started || fallbackStarted
-        if (launched) {
+        if (started) {
             onNavigationStarted?.invoke(lotName, lat, lng)
-        } else {
-            Log.w(TAG, "Pleos/AAOS 내비게이션 실행 실패")
+            GeofenceManager.onNaviDestinationChanged(lotName, lat, lng)
         }
-
-        Log.d(TAG, "목적지 설정 완료: $lotName launched=$launched")
-        return launched
+        return started
     }
 
-    /**
-     * 내비게이션을 취소합니다.
-     * 출차 완료 또는 사용자 수동 취소 시 호출.
-     */
     fun cancelNavigation() {
         try {
             naviInstance?.let { navi ->
-                val clazz = navi.javaClass
-                val stopMethod = clazz.getMethod("stopNavigation")
-                stopMethod.invoke(navi)
-                Log.d(TAG, "내비게이션 취소됨")
+                navi.javaClass.getMethod("stopNavigation").invoke(navi)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "내비게이션 취소 실패: ${e.message}")
+            Log.w(TAG, "cancelNavigation 실패: ${e.message}")
         }
         onNavigationEnded?.invoke()
     }
 
-    // ── Pleos SDK 내부 호출 ───────────────────────────────────────────────────
+    // ── 내부 ──────────────────────────────────────────────────────────────────
 
-    /**
-     * 리플렉션으로 Pleos NaviHelper SDK를 호출합니다.
-     * SDK가 없으면 false를 반환하며 앱이 크래시되지 않습니다.
-     *
-     * Pleos NaviHelper 예상 API:
-     *   naviHelper.setDestination(double lat, double lng, String poiName)
-     *   naviHelper.startNavigation()
-     *
-     * 실제 메서드명이 다를 경우 아래 methodNames 배열에 후보를 추가하세요.
-     */
     private fun tryPleosSdk(lat: Double, lng: Double, poiName: String): Boolean {
         val navi = naviInstance ?: return false
-        val clazz = navi.javaClass
-
-        // setDestination 메서드 후보 (Pleos SDK 버전별 대응)
-        val setDestCandidates = listOf(
-            Triple("setDestination",   arrayOf(Double::class.java, Double::class.java, String::class.java), arrayOf<Any>(lat, lng, poiName)),
-            Triple("setDestination",   arrayOf(Float::class.java,  Float::class.java,  String::class.java), arrayOf<Any>(lat.toFloat(), lng.toFloat(), poiName)),
-            Triple("navigate",         arrayOf(Double::class.java, Double::class.java, String::class.java), arrayOf<Any>(lat, lng, poiName)),
-            Triple("startNavigation",  arrayOf(Double::class.java, Double::class.java, String::class.java), arrayOf<Any>(lat, lng, poiName))
-        )
-
-        var setDestOk = false
-        for ((name, types, args) in setDestCandidates) {
-            try {
-                val method = clazz.getMethod(name, *types)
-                method.invoke(navi, *args)
-                Log.d(TAG, "SDK 호출 성공: $name($lat, $lng, $poiName)")
-                setDestOk = true
-                break
-            } catch (e: NoSuchMethodException) {
-                continue
-            } catch (e: Exception) {
-                Log.w(TAG, "$name 호출 실패: ${e.message}")
-            }
-        }
-
-        if (!setDestOk) return false
-
-        // startNavigation() 별도 호출이 필요한 경우
-        try {
-            val startMethod = clazz.getMethod("startNavigation")
-            startMethod.invoke(navi)
-            Log.d(TAG, "startNavigation() 호출 완료")
-        } catch (e: NoSuchMethodException) {
-            // setDestination 하나로 자동 시작되는 SDK 버전 — 정상
-        } catch (e: Exception) {
-            Log.w(TAG, "startNavigation 호출 실패: ${e.message}")
-        }
-
-        return true
-    }
-
-    private fun tryAaosNavigationIntent(
-        context: Context,
-        lat: Double,
-        lng: Double,
-        poiName: String
-    ): Boolean {
-        val encodedName = Uri.encode(poiName)
         val candidates = listOf(
-            "google.navigation:q=$lat,$lng",
-            "geo:$lat,$lng?q=$lat,$lng($encodedName)"
+            Triple("setDestination",  arrayOf(Double::class.java, Double::class.java, String::class.java), arrayOf<Any>(lat, lng, poiName)),
+            Triple("setDestination",  arrayOf(Float::class.java,  Float::class.java,  String::class.java), arrayOf<Any>(lat.toFloat(), lng.toFloat(), poiName)),
+            Triple("navigate",        arrayOf(Double::class.java, Double::class.java, String::class.java), arrayOf<Any>(lat, lng, poiName)),
+            Triple("startNavigation", arrayOf(Double::class.java, Double::class.java, String::class.java), arrayOf<Any>(lat, lng, poiName))
         )
-
-        for (uri in candidates) {
+        for ((name, types, args) in candidates) {
             try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-                Log.d(TAG, "AAOS 기본 내비 intent 실행: $uri")
+                navi.javaClass.getMethod(name, *types).invoke(navi, *args)
+                try { navi.javaClass.getMethod("startNavigation").invoke(navi) } catch (_: NoSuchMethodException) {}
                 return true
-            } catch (e: ActivityNotFoundException) {
-                Log.w(TAG, "내비 intent 처리 앱 없음: $uri")
-            } catch (e: Exception) {
-                Log.w(TAG, "내비 intent 실행 실패: ${e.message}")
-            }
+            } catch (_: NoSuchMethodException) { continue }
+              catch (e: Exception) { Log.w(TAG, "$name 실패: ${e.message}") }
         }
         return false
     }
 
-    /** 경로 시작 콜백 등록 (SDK 내부 리스너) */
+    private fun tryAaosNavigationIntent(context: Context, lat: Double, lng: Double, poiName: String): Boolean {
+        for (uri in listOf("google.navigation:q=$lat,$lng", "geo:$lat,$lng?q=$lat,$lng(${Uri.encode(poiName)})")) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                return true
+            } catch (_: ActivityNotFoundException) {}
+              catch (e: Exception) { Log.w(TAG, "intent 실패: ${e.message}") }
+        }
+        return false
+    }
+
     private fun registerRouteCallback() {
         val navi = naviInstance ?: return
         try {
-            // 인터페이스 동적 프록시로 SDK 콜백 연결
             val listenerClass = Class.forName("$NAVI_CLASS\$OnRouteStartedListener")
             val proxy = java.lang.reflect.Proxy.newProxyInstance(
-                listenerClass.classLoader,
-                arrayOf(listenerClass)
-            ) { _, method, args ->
+                listenerClass.classLoader, arrayOf(listenerClass)
+            ) { _, method, _ ->
                 when (method.name) {
-                    "onRouteStarted" -> {
-                        Log.d(TAG, "경로 안내 시작 (SDK 콜백)")
-                    }
-                    "onNavigationEnded", "onArrived" -> {
-                        Log.d(TAG, "목적지 도착 또는 안내 종료")
-                        onNavigationEnded?.invoke()
-                    }
+                    "onNavigationEnded", "onArrived" -> onNavigationEnded?.invoke()
                 }
                 null
             }
-            val setListener = navi.javaClass.getMethod(
-                "setOnRouteStartedListener", listenerClass
-            )
-            setListener.invoke(navi, proxy)
+            navi.javaClass.getMethod("setOnRouteStartedListener", listenerClass).invoke(navi, proxy)
         } catch (e: Exception) {
-            // 리스너 등록 실패는 무시 (SDK 버전 차이)
             Log.d(TAG, "경로 콜백 등록 스킵: ${e.message}")
         }
     }
 
-    // ── 해제 ─────────────────────────────────────────────────────────────────
-
     fun release() {
-        try {
-            naviInstance?.let { navi ->
-                navi.javaClass.getMethod("release").invoke(navi)
-            }
-        } catch (e: Exception) { /* 무시 */ }
-        naviInstance     = null
-        isInitialized    = false
+        try { naviInstance?.javaClass?.getMethod("release")?.invoke(naviInstance) } catch (_: Exception) {}
+        naviInstance        = null
+        isInitialized       = false
         onNavigationStarted = null
         onNavigationEnded   = null
-        Log.d(TAG, "NaviHelper 해제")
     }
 }

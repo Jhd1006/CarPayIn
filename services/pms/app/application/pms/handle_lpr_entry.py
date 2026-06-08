@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+import logging
 import uuid
+
+_logger = logging.getLogger("pms.handle_lpr_entry")
 
 
 @dataclass(frozen=True)
@@ -65,13 +68,19 @@ class HandleLprEntryService:
             plate=command.plate,
         )
 
-        # CarPayIn Backend에 entry webhook 전송
-        self.carpayin_webhook_client.send_entry_webhook(
-            pms_session_id=pms_session_id,
-            lot_id=command.lot_id,
-            plate=command.plate,
-            entry_time=command.entry_time,
-        )
+        # CarPayIn Backend에 entry webhook 전송 (실패해도 PMS 세션은 유지)
+        try:
+            self.carpayin_webhook_client.send_entry_webhook(
+                pms_session_id=pms_session_id,
+                lot_id=command.lot_id,
+                plate=command.plate,
+                entry_time=command.entry_time,
+            )
+        except Exception as exc:
+            _logger.warning(
+                "carpayin_webhook_failed_but_session_created: %s (pms_session_id=%s)",
+                exc, pms_session_id,
+            )
 
         return HandleLprEntryResult(
             status="created",

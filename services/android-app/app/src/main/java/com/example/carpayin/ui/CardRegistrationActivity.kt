@@ -2,7 +2,6 @@ package com.example.carpayin.ui
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -127,8 +126,21 @@ class CardRegistrationActivity : Activity() {
             etPlateNumber.setText(savedPlate)
         }
 
+        // 번호판 입력 여부에 따라 "다음" 버튼 활성/비활성
+        etPlateNumber.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                btnPlateNext.isEnabled = s?.toString()?.trim()?.isNotEmpty() == true
+                btnPlateNext.alpha = if (btnPlateNext.isEnabled) 1.0f else 0.45f
+            }
+        })
+        // 초기 상태 설정
+        btnPlateNext.isEnabled = !savedPlate.isNullOrEmpty()
+        btnPlateNext.alpha = if (btnPlateNext.isEnabled) 1.0f else 0.45f
+
         btnCancel.setOnClickListener {
-            // 어떤 단계에 있든 즉시 메인(로그인됨/카드 미등록) 화면으로 복귀
+            Log.d(TAG, "btnCancel (처음으로) clicked at step=$currentStep")
             returnToOAuthPending()
         }
 
@@ -140,21 +152,22 @@ class CardRegistrationActivity : Activity() {
         btnConsentAgree.setOnClickListener { goToStep(Step.PLATE) }
 
         btnPlateNext.setOnClickListener {
-            // 공백/하이픈/점 등 구분자를 제거해 사용자 입력 편차를 흡수
+            // 공백/하이픈/점 등 구분자 제거 + NFC 정규화(AAOS IME가 NFD로 입력할 수 있음)
             val raw   = etPlateNumber.text.toString()
-            val plate = raw.replace("\\s|-|\\.|·".toRegex(), "")
+            val plate = java.text.Normalizer
+                .normalize(raw.replace("\\s|-|\\.|·".toRegex(), ""), java.text.Normalizer.Form.NFC)
 
             if (!PLATE_REGEX.matches(plate)) {
-                Toast.makeText(
-                    this,
-                    "번호판 형식이 올바르지 않습니다.\n예) 12가3456  또는  123가4567",
-                    Toast.LENGTH_LONG
-                ).show()
-                etPlateNumber.requestFocus()
-                etPlateNumber.setSelection(etPlateNumber.text.length)
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("번호판 형식 오류")
+                    .setMessage("번호판 형식이 올바르지 않습니다.\n\n예) 12가3456  또는  123가4567\n\n입력값: \"$plate\"")
+                    .setPositiveButton("확인") { dialog, _ ->
+                        dialog.dismiss()
+                        etPlateNumber.requestFocus()
+                    }
+                    .show()
                 return@setOnClickListener
             }
-            // 정규화된 값을 입력칸에도 다시 반영(저장값과 표시값 일치 유지)
             if (raw != plate) etPlateNumber.setText(plate)
 
             hideKeyboard()
@@ -162,7 +175,6 @@ class CardRegistrationActivity : Activity() {
             goToStep(Step.BRAND)
         }
 
-        setupWebView()
         buildBrandGrid()
 
         // 시작은 무조건 Step 0(동의)부터
@@ -170,11 +182,182 @@ class CardRegistrationActivity : Activity() {
     }
 
     private fun openDevMenu() {
-        startActivity(Intent(this, MainActivity::class.java).apply {
-            action = MainActivity.ACTION_SHOW_DEV_MENU
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(MainActivity.EXTRA_SHOW_DEV_MENU, true)
+        val decorView = window.decorView as android.widget.FrameLayout
+
+        val overlay = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt())
+            elevation = 999f
+        }
+        fun dismissOverlay() { runOnUiThread { decorView.removeView(overlay) } }
+
+        val card = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = roundedBackground(0xFFFFFFFF.toInt())
+            val lp = android.widget.FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.78).toInt(),
+                (resources.displayMetrics.heightPixels * 0.65).toInt()
+            )
+            lp.gravity = android.view.Gravity.CENTER
+            layoutParams = lp
+        }
+
+        card.addView(android.widget.TextView(this).apply {
+            text = "개발자 메뉴"
+            setTextColor(0xFF191F28.toInt()); textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(20), dp(16), dp(20), dp(8))
         })
+
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+        }
+
+        fun addBtn(label: String, action: () -> Unit) {
+            container.addView(android.widget.Button(this).apply {
+                text = label; textSize = 13f
+                setTextColor(0xFF191F28.toInt())
+                background = roundedBackground(0xFFF4F7FB.toInt(), 0xFFDCE5F0.toInt())
+                setPadding(dp(16), dp(12), dp(16), dp(12))
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).also { it.setMargins(0, 0, 0, dp(6)) }
+                setOnClickListener { dismissOverlay(); action() }
+            })
+        }
+
+        addBtn("테스트 번호판 자동입력 (123가4567)") {
+            val testPlate = "123가4567"
+            etPlateNumber.setText(testPlate)
+            ParkingStateManager.savePlateNumber(this, testPlate)
+            android.widget.Toast.makeText(this, "번호판 설정: $testPlate", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        addBtn("번호판 직접 입력") {
+            val et = android.widget.EditText(this).apply {
+                hint = "예) 12가3456"; inputType = android.text.InputType.TYPE_CLASS_TEXT
+                val saved = ParkingStateManager.getPlateNumber(this@CardRegistrationActivity)
+                if (!saved.isNullOrBlank()) setText(saved)
+            }
+            showAaosInputDialog("번호판 직접 입력", et) {
+                val plate = java.text.Normalizer.normalize(
+                    et.text.toString().replace("\\s|-|\\.|·".toRegex(), ""),
+                    java.text.Normalizer.Form.NFC
+                )
+                if (plate.isNotBlank()) {
+                    etPlateNumber.setText(plate)
+                    ParkingStateManager.savePlateNumber(this, plate)
+                }
+            }
+        }
+        addBtn("PLATE 단계 건너뛰기 (현재 입력값 또는 테스트 번호판 사용)") {
+            val raw = etPlateNumber.text.toString().trim().ifBlank { "123가4567" }
+            val plate = java.text.Normalizer.normalize(
+                raw.replace("\\s|-|\\.|·".toRegex(), ""),
+                java.text.Normalizer.Form.NFC
+            )
+            etPlateNumber.setText(plate)
+            ParkingStateManager.savePlateNumber(this, plate)
+            goToStep(Step.BRAND)
+        }
+
+        card.addView(android.widget.ScrollView(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+            addView(container)
+        })
+        card.addView(android.widget.Button(this).apply {
+            text = "닫기"; textSize = 14f; setTextColor(0xFF1B64DA.toInt())
+            setBackgroundColor(android.graphics.Color.TRANSPARENT); minHeight = dp(48)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(dp(12), 0, dp(12), dp(8)) }
+            setOnClickListener { dismissOverlay() }
+        })
+
+        overlay.addView(card)
+        overlay.setOnClickListener { dismissOverlay() }
+        card.setOnClickListener { }
+        decorView.addView(overlay)
+    }
+
+    private fun showAaosInputDialog(title: String, inputView: android.view.View, onSave: () -> Unit) {
+        val decorView = window.decorView as android.widget.FrameLayout
+
+        val overlay = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt())
+            elevation = 1000f
+        }
+        fun dismiss() { runOnUiThread { decorView.removeView(overlay) } }
+
+        val card = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = roundedBackground(0xFFFFFFFF.toInt())
+            setPadding(dp(24), dp(20), dp(24), dp(8))
+            val lp = android.widget.FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.72).toInt(),
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.gravity = android.view.Gravity.CENTER
+            layoutParams = lp
+        }
+        card.addView(android.widget.TextView(this).apply {
+            text = title; setTextColor(0xFF191F28.toInt()); textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(12) }
+        })
+        card.addView(inputView, android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ).also { it.bottomMargin = dp(8) })
+        card.addView(android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.END
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            addView(android.widget.Button(this@CardRegistrationActivity).apply {
+                text = "취소"; textSize = 14f; setTextColor(android.graphics.Color.BLACK)
+                setBackgroundColor(android.graphics.Color.TRANSPARENT); minHeight = dp(48)
+                setPadding(dp(8), 0, dp(8), 0)
+                setOnClickListener { dismiss() }
+            })
+            addView(android.widget.Button(this@CardRegistrationActivity).apply {
+                text = "저장"; textSize = 14f; setTextColor(0xFF1B64DA.toInt())
+                setBackgroundColor(android.graphics.Color.TRANSPARENT); minHeight = dp(48)
+                setPadding(dp(8), 0, dp(8), 0)
+                setOnClickListener { dismiss(); onSave() }
+            })
+        })
+        overlay.addView(card)
+        overlay.setOnClickListener { dismiss() }
+        card.setOnClickListener { }
+        decorView.addView(overlay)
+    }
+
+    private fun roundedBackground(
+        fillColor: Int,
+        strokeColor: Int? = null
+    ): android.graphics.drawable.GradientDrawable {
+        return android.graphics.drawable.GradientDrawable().apply {
+            setColor(fillColor)
+            cornerRadius = dp(8).toFloat()
+            strokeColor?.let { setStroke(dp(1), it) }
+        }
     }
 
     private fun goToStep(step: Step) {
@@ -202,6 +385,7 @@ class CardRegistrationActivity : Activity() {
                 tvStepIndicator.text = "3 / 4"
             }
             Step.WEBVIEW -> {
+                setupWebView()  // 실제 필요한 시점에 초기화
                 webView.visibility = View.INVISIBLE
                 progressBar.visibility = View.VISIBLE
                 tvStatus.text        = "카드 정보 입력"
@@ -247,14 +431,22 @@ class CardRegistrationActivity : Activity() {
     }
 
     private fun makeBrandCard(brand: BrandInfo, hasRightMargin: Boolean): View {
+        val baseDrawable = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFFFFFFFF.toInt())
+            cornerRadius = dp(8).toFloat()
+            setStroke(dp(1), 0xFFE4EAF2.toInt())
+        }
+        val rippleDrawable = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(0x22000000),
+            baseDrawable,
+            null
+        )
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER_VERTICAL
-            background  = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFFFFFFFF.toInt())
-                cornerRadius = dp(8).toFloat()
-                setStroke(dp(1), 0xFFE4EAF2.toInt())
-            }
+            background  = rippleDrawable
+            isClickable = true  // RippleDrawable은 clickable이어야 ripple이 트리거됨
+            isFocusable = true
             layoutParams = LinearLayout.LayoutParams(0, dp(72), 1f).also {
                 it.setMargins(0, 0, if (hasRightMargin) dp(10) else 0, 0)
             }
@@ -330,8 +522,12 @@ class CardRegistrationActivity : Activity() {
         loadCardRegistrationPage(brand)
     }
 
+    private var webViewReady = false
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
+        if (webViewReady) return
+        webViewReady = true
         webView.settings.apply {
             javaScriptEnabled    = true
             domStorageEnabled    = true
@@ -385,20 +581,12 @@ class CardRegistrationActivity : Activity() {
         Thread {
             try {
                 val result = ApiManager.withAutoRefresh(this) { token ->
-                    try {
-                        ApiManager.createCardOrder(
-                            plate = currentPlate,
-                            bankName = brand.name,
-                            agreeTerms = true,
-                            accessToken = token
-                        )
-                    } catch (e: RuntimeException) {
-                        if (e.message.orEmpty().contains("HTTP 405")) {
-                            ApiManager.fetchCardOrderLegacy(token)
-                        } else {
-                            throw e
-                        }
-                    }
+                    ApiManager.createCardOrder(
+                        plate = currentPlate,
+                        bankName = brand.name,
+                        agreeTerms = true,
+                        accessToken = token
+                    )
                 }
                 val fixedPgUrl = normalizePgUrlForEmulator(result.pgUrl)
                 Log.d(TAG, "Loading PG url: $fixedPgUrl")
@@ -508,8 +696,13 @@ class CardRegistrationActivity : Activity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        window.decorView.requestFocus()
+    }
+
     override fun onBackPressed() {
-        // 시스템 백 버튼도 '← 이전' 버튼과 동일하게 동작
+        Log.d(TAG, "onBackPressed at step=$currentStep")
         goPrevStep()
     }
 
@@ -520,7 +713,7 @@ class CardRegistrationActivity : Activity() {
     }
 
     private fun returnToOAuthPending() {
-        // OAuth(마이현대) 로그인 상태는 유지하고 카드 등록 상태만 해제한다.
+        Log.d(TAG, "returnToOAuthPending() called — stack trace:", Throwable())
         ParkingStateManager.setOAuthComplete(this, true)
         ParkingStateManager.setRegistered(this, false)
         // MainActivity.onActivityResult(101, RESULT_CANCELED) 가
