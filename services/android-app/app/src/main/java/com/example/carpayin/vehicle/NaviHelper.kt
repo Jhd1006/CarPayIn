@@ -216,6 +216,7 @@ object NaviHelper {
     }
 
     fun release() {
+        releasePanelControl()
         try { naviInstance?.javaClass?.getMethod("release")?.invoke(naviInstance) } catch (_: Exception) {}
         naviInstance        = null
         isInitialized       = false

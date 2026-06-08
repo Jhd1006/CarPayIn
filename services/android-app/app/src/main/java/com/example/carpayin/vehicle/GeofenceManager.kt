@@ -70,7 +70,7 @@ object GeofenceManager {
     // ── 상태 ─────────────────────────────────────────────────────────────────
 
     private var locationManager: LocationManager? = null
-    private val detectedLots = mutableSetOf<String>()  // 세션 내 중복 감지 방지
+    private val detectedLots = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     @Volatile
     var lastVehicleLocation: VehicleLocation? = null
         private set

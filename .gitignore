@@ -20,6 +20,24 @@ env/
 .env.*
 !.env.example
 local.properties
+secrets.properties
+keystore.properties
+signing.properties
+release.properties
+
+# Android signing keys / certificates
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.crt
+
+# Firebase / Google services (contains API keys)
+google-services.json
+GoogleService-Info.plist
 
 # Android/Gradle
 .gradle/

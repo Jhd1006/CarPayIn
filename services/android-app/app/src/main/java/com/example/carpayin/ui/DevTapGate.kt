@@ -7,6 +7,7 @@ import android.text.InputType
 import android.view.View
 import android.widget.EditText
 import android.widget.Toast
+import com.example.carpayin.BuildConfig
 
 object DevTapGate {
     private const val TAP_TARGET = 5
@@ -14,6 +15,9 @@ object DevTapGate {
     private const val DEV_PIN = "1234"
 
     fun install(activity: Activity, target: View, onUnlocked: () -> Unit) {
+        // 릴리즈 빌드에서는 개발자 메뉴 진입 완전 차단
+        if (!BuildConfig.DEBUG) return
+
         val handler = Handler(Looper.getMainLooper())
         val resetTapCount = intArrayOf(0)
         val resetRunnable = Runnable { resetTapCount[0] = 0 }
@@ -25,7 +29,7 @@ object DevTapGate {
             resetTapCount[0] += 1
             if (resetTapCount[0] >= TAP_TARGET) {
                 resetTapCount[0] = 0
-                onUnlocked()
+                showPinDialog(activity, onUnlocked)
             } else {
                 handler.postDelayed(resetRunnable, TAP_WINDOW_MS)
             }

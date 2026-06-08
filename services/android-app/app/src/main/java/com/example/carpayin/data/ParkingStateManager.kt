@@ -216,6 +216,7 @@ object ParkingStateManager {
             .remove("parked")
             .remove("lot_id")
             .remove("session_id")
+            .remove("entry_time_ms")
             .remove("oauth_complete")
             .putBoolean("registered", false)
             .commit()

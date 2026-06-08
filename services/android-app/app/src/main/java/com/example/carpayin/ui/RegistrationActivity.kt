@@ -1,7 +1,6 @@
 package com.example.carpayin.ui
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -9,9 +8,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import com.example.carpayin.R
 import com.example.carpayin.data.ParkingStateManager
@@ -34,6 +39,7 @@ class RegistrationActivity : Activity() {
     private lateinit var tvSubMessage: TextView
     private lateinit var btnCancel: Button
     private lateinit var btnRefreshQr: Button
+    private lateinit var progressBarReg: ProgressBar
 
     private lateinit var loginSessionId: String
     private lateinit var vin: String
@@ -54,6 +60,7 @@ class RegistrationActivity : Activity() {
         tvSubMessage = findViewById(R.id.tvSubMessage)
         btnCancel = findViewById(R.id.btnCancel)
         btnRefreshQr = findViewById(R.id.btnRefreshQr)
+        progressBarReg = findViewById(R.id.progressBarReg)
 
         vin = VehicleDataManager.readVin(this)
         loginSessionId = UUID.randomUUID().toString()
@@ -102,6 +109,8 @@ class RegistrationActivity : Activity() {
 
     private fun renderQrCode() {
         val vinHash = sha256(vin + loginSessionId)
+        progressBarReg.visibility = View.VISIBLE
+        ivQrCode.setImageBitmap(null)
 
         Thread {
             try {
@@ -115,10 +124,14 @@ class RegistrationActivity : Activity() {
                         bitmap.setPixel(x, y, if (bits[x, y]) Color.BLACK else Color.WHITE)
                     }
                 }
-                handler.post { ivQrCode.setImageBitmap(bitmap) }
+                handler.post {
+                    ivQrCode.setImageBitmap(bitmap)
+                    progressBarReg.visibility = View.GONE
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to render QR: ${e.message}")
                 handler.post {
+                    progressBarReg.visibility = View.GONE
                     tvPollingStatus.text = "QR session creation failed"
                     tvSubMessage.text = e.message ?: "Check backend connection and try again."
                     btnRefreshQr.visibility = View.VISIBLE
@@ -236,25 +249,90 @@ class RegistrationActivity : Activity() {
         }
     }
 
+    /**
+     * AAOS 환경에서 AlertDialog는 별도 Window를 생성해 패널 소유권이 적용되지 않으므로
+     * window.decorView에 직접 overlay를 추가해 터치 전달 문제를 우회한다.
+     */
     private fun showVehiclePicker(
         result: ApiManager.SessionStatusResult,
         vehicles: List<ApiManager.VehicleInfo>
     ) {
-        val labels = vehicles.map { vehicleLabel(it) }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("CarPayIn에 연결할 차량")
-            .setItems(labels) { _, which ->
-                completeRegistration(result, vehicles[which])
-            }
-            .setOnCancelListener {
-                didCompleteLogin = false
-                btnRefreshQr.visibility = View.VISIBLE
-                btnCancel.visibility = View.VISIBLE
-                tvPollingStatus.text = "Vehicle selection required"
-                tvSubMessage.text = "Choose the Hyundai vehicle to link with this car."
-            }
-            .show()
+        val decorView = window.decorView as FrameLayout
+
+        val overlay = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt())
+            elevation = 999f
+        }
+        fun dismiss() { runOnUiThread { decorView.removeView(overlay) } }
+        fun onCancel() {
+            dismiss()
+            didCompleteLogin = false
+            btnRefreshQr.visibility = View.VISIBLE
+            btnCancel.visibility = View.VISIBLE
+            tvPollingStatus.text = "Vehicle selection required"
+            tvSubMessage.text = "Choose the Hyundai vehicle to link with this car."
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFFFFFFFF.toInt())
+            setPadding(dp(20), dp(20), dp(20), dp(12))
+            val lp = FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.78).toInt(),
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.gravity = Gravity.CENTER
+            layoutParams = lp
+        }
+        card.addView(TextView(this).apply {
+            text = "CarPayIn에 연결할 차량"
+            setTextColor(0xFF191F28.toInt()); textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(12) }
+        })
+
+        val listContainer = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(8) }
+        }
+        val listInner = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        vehicles.forEachIndexed { i, vehicle ->
+            listInner.addView(Button(this).apply {
+                text = vehicleLabel(vehicle)
+                textSize = 14f; setTextColor(0xFF1B64DA.toInt())
+                setBackgroundColor(Color.TRANSPARENT)
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                setOnClickListener { dismiss(); completeRegistration(result, vehicles[i]) }
+            })
+        }
+        listContainer.addView(listInner)
+        card.addView(listContainer)
+
+        card.addView(Button(this).apply {
+            text = "취소"; textSize = 14f; setTextColor(Color.BLACK)
+            setBackgroundColor(Color.TRANSPARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.gravity = Gravity.END }
+            setOnClickListener { onCancel() }
+        })
+
+        overlay.addView(card)
+        overlay.setOnClickListener { onCancel() }
+        card.setOnClickListener { }
+        decorView.addView(overlay)
     }
+
+    private fun dp(value: Int): Int =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
 
     private fun vehicleLabel(vehicle: ApiManager.VehicleInfo): String {
         val model = vehicle.modelName.ifBlank { "Hyundai vehicle" }

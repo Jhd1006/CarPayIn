@@ -100,6 +100,10 @@ class ProcessPaymentService:
                 failed_reason=existing_tx.get("failed_reason"),
             )
 
+        # amount가 0 이하면 DB CHECK 제약 위반 전에 명시적으로 거절
+        if command.amount <= 0:
+            raise ValueError("invalid_amount")
+
         # pending transaction 생성
         tx_id = str(uuid.uuid4())
         self.transaction_repository.create_pending_transaction(
@@ -121,7 +125,7 @@ class ProcessPaymentService:
             )
 
             # PG 성공 처리
-            if not pg_result.get("success", True):
+            if not pg_result.get("success", False):
                 failed_reason = pg_result.get("failed_reason", "pg_payment_failed")
                 self.transaction_repository.update_transaction_status(
                     idempotency_key, "failed", failed_reason=failed_reason
