@@ -39,19 +39,27 @@ class HttpxPmsClient:
 
     # ── UC-PAY-001: 주차 요금 조회 ────────────────────────────────────────
 
-    def get_parking_fee(self, *, lot_id: str, plate: str) -> dict:
+    def get_parking_fee(
+        self, *, lot_id: str, plate: str, pms_session_id: str | None = None
+    ) -> dict:
         """
         PMS에서 현재 주차 요금을 조회한다.
 
-        GET /pms/parking/fee?lot_id=&plate=
+        GET /pms/parking/fee?lot_id=&plate=[&pms_session_id=]
+
+        pms_session_id를 함께 전달하면 PMS 쪽에서 lot+plate 조회 실패 시
+        session_id로 폴백 조회할 수 있어 더 안정적이다.
 
         Returns:
             {"amount": int, "duration": int, "currency": str}
         """
+        params: dict = {"lot_id": lot_id, "plate": plate}
+        if pms_session_id:
+            params["pms_session_id"] = pms_session_id
         try:
             response = httpx.get(
                 f"{self._base_url}/pms/parking/fee",
-                params={"lot_id": lot_id, "plate": plate},
+                params=params,
                 timeout=self._timeout,
             )
             response.raise_for_status()

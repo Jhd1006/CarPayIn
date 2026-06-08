@@ -21,7 +21,7 @@ VALID_ENTRY_TIME = "2026-05-20T14:30:00"
 VALID_AMOUNT = 5000
 VALID_CURRENCY = "KRW"
 VALID_DURATION = 90 #추가된 item
-FEE_QUOTE_TTL = 300  # 5분
+FEE_QUOTE_TTL = 900  # 15분 (get_parking_fee.py의 FEE_QUOTE_TTL_SECONDS와 동기화)
 
 
 class FakeTokenValidator:
@@ -103,12 +103,13 @@ class FakePmsClient:
         self.should_fail = False
 
     def get_parking_fee(
-        self, *, lot_id: str, plate: str) -> dict:
+        self, *, lot_id: str, plate: str, pms_session_id: str | None = None
+    ) -> dict:
         if self.should_fail:
             raise Exception("PMS fee API failed")
 
         self.fee_requests.append(
-            {"lot_id": lot_id, "plate": plate}
+            {"lot_id": lot_id, "plate": plate, "pms_session_id": pms_session_id}
         )
 
         return {

@@ -1,3 +1,0 @@
-curl -X POST http://192.168.203.82:5600 \
-  -H "Content-Type: application/json" \
-  -d '{"lat":37.493087,"lng":127.049750}'

@@ -20,22 +20,31 @@ object ParkingStateManager {
     private const val TAG = "ParkingStateManager"
     private const val PREF_FILE = "carpayin_secure"
 
+    @Volatile private var _prefs: SharedPreferences? = null
+
     private fun getPrefs(context: Context): SharedPreferences {
-        return try {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                context,
-                PREF_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (e: Exception) {
-            // 에뮬레이터 등 환경에서 EncryptedSharedPreferences 실패 시 일반 prefs로 fallback
-            Log.w(TAG, "EncryptedSharedPreferences 초기화 실패, fallback 사용: ${e.message}")
-            context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+        _prefs?.let { return it }
+        return synchronized(this) {
+            _prefs ?: run {
+                val prefs = try {
+                    val masterKey = MasterKey.Builder(context.applicationContext)
+                        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                        .build()
+                    EncryptedSharedPreferences.create(
+                        context.applicationContext,
+                        PREF_FILE,
+                        masterKey,
+                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                    )
+                } catch (e: Exception) {
+                    // 에뮬레이터 등 환경에서 EncryptedSharedPreferences 실패 시 일반 prefs로 fallback
+                    Log.w(TAG, "EncryptedSharedPreferences 초기화 실패, fallback 사용: ${e.message}")
+                    context.applicationContext.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+                }
+                _prefs = prefs
+                prefs
+            }
         }
     }
 
@@ -139,6 +148,7 @@ object ParkingStateManager {
             .putBoolean("parked", parked)
             .putString("lot_id", if (parked) lotId else "")
             .putString("session_id", if (parked) sessionId else "")
+            .putLong("entry_time_ms", if (parked) System.currentTimeMillis() else 0L)
             .apply()
         Log.d(TAG, "주차 상태 저장: parked=$parked, lot=$lotId")
     }
@@ -151,6 +161,9 @@ object ParkingStateManager {
 
     fun getSessionId(context: Context): String =
         getPrefs(context).getString("session_id", "") ?: ""
+
+    fun getEntryTimeMs(context: Context): Long =
+        getPrefs(context).getLong("entry_time_ms", 0L)
 
     // ── 마이현대 사용자 정보 ──────────────────────────────────────────────────
     fun saveHyundaiUserInfo(

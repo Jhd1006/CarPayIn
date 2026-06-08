@@ -106,10 +106,13 @@ class CarPayInService : Service() {
         }
         Log.d(TAG, "서비스 시작")
 
-        VehicleDataManager.init(this)
         carId = ParkingStateManager.getHyundaiCarId(this)
 
+        // 콜백 먼저 등록 후 init → ignition 이벤트 유실 방지
         setupCallbacks()
+
+        // Car API 바인딩은 백그라운드에서 (메인 스레드 블로킹 방지)
+        Thread { VehicleDataManager.init(this) }.start()
 
         Thread {
             runCatching {
@@ -220,6 +223,7 @@ class CarPayInService : Service() {
             Log.d(TAG, "결제 완료 수신: $txId / ${"%,d".format(amount)}원")
             TransactionStore.save(this, txId, lotId, amount)
             ParkingStateManager.saveParkingState(this, false)
+            GeofenceManager.clearDetectedLots() // 같은 주차장 재방문 시 pre-notify 재활성화
             handler.post {
                 onPaymentComplete?.invoke(txId, approvalNo, lotId, amount)
                 updateServiceNotif("CarPayIn 주차 감시 중")
@@ -231,12 +235,14 @@ class CarPayInService : Service() {
             )
         }
 
-        GeofenceManager.onParkingLotApproach = geofence@{ lotId, lotName, triggerType ->
+        GeofenceManager.onParkingLotApproach = { lotId, lotName, triggerType ->
             handler.post { onLotApproaching?.invoke(lotId, lotName) }
-            val plate = ParkingStateManager.getPlateNumber(this) ?: return@geofence
-            val carId = ParkingStateManager.getHyundaiCarId(this).ifBlank { return@geofence }
-            val token = getValidToken() ?: return@geofence
+            // SharedPrefs 읽기와 HTTP 요청을 백그라운드 스레드로 분리
+            // (locationListener는 메인 스레드에서 실행되므로 여기서 블로킹 작업 금지)
             Thread {
+                val plate = ParkingStateManager.getPlateNumber(this) ?: return@Thread
+                val carId = ParkingStateManager.getHyundaiCarId(this).ifBlank { return@Thread }
+                val token = getValidToken() ?: return@Thread
                 runCatching {
                     ApiManager.sendPreNotification(carId, plate, lotId, triggerType, token)
                     Log.d(TAG, "사전 알림 전송 완료: $lotId ($triggerType)")
@@ -258,9 +264,9 @@ class CarPayInService : Service() {
     private fun pollFee() {
         val lotId     = ParkingStateManager.getLotId(this)
         val sessionId = ParkingStateManager.getSessionId(this)
-        val token     = getValidToken() ?: return
-
+        // getValidToken()은 HTTP 요청을 포함할 수 있으므로 반드시 백그라운드 스레드에서 실행
         Thread {
+            val token = getValidToken() ?: return@Thread
             runCatching {
                 val fee = ApiManager.queryFee(lotId, sessionId, token)
                 handler.post {

@@ -9,7 +9,10 @@ def test_parking_lots_include_webots_test_lot():
 
     assert response.status_code == 200
     lots = response.json()["lots"]
-    assert any(lot["id"] == "LOT_TEST_01" for lot in lots)
+    test_lot = next(lot for lot in lots if lot["id"] == "LOT_TEST_01")
+    assert test_lot["name"] == "42dot 테스트 주차장"
+    assert test_lot["lat"] == 37.48544722
+    assert test_lot["lng"] == 127.03636666
 
 
 def test_sim_location_can_be_updated_and_read_back():
