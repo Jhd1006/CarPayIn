@@ -1,13 +1,16 @@
 """
 CarPayIn 차량 컨트롤러 (Webots 내부 실행)
 
+역할: 차량 이동 + 주차장 4m 이내 진입 시 PMS /lpr/entry 트리거
+     (GPS를 외부로 전송하지 않음 - 앱 사전등록은 앱에서 별도 처리)
+
 좌표계: Webots Z-up → translation[X, Y, Z] 에서 X,Y가 수평 평면, Z가 고도
   - ToyotaPrius 시작: (70.7132, 1.04608, -0.173432)
-  - 주차장 목표:      (53.33, 3.67, ...)
+  - 주차장 목표:      (53.33, 3.67)
 
-동작 모드 (WEBOTS_DRIVE_MODE):
-  auto   - 60초에 걸쳐 주차장까지 자동 이동 (시각적으로 차량 이동)
-  manual - 방향키 / WASD 키보드로 직접 조작
+WEBOTS_DRIVE_MODE:
+  auto   - 60초에 걸쳐 주차장까지 자동 이동
+  manual - 방향키 / WASD 키보드 직접 조작
 """
 import math, json, os, urllib.request
 from datetime import datetime, timezone
@@ -40,26 +43,15 @@ if os.path.exists(_env_path):
             if _k and _k not in os.environ:
                 os.environ[_k] = _v
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
-PMS_URL     = os.environ.get("PARKING_PMS_URL", "http://localhost:8001")
-PLATE       = os.environ.get("WEBOTS_PLATE", "12가3456")
-LOT_ID      = os.environ.get("WEBOTS_LOT_ID", "LOT_TEST_01")
-DRIVE_MODE  = os.environ.get("WEBOTS_DRIVE_MODE", "auto").lower()
+PMS_URL    = os.environ.get("PARKING_PMS_URL", "http://localhost:8001")
+PLATE      = os.environ.get("WEBOTS_PLATE", "12가3456")
+LOT_ID     = os.environ.get("WEBOTS_LOT_ID", "LOT_TEST_01")
+DRIVE_MODE = os.environ.get("WEBOTS_DRIVE_MODE", "auto").lower()
 
-# ── 좌표 상수 (sim_vehicle.py 와 동일) ─────────────────────────────────
+# ── 좌표 상수 ────────────────────────────────────────────────────────────
 PARKING_LOT_X = 53.33
 PARKING_LOT_Y = 3.67
 START_X, START_Y = 70.7, 1.0
-REF_LAT = 37.48544722
-REF_LNG = 127.03636666
-M_PER_LAT = 111_320.0
-M_PER_LNG = 111_320.0 * math.cos(math.radians(REF_LAT))
-
-def webots_to_gps(wx, wy):
-    return (
-        REF_LAT + (wy - PARKING_LOT_Y) / M_PER_LAT,
-        REF_LNG + (wx - PARKING_LOT_X) / M_PER_LNG,
-    )
 
 # ── HTTP 헬퍼 ────────────────────────────────────────────────────────────
 def post_json(url, data):
@@ -78,33 +70,27 @@ def post_json(url, data):
 gps = robot.getDevice("gps")
 if gps:
     gps.enable(timestep)
-    print("[VC] GPS 센서 활성화", flush=True)
 
 # ── 키보드 초기화 ────────────────────────────────────────────────────────
 keyboard = Keyboard()
 keyboard.enable(timestep)
 
-# ── Supervisor: 자신의 translation 필드 참조 ────────────────────────────
-self_node = None
+# ── Supervisor: 자신의 translation 필드 참조 (auto 모드 이동용) ──────────
 translation_field = None
+GROUND_Z = -0.173432
 try:
     self_node = robot.getSelf()
     translation_field = self_node.getField("translation")
-    cur0 = translation_field.getSFVec3f()
-    GROUND_Z = cur0[2]    # 고도 고정값 (-0.173...)
-    print(f"[VC] Supervisor 활성 - 초기위치 ({cur0[0]:.2f}, {cur0[1]:.2f}, {cur0[2]:.3f})", flush=True)
+    GROUND_Z = translation_field.getSFVec3f()[2]
+    print(f"[VC] 시작 — mode={DRIVE_MODE}, plate={PLATE}, lot={LOT_ID}", flush=True)
 except Exception as e:
-    GROUND_Z = -0.173432
-    print(f"[VC] Supervisor 불가: {e}", flush=True)
+    print(f"[VC] Supervisor 불가: {e} — mode={DRIVE_MODE}", flush=True)
 
 # ── 상태 변수 ────────────────────────────────────────────────────────────
 lpr_triggered = False
 last_lpr_time = 0.0
-last_gps_send = 0.0
-GPS_INTERVAL_MS = 1000.0
-
 auto_t = 0.0
-AUTO_DURATION = 60.0   # 60초에 주차장 도착
+AUTO_DURATION = 60.0
 
 current_speed = 0.0
 current_steer = 0.0
@@ -113,43 +99,36 @@ MAX_STEER = 0.4
 SPEED_STEP = 2.0
 STEER_STEP = 0.5
 
-print(f"[VC] 시작 — mode={DRIVE_MODE}, plate={PLATE}, lot={LOT_ID}", flush=True)
-
 # ════════════════════════════════════════════════════════════════════════
 while robot.step(timestep) != -1:
     sim_time = robot.getTime()
-    now_ms   = sim_time * 1000.0
 
     # ── 1. 현재 위치 결정 ────────────────────────────────────────────────
     if DRIVE_MODE == "auto":
         progress = min(auto_t / AUTO_DURATION, 1.0)
         wx = START_X + (PARKING_LOT_X - START_X) * progress
         wy = START_Y + (PARKING_LOT_Y - START_Y) * progress
-        spd = max(0.0, 20.0 * (1.0 - progress))
 
-        # 시각적으로 차량 이동 (X, Y 업데이트, Z=고도 유지)
         if translation_field:
             translation_field.setSFVec3f([wx, wy, GROUND_Z])
 
         auto_t += timestep / 1000.0
 
         if progress >= 1.0:
-            print("[VC] 주차장 도착. 60초 후 재시작", flush=True)
+            print("[VC] 주차장 도착. 재시작 대기", flush=True)
             auto_t = 0.0
             lpr_triggered = False
 
     else:
-        # manual 모드: 실제 GPS 혹은 현재 translation 에서 위치 읽기
+        # manual 모드: GPS 또는 translation 에서 현재 위치 읽기
         if gps:
             vals = gps.getValues()
-            wx, wy = vals[0], vals[1]   # X(동), Y(북) — Z는 고도
+            wx, wy = vals[0], vals[1]
         elif translation_field:
             cur = translation_field.getSFVec3f()
             wx, wy = cur[0], cur[1]
         else:
             wx, wy = START_X, START_Y
-
-        spd = abs(current_speed)
 
         # 키보드 입력
         key = keyboard.getKey()
@@ -172,25 +151,12 @@ while robot.step(timestep) != -1:
             robot.setCruisingSpeed(current_speed)
             robot.setSteeringAngle(current_steer)
 
-    # ── 2. 주차장까지 거리 계산 ──────────────────────────────────────────
+    # ── 2. 거리 계산 + LPR 트리거 ────────────────────────────────────────
     dist = math.sqrt((wx - PARKING_LOT_X) ** 2 + (wy - PARKING_LOT_Y) ** 2)
 
-    # ── 3. 위치 → backend 전송 (1초 간격) ────────────────────────────────
-    if now_ms - last_gps_send >= GPS_INTERVAL_MS:
-        last_gps_send = now_ms
-        lat, lng = webots_to_gps(wx, wy)
-        post_json(f"{BACKEND_URL}/sim/location", {
-            "lat": lat, "lng": lng,
-            "speed_kph": round(spd, 1),
-            "heading": 225.0,
-            "source": "webots_controller",
-        })
-        print(f"[GPS] wx={wx:.2f} wy={wy:.2f} dist={dist:.1f}m", flush=True)
-
-    # ── 4. LPR 트리거 (4m 이내, 30초 쿨다운) ────────────────────────────
     if dist <= 4.0 and not lpr_triggered and (sim_time - last_lpr_time) > 30.0:
         entry_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-        print(f"[LPR] 진입 감지! dist={dist:.1f}m plate={PLATE}", flush=True)
+        print(f"[LPR] 진입 감지! dist={dist:.1f}m → PMS /lpr/entry", flush=True)
         res = post_json(f"{PMS_URL}/lpr/entry", {
             "plate": PLATE,
             "lot_id": LOT_ID,
