@@ -231,6 +231,99 @@ components:
           example: "9b1f..."
 
     # ── Parking ───────────────────────────────
+    ParkingLotResponse:
+      type: object
+      required: [id, name, lat, lng]
+      properties:
+        id:
+          type: string
+          description: 제휴 주차장 ID
+          example: "LOT_TEST_01"
+        name:
+          type: string
+          description: 제휴 주차장 표시 이름
+          example: "42dot 테스트 주차장"
+        lat:
+          type: number
+          format: double
+          description: 주차장 위도
+          example: 37.48544722
+        lng:
+          type: number
+          format: double
+          description: 주차장 경도
+          example: 127.03636666
+
+    ParkingLotsResponse:
+      type: object
+      required: [lots]
+      properties:
+        lots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParkingLotResponse'
+
+    SimLocationRequest:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+          description: 시뮬레이션 차량 위도
+          example: 37.48544722
+        lng:
+          type: number
+          format: double
+          description: 시뮬레이션 차량 경도
+          example: 127.03636666
+        speed_kph:
+          type: number
+          format: double
+          default: 0.0
+          description: 차량 속도(km/h)
+          example: 12.5
+        heading:
+          type: number
+          format: double
+          default: 0.0
+          description: 진행 방향(degree)
+          example: 90.0
+        source:
+          type: string
+          default: webots
+          description: 위치 업데이트 출처
+          example: webots
+
+    SimLocationResponse:
+      type: object
+      required: [lat, lng, speed_kph, heading, source, updated_at]
+      properties:
+        lat:
+          type: number
+          format: double
+          example: 37.48544722
+        lng:
+          type: number
+          format: double
+          example: 127.03636666
+        speed_kph:
+          type: number
+          format: double
+          example: 12.5
+        heading:
+          type: number
+          format: double
+          example: 90.0
+        source:
+          type: string
+          example: webots
+        updated_at:
+          type: string
+          format: date-time
+          description: 서버가 위치 상태를 갱신한 시각
+          example: "2024-01-15T10:30:00Z"
+
     PreNotifyRequest:
       type: object
       required: [car_id, lot_id, plate]
@@ -1001,6 +1094,60 @@ paths:
   # ══════════════════════════════════════════
   # Parking
   # ══════════════════════════════════════════
+  /parking/lots:
+    get:
+      tags: [Parking]
+      summary: 제휴 주차장 목록 조회
+      description: |
+        Android 앱과 시뮬레이션 서비스가 사용할 제휴 주차장 목록을 반환합니다.
+        현재 구현은 로컬/시연용 정적 목록을 반환합니다.
+      responses:
+        '200':
+          description: 제휴 주차장 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingLotsResponse'
+
+  /sim/location:
+    get:
+      tags: [Parking]
+      summary: 현재 시뮬레이션 차량 위치 조회
+      description: |
+        Webots 또는 로컬 테스트 UI가 마지막으로 저장한 시뮬레이션 차량 위치를 조회합니다.
+      responses:
+        '200':
+          description: 현재 시뮬레이션 위치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimLocationResponse'
+    post:
+      tags: [Parking]
+      summary: 시뮬레이션 차량 위치 갱신
+      description: |
+        Webots 또는 로컬 테스트 도구가 시뮬레이션 차량 위치를 서버 메모리에 갱신합니다.
+        이 endpoint는 로컬 시연/테스트 편의를 위한 상태 저장 API입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimLocationRequest'
+      responses:
+        '200':
+          description: 갱신된 시뮬레이션 위치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimLocationResponse'
+        '422':
+          description: 요청 body validation 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /pre-notify:
     post:
       tags: [Parking]
