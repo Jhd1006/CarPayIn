@@ -189,11 +189,6 @@ object ApiManager {
         return CardOrderResult(response.getString("order_id"), response.getString("pg_url"))
     }
 
-    fun fetchCardOrderLegacy(accessToken: String): CardOrderResult {
-        val response = getJson(URL("$BASE_URL/card/order"), accessToken)
-        return CardOrderResult(response.getString("order_id"), response.getString("pg_url"))
-    }
-
     fun fetchParkingLots(): List<ParkingLotInfo> {
         return try {
             val response = getJson(URL("$BASE_URL/parking/lots"))

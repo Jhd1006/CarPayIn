@@ -13,21 +13,33 @@ services/
   mock-card/          Mock card company API
   mock-pg/            Mock PG API and card registration WebView
   pms/                Mock parking management system API
+  webots/             Webots vehicle and barrier simulation controllers
 
 docs/
   api/                OpenAPI contract
-  DB 스키마/          Database and Redis schema documents
+  DB schemas/         Database and Redis schema documents
   deployment/         Registry, CI/CD, and deployment notes
   diagrams/           Mermaid sequence diagrams
+  scenarios/          Scenario flow documents
   use-cases/          Use-case level specifications
-  시나리오/           Scenario flow documents
 
 scripts/
   build-push-images.ps1      Local GitLab Registry image build/push helper
+  start-local-full.ps1       Start Docker services and local support setup
   deploy-from-registry.ps1   Pull registry images and run Docker Compose
   start-local-e2e.ps1        Start local E2E dependencies
   stop-local-e2e.ps1         Stop local E2E dependencies
 ```
+
+## Documentation Map
+
+- API contract: `docs/api/car-pay-in-openapi.yaml`
+- Business flow specs: `docs/use-cases/`
+- Presentation/scenario flow: `docs/scenarios/`
+- Mermaid sequence sources: `docs/diagrams/`
+- DB and Redis schemas: `docs/DB schemas/`
+- Testing conventions: `docs/conventions/`
+- Android setup: `services/android-app/README.md`
 
 ## Local Configuration
 
@@ -44,6 +56,10 @@ PG_PUBLIC_BASE_URL
 ```
 
 Do not commit `.env` or real credentials.
+
+Android uses `services/android-app/local.properties`. Copy
+`services/android-app/local.properties.example` before compiling or launching
+the app.
 
 ## Local Run
 
@@ -67,9 +83,36 @@ Useful ports:
 6379  redis
 ```
 
+API docs are available after the stack starts:
+
+```text
+http://localhost:8000/docs       carpayin-backend Swagger UI
+http://localhost:8001/docs       PMS Swagger UI
+http://localhost:8002/docs       mock-pg Swagger UI
+http://localhost:8003/docs       mock-card Swagger UI
+```
+
+For a guided local startup script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-local-full.ps1
+```
+
+Stop the full local stack:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\stop-local-full.ps1
+```
+
 ## Tests
 
-Run the backend unit/API tests:
+Run all Python service unit/API tests:
+
+```powershell
+make test
+```
+
+Run one backend test set directly:
 
 ```powershell
 cd services/carpayin-backend
