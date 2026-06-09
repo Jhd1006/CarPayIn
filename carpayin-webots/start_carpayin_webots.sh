@@ -41,7 +41,7 @@ fi
 export WEBOTS_VIN="${WEBOTS_VIN:-TESTVIN001}"
 export WEBOTS_PLATE="${WEBOTS_PLATE:-12가3456}"
 export WEBOTS_LOT_ID="${WEBOTS_LOT_ID:-LOT_TEST_01}"
-export WEBOTS_DRIVE_MODE="${WEBOTS_DRIVE_MODE:-manual}"
+export WEBOTS_DRIVE_MODE="${WEBOTS_DRIVE_MODE:-auto}"
 
 echo "[CarPayIn] Backend:    $BACKEND_URL"
 echo "[CarPayIn] PMS:        $PARKING_PMS_URL"
