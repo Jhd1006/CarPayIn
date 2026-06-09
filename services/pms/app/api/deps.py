@@ -11,27 +11,16 @@ from app.infra.clients import HttpxCarPayInWebhookClient
 from app.infra.db.session import get_db_session
 from app.infra.fees import SimpleFeeCalculator
 from app.infra.mqtt import build_barrier_publisher
-from app.infra.repositories.payment_request_repository import (
-    SqlAlchemyPaymentRequestRepository,
-)
-from app.infra.repositories.pre_registration_repository import (
-    SqlAlchemyPreRegistrationRepository,
-)
-from app.infra.repositories.pms_session_repository import (
-    SqlAlchemyPmsSessionRepository,
-)
+from app.infra.repositories.payment_request_repository import SqlAlchemyPaymentRequestRepository
+from app.infra.repositories.pre_registration_repository import SqlAlchemyPreRegistrationRepository
+from app.infra.repositories.pms_session_repository import SqlAlchemyPmsSessionRepository
 
 
-def _requires_explicit_env() -> bool:
-    return os.getenv("APP_ENV", "local").strip().lower() in {
-        "aws",
-        "staging",
-        "prod",
-        "production",
-    }
+def _requires_explicit_env():
+    return os.getenv("APP_ENV", "local").strip().lower() in {"aws", "staging", "prod", "production"}
 
 
-def _env_or_default(name: str, default: str) -> str:
+def _env_or_default(name, default):
     value = os.getenv(name, "").strip()
     if value:
         return value
@@ -50,17 +39,13 @@ fee_calculator = SimpleFeeCalculator(
 barrier_publisher = build_barrier_publisher()
 
 
-def get_register_pre_notify_service(
-    session: Session = Depends(get_db_session),
-) -> RegisterPreNotifyService:
+def get_register_pre_notify_service(session: Session = Depends(get_db_session)) -> RegisterPreNotifyService:
     return RegisterPreNotifyService(
         pre_registration_repository=SqlAlchemyPreRegistrationRepository(session),
     )
 
 
-def get_handle_lpr_entry_service(
-    session: Session = Depends(get_db_session),
-) -> HandleLprEntryService:
+def get_handle_lpr_entry_service(session: Session = Depends(get_db_session)) -> HandleLprEntryService:
     return HandleLprEntryService(
         pre_registration_repository=SqlAlchemyPreRegistrationRepository(session),
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
@@ -69,19 +54,16 @@ def get_handle_lpr_entry_service(
     )
 
 
-def get_calculate_fee_service(
-    session: Session = Depends(get_db_session),
-) -> CalculateFeeService:
+def get_calculate_fee_service(session: Session = Depends(get_db_session)) -> CalculateFeeService:
     return CalculateFeeService(
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
         fee_calculator=fee_calculator,
     )
 
 
-def get_record_payment_complete_service(
-    session: Session = Depends(get_db_session),
-) -> RecordPaymentCompleteService:
+def get_record_payment_complete_service(session: Session = Depends(get_db_session)) -> RecordPaymentCompleteService:
     return RecordPaymentCompleteService(
         payment_request_repository=SqlAlchemyPaymentRequestRepository(session),
         barrier_publisher=barrier_publisher,
+        pms_session_repository=SqlAlchemyPmsSessionRepository(session),
     )

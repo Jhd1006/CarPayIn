@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+import logging
+
+_logger = logging.getLogger("pms.record_payment_complete")
 
 
 @dataclass(frozen=True)
@@ -18,22 +21,16 @@ class RecordPaymentCompleteResult:
 
 
 class RecordPaymentCompleteService:
-    def __init__(self, payment_request_repository, barrier_publisher):
+    def __init__(self, payment_request_repository, barrier_publisher, pms_session_repository=None):
         self.payment_request_repository = payment_request_repository
         self.barrier_publisher = barrier_publisher
+        self.pms_session_repository = pms_session_repository
 
-    def execute(
-        self, command: RecordPaymentCompleteCommand
-    ) -> RecordPaymentCompleteResult:
-        # idempotency_key로 중복 확인
-        existing = self.payment_request_repository.get_by_idempotency_key(
-            command.idempotency_key
-        )
-
+    def execute(self, command: RecordPaymentCompleteCommand) -> RecordPaymentCompleteResult:
+        existing = self.payment_request_repository.get_by_idempotency_key(command.idempotency_key)
         if existing:
             return RecordPaymentCompleteResult(status=existing["status"])
 
-        # PMS DB payment_requests에 success 이력 저장
         self.payment_request_repository.save_payment_request(
             idempotency_key=command.idempotency_key,
             pms_session_id=command.pms_session_id,
@@ -44,7 +41,12 @@ class RecordPaymentCompleteService:
             approval_no=command.approval_no,
         )
 
-        # 결제 확인 완료 → 출구 차단기 개방 명령 발행
-        self.barrier_publisher.open_exit(pms_session_id=command.pms_session_id)
+        if self.pms_session_repository is not None:
+            try:
+                self.pms_session_repository.mark_exited(command.pms_session_id)
+                _logger.info("pms_session_exited: %s", command.pms_session_id)
+            except LookupError:
+                _logger.warning("session_not_found_on_payment: %s", command.pms_session_id)
 
+        self.barrier_publisher.open_exit(pms_session_id=command.pms_session_id)
         return RecordPaymentCompleteResult(status="success")
