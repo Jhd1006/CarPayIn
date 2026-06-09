@@ -88,6 +88,15 @@ object GeofenceManager {
     // ── 시작 / 중지 ───────────────────────────────────────────────────────────
 
     fun start(context: Context) {
+        // DEBUG 빌드(에뮬레이터/개발 환경)에서는 항상 /sim/location 폴링 사용
+        // — VHAL 없는 Webots 시뮬레이터 환경에서 실제 GPS 대신 백엔드 위치를 소비
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "DEBUG 빌드 — Webots /sim/location 폴링 시작")
+            startSimulated()
+            return
+        }
+
+        // 릴리즈 빌드: 실제 GPS / 네트워크 위치 사용
         locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         try {
             locationManager?.requestLocationUpdates(
@@ -106,12 +115,7 @@ object GeofenceManager {
                     locationListener
                 )
             } catch (e2: SecurityException) {
-                if (BuildConfig.DEBUG) {
-                    Log.e(TAG, "네트워크 위치도 실패 — 디버그 시뮬레이션 모드: ${e2.message}")
-                    startSimulated()
-                } else {
-                    Log.e(TAG, "네트워크 위치도 실패 — 릴리즈 빌드에서는 시뮬레이션 폴링 생략: ${e2.message}")
-                }
+                Log.e(TAG, "네트워크 위치도 실패: ${e2.message}")
             }
         }
     }

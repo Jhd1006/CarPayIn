@@ -250,7 +250,7 @@ class RedisPaymentNotifyRetryStore(_RedisJsonStore):
         tx_id: str,
         payload: dict,
         reason: str,
-        ttl_seconds: int,
+        ttl_seconds: int = 7 * 24 * 60 * 60,
     ) -> None:
         self._save(
             f"pms_payment_retry:{tx_id}",

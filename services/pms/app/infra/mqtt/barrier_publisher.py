@@ -16,18 +16,25 @@ class BarrierPublisher:
     def __init__(self) -> None:
         self._logger = logging.getLogger("pms.barrier")
 
+    def open_entry(self, *, pms_session_id: str = "") -> None:
+        self._logger.info("barrier_open_entry", extra={"pms_session_id": pms_session_id})
+
     def open_exit(self, *, pms_session_id: str = "") -> None:
         self._logger.info("barrier_open_exit", extra={"pms_session_id": pms_session_id})
 
 
 class MqttBarrierPublisher(BarrierPublisher):
-    """EC2 Mosquitto 브로커로 출구 차단기 개방 명령을 발행한다."""
+    """EC2 Mosquitto 브로커로 입·출구 차단기 개방 명령을 발행한다."""
 
     def __init__(self, *, host: str, port: int, enabled: bool = True) -> None:
         super().__init__()
         self._host = host
         self._port = port
         self._enabled = enabled and mqtt_publish is not None
+
+    def open_entry(self, *, pms_session_id: str = "") -> None:
+        super().open_entry(pms_session_id=pms_session_id)
+        self._publish({"gate": "entry", "action": "open", "pms_session_id": pms_session_id})
 
     def open_exit(self, *, pms_session_id: str = "") -> None:
         super().open_exit(pms_session_id=pms_session_id)
