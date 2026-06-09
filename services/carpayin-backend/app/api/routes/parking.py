@@ -59,6 +59,7 @@ _sim_location = SimLocationResponse(
     lat=37.48544722,
     lng=127.03636666,
     speed_kph=0.0,
+    heading=0.0,
     source="default",
     updated_at=datetime.now(timezone.utc).isoformat(),
 )
@@ -98,6 +99,7 @@ def update_sim_location(request: SimLocationRequest) -> SimLocationResponse:
         lat=request.lat,
         lng=request.lng,
         speed_kph=request.speed_kph,
+        heading=request.heading,
         source=request.source,
         updated_at=datetime.now(timezone.utc).isoformat(),
     )

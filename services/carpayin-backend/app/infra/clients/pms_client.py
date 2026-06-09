@@ -85,7 +85,7 @@ class HttpxPmsClient:
         currency: str,
         approval_no: str,
         idempotency_key: str,
-    ) -> None:
+    ) -> dict:
         """
         PMS에 결제 완료를 통보한다.
 
@@ -106,5 +106,6 @@ class HttpxPmsClient:
                 timeout=self._timeout,
             )
             response.raise_for_status()
+            return response.json()
         except httpx.HTTPError as e:
             raise RuntimeError(f"pms_notify_failed: {e}") from e

@@ -24,12 +24,21 @@ class HandleLprEntryService:
         pre_registration_repository,
         pms_session_repository,
         carpayin_webhook_client,
+        barrier_publisher=None,
     ):
         self.pre_registration_repository = pre_registration_repository
         self.pms_session_repository = pms_session_repository
         self.carpayin_webhook_client = carpayin_webhook_client
+        self.barrier_publisher = barrier_publisher
 
     def execute(self, command: HandleLprEntryCommand) -> HandleLprEntryResult:
+        # LPR 인식 즉시 입구 차단기 개방 (사전등록 여부와 무관)
+        if self.barrier_publisher is not None:
+            try:
+                self.barrier_publisher.open_entry(pms_session_id="")
+            except Exception as exc:
+                _logger.warning("barrier_open_entry_failed: %s", exc)
+
         # 같은 plate에 active session이 있는지 확인
         existing_session = self.pms_session_repository.get_active_session_by_plate(
             command.plate

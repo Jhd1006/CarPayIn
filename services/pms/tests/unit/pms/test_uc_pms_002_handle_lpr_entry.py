@@ -65,6 +65,18 @@ class FakePmsSessionRepository:
         return self.sessions[pms_session_id]
 
 
+class FakeBarrierPublisher:
+    def __init__(self):
+        self.entry_calls = []
+        self.exit_calls = []
+
+    def open_entry(self, *, pms_session_id: str = ""):
+        self.entry_calls.append(pms_session_id)
+
+    def open_exit(self, *, pms_session_id: str = ""):
+        self.exit_calls.append(pms_session_id)
+
+
 class FakeCarPayInWebhookClient:
     def __init__(self):
         self.webhook_calls = []
@@ -212,3 +224,54 @@ class TestHandleLprEntry:
 
         with pytest.raises(ValueError, match="pre_registration_not_found"):
             handle_lpr_entry_service.execute(command)
+
+    def test_entry_barrier_opens_on_lpr(
+        self,
+        fake_pre_registration_repository,
+        fake_pms_session_repository,
+        fake_carpayin_webhook_client,
+    ):
+        """LPR 인식 시 사전등록 여부와 무관하게 입구 차단기가 열린다."""
+        barrier = FakeBarrierPublisher()
+        service = HandleLprEntryService(
+            pre_registration_repository=fake_pre_registration_repository,
+            pms_session_repository=fake_pms_session_repository,
+            carpayin_webhook_client=fake_carpayin_webhook_client,
+            barrier_publisher=barrier,
+        )
+        command = HandleLprEntryCommand(
+            lot_id=VALID_LOT_ID,
+            plate=VALID_PLATE,
+            entry_time=VALID_ENTRY_TIME,
+        )
+
+        service.execute(command)
+
+        assert len(barrier.entry_calls) == 1
+        assert len(barrier.exit_calls) == 0
+
+    def test_entry_barrier_opens_even_for_unregistered_plate(
+        self,
+        fake_pre_registration_repository,
+        fake_pms_session_repository,
+        fake_carpayin_webhook_client,
+    ):
+        """사전등록 안 된 차량도 입구 차단기는 열린다."""
+        barrier = FakeBarrierPublisher()
+        service = HandleLprEntryService(
+            pre_registration_repository=fake_pre_registration_repository,
+            pms_session_repository=fake_pms_session_repository,
+            carpayin_webhook_client=fake_carpayin_webhook_client,
+            barrier_publisher=barrier,
+        )
+        command = HandleLprEntryCommand(
+            lot_id=VALID_LOT_ID,
+            plate="99UNKNOWN",
+            entry_time=VALID_ENTRY_TIME,
+        )
+
+        with pytest.raises(ValueError):
+            service.execute(command)
+
+        # 예외가 나도 차단기는 이미 열렸어야 함
+        assert len(barrier.entry_calls) == 1

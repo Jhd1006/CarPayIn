@@ -21,7 +21,7 @@ import threading
 import pathlib
 import sys
 
-SERVER_DIR = pathlib.Path(__file__).resolve().parents[1]
+SERVER_DIR = pathlib.Path(__file__).resolve().parent
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 from shared_config import get_config, get_int_config
@@ -54,12 +54,13 @@ def _enqueue(gate: str, action: str):
         _cmd_queue.append({"gate": gate, "action": action})
 
 # ── MQTT 콜백 ──────────────────────────────────────────────────────────────
-def _on_connect(client, userdata, flags, rc):
+def _on_connect(client, userdata, flags, reason_code, properties=None):
+    rc = reason_code if isinstance(reason_code, int) else (0 if str(reason_code) == "Success" else 1)
     if rc == 0:
-        client.subscribe(TOPIC_BARRIER)
+        client.subscribe(TOPIC_BARRIER, qos=1)
         print(f"[MQTT] 연결 성공 – {TOPIC_BARRIER} 구독 시작")
     else:
-        print(f"[MQTT] 연결 실패 rc={rc}")
+        print(f"[MQTT] 연결 실패 rc={reason_code}")
 
 def _on_message(client, userdata, msg):
     try:
@@ -72,7 +73,10 @@ def _on_message(client, userdata, msg):
         print(f"[MQTT] 메시지 파싱 오류: {e}")
 
 def _start_mqtt():
-    client = mqtt.Client()
+    try:
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    except AttributeError:
+        client = mqtt.Client()
     client.on_connect = _on_connect
     client.on_message = _on_message
     try:

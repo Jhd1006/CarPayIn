@@ -65,6 +65,7 @@ def get_handle_lpr_entry_service(
         pre_registration_repository=SqlAlchemyPreRegistrationRepository(session),
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
         carpayin_webhook_client=carpayin_webhook_client,
+        barrier_publisher=barrier_publisher,
     )
 
 

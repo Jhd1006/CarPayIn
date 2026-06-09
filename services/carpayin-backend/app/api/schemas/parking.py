@@ -16,6 +16,7 @@ class SimLocationRequest(BaseModel):
     lat: float
     lng: float
     speed_kph: float = 0.0
+    heading: float = 0.0
     source: str = "webots"
 
 
@@ -23,6 +24,7 @@ class SimLocationResponse(BaseModel):
     lat: float
     lng: float
     speed_kph: float = 0.0
+    heading: float = 0.0
     source: str = "webots"
     updated_at: str
 
