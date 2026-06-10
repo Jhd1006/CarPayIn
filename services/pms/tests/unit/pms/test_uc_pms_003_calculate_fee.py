@@ -81,7 +81,7 @@ def calculate_fee_service(
 
 
 class TestCalculateFee:
-    """UC-PMS-003 - GET /pms/parking/fee"""
+    """UC-PMS-003 - GET /parking/fee"""
 
     def test_active_session_returns_amount_and_duration(
         self,

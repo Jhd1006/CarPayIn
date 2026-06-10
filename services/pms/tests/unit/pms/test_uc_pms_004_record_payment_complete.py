@@ -81,7 +81,7 @@ def record_payment_complete_service(fake_payment_request_repository, fake_pms_se
 
 
 class TestRecordPaymentComplete:
-    """UC-PMS-004 - POST /pms/payment/complete"""
+    """UC-PMS-004 - POST /payment/complete"""
 
     def test_payment_complete_request_is_saved_as_success(
         self,

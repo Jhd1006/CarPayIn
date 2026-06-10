@@ -1388,15 +1388,15 @@ paths:
   # ══════════════════════════════════════════
   # PMS 연동 API (Car Pay-in Backend → PMS)
   # ══════════════════════════════════════════
-  /pms/parking/pre-register:
+  /parking/pre-register:
     post:
       tags: [PMS]
       summary: 차량번호 사전 등록 (→ PMS)
       description: |
         Car Pay-in Backend가 PMS에 입차 예정 차량을 사전 등록합니다.
         PMS는 해당 차량번호와 주차장 ID를 입차 감지 대상으로 등록합니다.
-        
-        실제 요청 URL: `POST {PMS_URL}/parking/pre-register`
+
+        요청 URL: `POST {PMS_URL}/parking/pre-register`
       requestBody:
         required: true
         content:
@@ -1411,7 +1411,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PmsPreRegisterResponse'
 
-  /pms/lpr/entry:
+  /lpr/entry:
     post:
       tags: [PMS]
       summary: LPR 입차 이벤트 시뮬레이션
@@ -1419,7 +1419,7 @@ paths:
         Mock PMS 내부에서 LPR 입차 이벤트를 발생시켜 PMS 세션을 생성하고,
         Car Pay-in Backend의 `/webhook/entry`로 전달할 payload를 만든다.
 
-        실제 요청 URL: `POST {PMS_URL}/lpr/entry`
+        요청 URL: `POST {PMS_URL}/lpr/entry`
       requestBody:
         required: true
         content:
@@ -1434,15 +1434,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/PmsLprEntryResponse'
 
-  /pms/parking/fee:
+  /parking/fee:
     get:
       tags: [PMS]
       summary: 주차 요금 조회 (→ PMS)
       description: |
         Car Pay-in Backend가 PMS에 현재 주차 요금을 조회합니다.
         PMS는 plate, lot_id로 active 세션을 찾아 입차 시각부터 현재까지의 요금을 계산합니다.
-        
-        실제 요청 URL: `GET {PMS_URL}/parking/fee`
+
+        요청 URL: `GET {PMS_URL}/parking/fee`
       parameters:
         - name: lot_id
           in: query
@@ -1468,15 +1468,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /pms/payment/complete:
+  /payment/complete:
     post:
       tags: [PMS]
       summary: 결제 완료 통보 (→ PMS)
       description: |
         Car Pay-in Backend가 PMS에 결제 완료를 통보합니다.
         PMS는 해당 결과를 payment_requests에 저장하고, 출구 차단기 개방 기준으로 사용합니다.
-        
-        실제 요청 URL: `POST {PMS_URL}/payment/complete`
+
+        요청 URL: `POST {PMS_URL}/payment/complete`
         
         **멱등성**: payment_requests.idempotency_key UNIQUE 제약으로 중복 저장 방지
       requestBody:

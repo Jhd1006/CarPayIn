@@ -90,26 +90,6 @@ class TestCalculateFeeApi:
             "calculated_at": VALID_CURRENT_TIME,
         }
 
-    def test_openapi_query_shape_returns_fee_response(
-        self,
-        api_client_with_service_stub,
-    ):
-        response = api_client_with_service_stub.get(
-            "/pms/parking/fee",
-            params={
-                "lot_id": VALID_LOT_ID,
-                "plate": VALID_PLATE,
-            },
-        )
-
-        assert response.status_code == 200
-        body = response.json()
-        assert body["pms_session_id"] == VALID_PMS_SESSION_ID
-        assert body["lot_id"] == VALID_LOT_ID
-        assert body["plate"] == VALID_PLATE
-        assert body["amount"] == 5000
-        assert body["currency"] == "KRW"
-
     def test_session_not_found_returns_404(
         self,
         api_client_with_failing_service_stub,

@@ -66,15 +66,6 @@ class TestRecordPaymentCompleteApi:
             "carpay_tx_id": VALID_TX_ID,
         }
 
-    def test_openapi_prefixed_path_returns_success(self, api_client_with_service_stub):
-        response = api_client_with_service_stub.post(
-            "/pms/payment/complete",
-            json=valid_payment_payload(),
-        )
-
-        assert response.status_code == 200
-        assert response.json()["status"] == "success"
-
     def test_duplicate_idempotency_key_returns_existing_success(
         self,
         api_client_with_service_stub,
