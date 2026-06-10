@@ -220,10 +220,33 @@ quote가 만료되면 앱은 요금을 다시 조회해야 한다.
 - `created_at`: 요금 quote 생성 시각
 - `expires_at`: 요금 quote 만료 시각
 
+## entry_notify_retry:{session_id}
+
+입차 확정 알림 MQTT 발행이 실패한 경우 재시도 대기 이벤트를 저장한다.
+`NotifyRetryWorker`가 60초마다 SCAN으로 이 패턴의 키를 순회해 재시도하고, 성공 시 키를 삭제한다.
+
+TTL은 1시간이다.
+
+```json
+{
+  "car_id": "...",
+  "session_id": "...",
+  "lot_id": "...",
+  "entry_time": "..."
+}
+```
+
+필드 설명:
+
+- `car_id`: MQTT 알림 대상 차량 ID
+- `session_id`: Car Pay-in 기준 주차 세션 ID
+- `lot_id`: 입차 주차장 ID
+- `entry_time`: 입차 시각
+
 ## pms_payment_retry:{tx_id}
 
 PMS 결제 완료 통보가 실패했지만 Car Pay-in 결제는 성공한 경우 재전송 대기 이벤트를 저장한다.
-동일 결제 요청이 다시 들어오면 PMS 통보를 재시도하고, 성공 시 해당 키를 삭제한다.
+`NotifyRetryWorker`가 60초마다 SCAN으로 이 패턴의 키를 순회해 재시도하고, 성공 시 키를 삭제한다.
 
 TTL은 7일이다.
 
@@ -280,7 +303,7 @@ pre_reg:LOT_GN_01:12가3456 → "1"  (TTL: 3600)
 Redis는 두 인스턴스로 서비스를 분리 운영한다.
 
 **carpayin-redis (port 6379)** — Car Pay-in Backend 전용:
-QR 로그인, OAuth state 매핑, 현대 OAuth 임시 결과, AAOS 앱 로그인 polling, 카드 등록 웹뷰 상태, 사전 입차 등록 상태, 요금 quote처럼 짧은 시간 동안만 필요한 데이터를 TTL 기반으로 관리한다.
+QR 로그인, OAuth state 매핑, 현대 OAuth 임시 결과, AAOS 앱 로그인 polling, 카드 등록 웹뷰 상태, 사전 입차 등록 상태, 요금 quote, 알림 재시도 이벤트(`entry_notify_retry:*`, `pms_payment_retry:*`)처럼 짧은 시간 동안만 필요한 데이터를 TTL 기반으로 관리한다.
 
 **pms-redis (port 6380)** — PMS 전용:
 Car Pay-in 앱에서 사전 등록된 차량번호를 `pre_reg:{lot_id}:{plate}` 키로 TTL 1시간 관리한다.

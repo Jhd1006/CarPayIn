@@ -1,50 +1,87 @@
-# 06. 결제 완료 알림 Outbox / SQS / Lambda / IoT Core
+# 06. 앱 알림 발송과 재시도
 
 ## 목적
 
-결제 성공 후 앱에 결제 완료 알림을 보내야 하지만, 알림 발송은 결제 자체보다 실패 가능성이 높다.
-따라서 결제 성공 기록과 알림 발송 대상 이벤트를 Car Pay-in DB에 먼저 저장하고, Amazon SQS, Lambda, AWS IoT Core는 그 이후 전달 경로로 사용한다.
+Car Pay-in Backend는 입차 확정과 결제 완료 시점에 AAOS 앱에 알림을 보낸다.
+알림 발송이 실패해도 결제·세션 처리 자체는 보존되고, 백그라운드 워커가 주기적으로 재시도한다.
 
 ## 참여 컴포넌트
 
-- Car Pay-in Backend
-- Car Pay-in DB
-- Amazon SQS
-- Payment Notification Lambda
-- AWS IoT Core
-- AAOS App
+- Car Pay-in Backend (`MqttNotificationPublisher`, `NotifyRetryWorker`)
+- MQTT Broker (Eclipse Mosquitto)
+- carpayin-redis (재시도 이벤트 저장)
+- AAOS App (`MqttManager`)
+- Parking PMS (결제 완료 통보 수신)
 
-## 핵심 데이터
+## 알림 채널
 
-- `transactions`: 결제 성공/실패의 기준 기록
-- `payment_notification_outbox`: 앱에 보내야 할 결제 완료 알림 이벤트 기록
+paho-mqtt 라이브러리로 Mosquitto 브로커에 직접 발행한다.
 
-## 흐름
+MQTT 토픽:
 
-1. 사용자가 `/payment`를 호출하고 Mock PG 결제가 성공한다.
-2. Backend는 `transactions` row를 `success`로 갱신한다.
-3. Backend는 같은 결제 성공 처리에서 `payment_notification_outbox`에 `payment.completed` 이벤트를 `pending` 상태로 저장한다.
-4. Backend는 사용자에게 결제 성공 응답을 반환한다.
-5. 알림 worker는 `payment_notification_outbox`에서 `pending`이고 `next_attempt_at <= now()`인 이벤트를 조회한다.
-6. worker는 이벤트 상태를 `publishing`으로 변경한다.
-7. worker 또는 backend publisher는 SQS에 `payment.completed` 이벤트를 전송한다.
-8. Lambda는 SQS 메시지를 받아 AWS IoT Core topic으로 publish한다.
-9. 앱은 IoT Core를 통해 결제 완료 알림을 수신한다.
-10. 발송 성공 시 outbox row를 `published` 또는 `delivered`로 갱신한다.
-11. 발송 실패 시 `attempts`를 증가시키고 `next_attempt_at`을 뒤로 미뤄 재시도한다.
-12. `max_attempts`를 초과하면 `dead` 상태로 둔다.
+- 입차 확정: `parking/confirmed/{car_id}` (QoS 1)
+- 결제 완료: `payment/complete/{car_id}` (QoS 1)
 
-## 상태
+앱은 `isCleanSession=false` (persistent session)으로 연결한다. 앱이 오프라인 상태일 때 브로커가 QoS 1 메시지를 버퍼링하고, 재연결 시 전달한다.
 
-- `pending`: 아직 발송하지 않은 이벤트
-- `publishing`: worker가 처리 중인 이벤트
-- `published`: SQS 전송 또는 IoT publish까지 성공한 이벤트
-- `delivered`: 최종 전달 확인까지 성공한 이벤트
-- `failed`: 재시도 가능한 실패 상태
-- `dead`: 최대 재시도 횟수를 초과한 상태
+## 흐름 — 입차 확정 알림
+
+1. PMS 입차 webhook → `POST /webhook/entry` 처리 성공, `parking_sessions` 생성.
+2. `notification_publisher.publish_entry_notification()` 호출.
+   - 성공 → 앱이 `parking/confirmed/{car_id}` 수신 → `parked=true` 저장.
+   - 실패 → `entry_notify_retry:{session_id}` Redis 키 저장 (TTL 1시간).
+3. `NotifyRetryWorker`가 60초마다 `entry_notify_retry:*` 키를 SCAN해 재시도.
+4. 재시도 성공 → 키 삭제.
+
+```json
+// parking/confirmed/{car_id} 페이로드
+{
+  "session_id": "...",
+  "lot_id": "...",
+  "entry_time": "..."
+}
+```
+
+## 흐름 — 결제 완료 알림
+
+1. PG 결제 성공 → `transactions` success 갱신.
+2. `notification_publisher.publish_payment_notification()` 호출.
+   - 앱이 `payment/complete/{car_id}` 수신 → `parked=false` 저장.
+3. PMS `POST /payment/complete` 통보.
+   - 성공 → PMS `parking_sessions` `paid` 전환, 출구 차단기 개방 가능.
+   - 실패 → `pms_payment_retry:{tx_id}` Redis 키 저장 (TTL 7일).
+4. `NotifyRetryWorker`가 60초마다 `pms_payment_retry:*` 키를 SCAN해 재시도.
+5. 재시도 성공 → 키 삭제, PMS `paid` 전환.
+
+```json
+// payment/complete/{car_id} 페이로드
+{
+  "transaction_id": "...",
+  "approval_number": "...",
+  "lot_id": "...",
+  "amount": 6000
+}
+```
+
+## NotifyRetryWorker
+
+- 파일: `services/carpayin-backend/app/infra/workers/notify_retry_worker.py`
+- FastAPI lifespan(`asynccontextmanager`)으로 앱 시작 시 daemon thread 기동.
+- `interval_seconds=60` 기본값.
+- Redis SCAN (`cursor=0` 기반 비블로킹 순회, `count=100`씩).
+- 재시도 성공 시 해당 키 삭제 (멱등).
+- 재시도 실패 시 키 유지, 다음 interval에 재시도.
+
+## 재시도 TTL 정책
+
+| 알림 종류 | Redis 키 패턴 | TTL |
+|---|---|---|
+| 입차 확정 (MQTT) | `entry_notify_retry:{session_id}` | 1시간 |
+| PMS 결제 통보 | `pms_payment_retry:{tx_id}` | 7일 |
+
+PMS 통보 실패는 사용자가 결제를 마쳤는데 출구 차단기가 열리지 않는 직접적 불편을 유발하므로 TTL을 7일로 길게 잡는다.
 
 ## 이유
 
-- SQS는 전달 큐이므로 영구적인 업무 기록의 기준으로 두지 않는다.
-- 결제 성공과 알림 이벤트 생성을 DB에 함께 남기면, 결제는 성공했는데 알림 이벤트가 사라지는 상황을 줄일 수 있다.
-- 알림 발송 실패가 있어도 결제 성공은 유지되고, outbox 기반으로 안전하게 재시도할 수 있다.
+- 결제 성공(`transactions`)과 알림 발송을 분리한다. 알림 실패가 결제 롤백을 유발하지 않는다.
+- Redis TTL 기반 재시도: 성공 후 자동 삭제되고 단기 재시도 용도에 적합하다.
