@@ -40,7 +40,6 @@ from app.application.pms.register_pre_notify import (
 router = APIRouter()
 
 
-@router.post("/pms/parking/pre-register", response_model=PreRegisterResponse)
 @router.post("/parking/pre-register", response_model=PreRegisterResponse)
 def pre_register_plate(
     request: PreRegisterRequest,
@@ -56,7 +55,6 @@ def pre_register_plate(
     )
 
 
-@router.post("/pms/lpr/entry", response_model=LprEntryResponse)
 @router.post("/lpr/entry", response_model=LprEntryResponse)
 def handle_lpr_entry(
     request: LprEntryRequest,
@@ -75,7 +73,6 @@ def handle_lpr_entry(
     )
 
 
-@router.post("/pms/lpr/exit", response_model=LprExitResponse)
 @router.post("/lpr/exit", response_model=LprExitResponse)
 def handle_lpr_exit(
     request: LprExitRequest,
@@ -87,11 +84,6 @@ def handle_lpr_exit(
     return LprExitResponse(status=result.status, pms_session_id=result.pms_session_id)
 
 
-@router.get(
-    "/pms/parking/fee",
-    response_model=CalculateFeeResponse,
-    response_model_exclude_none=True,
-)
 @router.get(
     "/parking/fee",
     response_model=CalculateFeeResponse,
@@ -124,11 +116,6 @@ def calculate_fee(
     )
 
 
-@router.post(
-    "/pms/payment/complete",
-    response_model=PaymentCompleteResponse,
-    response_model_exclude_none=True,
-)
 @router.post(
     "/payment/complete",
     response_model=PaymentCompleteResponse,
