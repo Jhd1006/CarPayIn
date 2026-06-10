@@ -1,46 +1,46 @@
 # 04. Entry / Parking Session Use Cases
 
-## UC-PARK-001. 사전 입차 알림 등록
+## UC-PARK-001. 제휴 주차장 길안내 → 사전 입차 알림 등록
+
+트리거: 앱에서 제휴 주차장 목록(`GET /parking/lots`) 조회 후 원하는 주차장의 길안내 버튼 탭
 
 API:
 
-- `POST /pre-notify`
+- `GET /parking/lots` — 제휴 주차장 목록 조회 (인증 불필요)
+- `POST /parking/navigate` — 길안내 탭 시 사전 등록
 
 입력:
 
-- Bearer app access token
-- `car_id`
-- `lot_id`
-- `plate`
+- Bearer app access token (Authorization 헤더)
+- `lot_id`: 길안내를 누른 주차장 ID
 
 출력:
 
 - `status=registered`
-- `car_id`
-- `lot_id`
-- `plate`
+- `car_id`: 토큰에서 추출된 차량 ID
+- `lot_id`: 요청한 주차장 ID
+- `plate`: DB에서 조회한 차량번호
 
 사전 조건:
 
 - app access token이 유효해야 한다.
-- 요청 `car_id`가 access token에 연결된 차량과 같아야 한다.
-- 요청 `car_id`의 차량이 DB `vehicles`에 존재해야 한다.
-- 차량번호가 등록되어 있어야 한다.
+- 토큰의 `car_id`에 해당하는 차량이 DB `vehicles`에 존재해야 한다.
+- 해당 차량에 번호판(`plate`)이 등록되어 있어야 한다.
 - `vehicle_billing_keys`에 active billing key가 있어야 한다.
 
 처리:
 
-- token에서 `user_id`, `car_id`를 확인한다.
-- 요청 `car_id`와 token의 `car_id`가 같은지 검증한다.
-- DB에서 차량과 차량번호를 조회한다.
-- 요청 `plate`를 정규화하고 DB의 차량번호와 일치하는지 확인한다.
-- active billing key 존재 여부를 확인한다.
-- Redis `parking_pre_notify:{lot_id}:{plate}`를 incoming 상태로 저장한다.
-- PMS에 차량번호 사전 등록을 요청한다.
+- Authorization 헤더의 access token을 검증하고 `car_id`, `user_id`를 추출한다.
+- DB `vehicles`에서 `car_id`로 차량과 번호판을 조회한다.
+- 차량이 없거나 번호판이 미등록이면 400 반환.
+- `vehicle_billing_keys`에서 active billing key 존재 여부를 확인한다.
+- carpayin-redis에 `parking_pre_notify:{lot_id}:{plate}`를 incoming 상태로 저장한다 (TTL 1시간).
+- PMS에 `POST /parking/pre-register`로 `{ lot_id, plate }`를 전달해 pms-redis에 사전 등록한다.
 
 Redis 변경:
 
-- `parking_pre_notify:{lot_id}:{plate}` 저장
+- carpayin-redis: `parking_pre_notify:{lot_id}:{plate}` 저장 (TTL 1시간)
+- pms-redis: `pre_reg:{lot_id}:{plate}` 저장 (PMS가 직접 처리, TTL 1시간)
 
 DB 변경:
 
@@ -52,20 +52,17 @@ DB 변경:
 
 실패 케이스:
 
-- 인증 실패
-- 요청 차량과 token 차량 불일치
-- 차량 없음
-- 차량번호 없음
-- 요청 차량번호와 등록 차량번호 불일치
-- active billing key 없음
-- PMS 사전 등록 실패
+- 인증 실패 (토큰 없음 또는 유효하지 않음) → 401
+- 차량 없음 → 400
+- 차량번호 미등록 → 400
+- active billing key 없음 → 400
+- PMS 사전 등록 실패 → 400
 
 먼저 작성할 테스트:
 
 - active billing key가 있으면 Redis에 pre-notify를 저장하고 PMS를 호출한다.
 - billing key가 없으면 400을 반환하고 PMS를 호출하지 않는다.
 - 차량번호가 없으면 400을 반환한다.
-- token의 car_id와 요청 car_id가 다르면 403을 반환한다.
 - PMS 사전 등록에 실패한 경우 400을 반환한다.
 
 ## UC-PARK-002. PMS 입차 webhook 처리

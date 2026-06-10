@@ -29,13 +29,11 @@ class SimLocationResponse(BaseModel):
     updated_at: str
 
 
-class PreNotifyRequest(BaseModel):
-    car_id: str
+class NavigateRequest(BaseModel):
     lot_id: str
-    plate: str
 
 
-class PreNotifyResponse(BaseModel):
+class NavigateResponse(BaseModel):
     status: str
     car_id: str
     lot_id: str

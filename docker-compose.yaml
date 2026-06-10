@@ -80,6 +80,19 @@ services:
       timeout: 3s
       retries: 10
 
+  pms-redis:
+    image: redis:7-alpine
+    container_name: pms-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - pms_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   mqtt:
     image: eclipse-mosquitto:2
     container_name: carpayin-mqtt
@@ -195,6 +208,7 @@ services:
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
       PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
       PMS_FEE_PER_30_MINUTES: ${PMS_FEE_PER_30_MINUTES:-500}
+      PMS_REDIS_URL: ${PMS_REDIS_URL:-redis://pms-redis:6379/0}
       MQTT_HOST: ${MQTT_HOST:-mqtt}
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_ENABLED: ${MQTT_ENABLED:-true}
@@ -202,6 +216,8 @@ services:
       - "8001:8000"
     depends_on:
       pms-postgres:
+        condition: service_healthy
+      pms-redis:
         condition: service_healthy
       carpayin-backend:
         condition: service_healthy
@@ -219,3 +235,4 @@ volumes:
   mock_pg_postgres_data:
   pms_postgres_data:
   redis_data:
+  pms_redis_data:

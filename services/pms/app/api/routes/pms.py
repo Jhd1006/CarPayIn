@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import (
     get_calculate_fee_service,
     get_handle_lpr_entry_service,
+    get_handle_lpr_exit_service,
     get_record_payment_complete_service,
     get_register_pre_notify_service,
 )
@@ -10,6 +11,8 @@ from app.api.schemas.pms import (
     CalculateFeeResponse,
     LprEntryRequest,
     LprEntryResponse,
+    LprExitRequest,
+    LprExitResponse,
     PaymentCompleteRequest,
     PaymentCompleteResponse,
     PreRegisterRequest,
@@ -19,6 +22,10 @@ from app.application.pms.calculate_fee import CalculateFeeCommand, CalculateFeeS
 from app.application.pms.handle_lpr_entry import (
     HandleLprEntryCommand,
     HandleLprEntryService,
+)
+from app.application.pms.handle_lpr_exit import (
+    HandleLprExitCommand,
+    HandleLprExitService,
 )
 from app.application.pms.record_payment_complete import (
     RecordPaymentCompleteCommand,
@@ -66,6 +73,18 @@ def handle_lpr_entry(
         status=result.status,
         pms_session_id=result.pms_session_id,
     )
+
+
+@router.post("/pms/lpr/exit", response_model=LprExitResponse)
+@router.post("/lpr/exit", response_model=LprExitResponse)
+def handle_lpr_exit(
+    request: LprExitRequest,
+    service: HandleLprExitService = Depends(get_handle_lpr_exit_service),
+) -> LprExitResponse:
+    result = service.execute(
+        HandleLprExitCommand(lot_id=request.lot_id, plate=request.plate)
+    )
+    return LprExitResponse(status=result.status, pms_session_id=result.pms_session_id)
 
 
 @router.get(

@@ -9,10 +9,10 @@ from app.api.deps import (
 from app.api.schemas.parking import (
     EntryWebhookRequest,
     EntryWebhookResponse,
+    NavigateRequest,
+    NavigateResponse,
     ParkingLotResponse,
     ParkingLotsResponse,
-    PreNotifyRequest,
-    PreNotifyResponse,
     SimLocationRequest,
     SimLocationResponse,
 )
@@ -111,22 +111,20 @@ def get_sim_location() -> SimLocationResponse:
     return _sim_location
 
 
-@router.post("/pre-notify", response_model=PreNotifyResponse)
+@router.post("/parking/navigate", response_model=NavigateResponse)
 def register_pre_notify(
-    request: PreNotifyRequest,
+    request: NavigateRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
     service: RegisterPreNotifyService = Depends(get_register_pre_notify_service),
-) -> PreNotifyResponse:
+) -> NavigateResponse:
     result = service.execute(
         RegisterPreNotifyCommand(
             access_token=extract_bearer_token(authorization),
-            car_id=request.car_id,
             lot_id=request.lot_id,
-            plate=request.plate,
         )
     )
 
-    return PreNotifyResponse(
+    return NavigateResponse(
         status=result.status,
         car_id=result.car_id,
         lot_id=result.lot_id,

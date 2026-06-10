@@ -229,7 +229,7 @@ class CarPayInService : Service() {
             Log.d(TAG, "결제 완료 수신: $txId / ${"%,d".format(amount)}원")
             TransactionStore.save(this, txId, lotId, amount)
             ParkingStateManager.saveParkingState(this, false)
-            GeofenceManager.clearDetectedLots() // 같은 주차장 재방문 시 pre-notify 재활성화
+            GeofenceManager.clearDetectedLots() // 같은 주차장 재방문 시 지오펜스 재활성화
             handler.post {
                 onPaymentComplete?.invoke(txId, approvalNo, lotId, amount)
                 updateServiceNotif("CarPayIn 주차 감시 중")
@@ -241,30 +241,31 @@ class CarPayInService : Service() {
             )
         }
 
-        GeofenceManager.onParkingLotApproach = { lotId, lotName, triggerType ->
+        GeofenceManager.onParkingLotApproach = { lotId, lotName, _ ->
+            // 지오펜스 접근 감지는 UI 알림 용도로만 사용한다.
+            // 사전 등록은 사용자가 길안내 버튼을 탭할 때 navigateToParkingLot()에서 처리한다.
             handler.post { onLotApproaching?.invoke(lotId, lotName) }
-            // SharedPrefs 읽기와 HTTP 요청을 백그라운드 스레드로 분리
-            // (locationListener는 메인 스레드에서 실행되므로 여기서 블로킹 작업 금지)
-            Thread {
-                val plate = ParkingStateManager.getPlateNumber(this) ?: return@Thread
-                val carId = ParkingStateManager.getHyundaiCarId(this).ifBlank { return@Thread }
-                val token = getValidToken() ?: return@Thread
-                runCatching {
-                    ApiManager.sendPreNotification(carId, plate, lotId, triggerType, token)
-                    Log.d(TAG, "사전 알림 전송 완료: $lotId ($triggerType)")
-                    handler.post {
-                        updateServiceNotif("$lotName 사전 등록 완료")
-                        showEventNotif(
-                            NOTIF_PRE_REGISTER,
-                            "제휴 주차장 접근",
-                            "$lotName 사전 등록이 완료되었습니다"
-                        )
-                    }
-                }.onFailure {
-                    Log.e(TAG, "사전 알림 실패: ${it.message}")
-                }
-            }.start()
         }
+    }
+
+    fun navigateToParkingLot(lotId: String, lotName: String) {
+        Thread {
+            val token = getValidToken() ?: return@Thread
+            runCatching {
+                ApiManager.sendPreNotification(lotId, token)
+                Log.d(TAG, "사전 알림 전송 완료: $lotId")
+                handler.post {
+                    updateServiceNotif("$lotName 사전 등록 완료")
+                    showEventNotif(
+                        NOTIF_PRE_REGISTER,
+                        "제휴 주차장 길안내",
+                        "$lotName 사전 등록이 완료되었습니다"
+                    )
+                }
+            }.onFailure {
+                Log.e(TAG, "사전 알림 실패: ${it.message}")
+            }
+        }.start()
     }
 
     private fun pollFee() {

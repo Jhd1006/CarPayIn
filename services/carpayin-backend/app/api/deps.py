@@ -26,7 +26,6 @@ from app.infra.redis import (
     RedisAppLoginResultStore,
     RedisCardOrderStore,
     RedisFeeQuoteStore,
-    RedisHyundaiAccessTokenStore,
     RedisHyundaiOAuthResultStore,
     RedisOAuthStateStore,
     RedisPaymentNotifyRetryStore,
@@ -39,9 +38,6 @@ from app.infra.repositories.app_refresh_token_repository import (
 )
 from app.infra.repositories.billing_key_repository import (
     SqlAlchemyBillingKeyRepository,
-)
-from app.infra.repositories.hyundai_token_repository import (
-    SqlAlchemyHyundaiTokenRepository,
 )
 from app.infra.repositories.parking_session_repository import (
     SqlAlchemyParkingSessionRepository,
@@ -116,7 +112,6 @@ MOLIT_VERIFY_ENABLED = _env_bool("MOLIT_VERIFY_ENABLED", True)
 
 qr_session_store = RedisQrSessionStore(redis_client)
 oauth_state_store = RedisOAuthStateStore(redis_client)
-hyundai_access_token_store = RedisHyundaiAccessTokenStore(redis_client)
 hyundai_oauth_result_store = RedisHyundaiOAuthResultStore(redis_client)
 app_login_result_store = RedisAppLoginResultStore(redis_client)
 card_order_store = RedisCardOrderStore(redis_client)
@@ -210,12 +205,9 @@ def get_handle_hyundai_oauth_callback_service(
         qr_session_store=qr_session_store,
         hyundai_oauth_client=hyundai_oauth_client,
         user_repository=SqlAlchemyUserRepository(session),
-        hyundai_token_repository=SqlAlchemyHyundaiTokenRepository(session),
-        hyundai_access_token_store=hyundai_access_token_store,
         hyundai_oauth_result_store=hyundai_oauth_result_store,
         app_login_result_store=app_login_result_store,
         temp_access_token_issuer=security_components["temp_access_token_issuer"],
-        refresh_token_encryptor=security_components["refresh_token_encryptor"],
         public_base_url=PUBLIC_BASE_URL,
     )
 

@@ -8,7 +8,6 @@ from app.infra.redis.stores import (
     RedisAppLoginResultStore,
     RedisCardOrderStore,
     RedisFeeQuoteStore,
-    RedisHyundaiAccessTokenStore,
     RedisHyundaiOAuthResultStore,
     RedisOAuthStateStore,
     RedisPaymentNotifyRetryStore,
@@ -40,13 +39,11 @@ def test_auth_redis_stores_persist_status_and_ttl(redis_client):
     user_id = f"user-{unique_id}"
     qr_key = f"qr_session:{session_id}"
     state_key = f"oauth_state:{oauth_state}"
-    access_key = f"hyundai_access:{user_id}"
     oauth_result_key = f"hyundai_oauth:{session_id}"
     login_result_key = f"app_login_result:{session_id}"
 
     qr_store = RedisQrSessionStore(redis_client)
     state_store = RedisOAuthStateStore(redis_client)
-    access_store = RedisHyundaiAccessTokenStore(redis_client)
     oauth_result_store = RedisHyundaiOAuthResultStore(redis_client)
     login_result_store = RedisAppLoginResultStore(redis_client)
 
@@ -68,15 +65,6 @@ def test_auth_redis_stores_persist_status_and_ttl(redis_client):
         assert_ttl(redis_client, state_key, 900)
         state_store.mark_used(oauth_state)
         assert state_store.get_session_id(oauth_state) is None
-
-        access_store.save_access_token(
-            user_id=user_id, access_token="hyundai-access-token", ttl_seconds=3600
-        )
-        assert (
-            access_store.get_access_token(user_id)["hyundai_access_token"]
-            == "hyundai-access-token"
-        )
-        assert_ttl(redis_client, access_key, 3600)
 
         cars = [{"car_id": "car-001", "plate": "12TEST34"}]
         oauth_result_store.save_result(
@@ -107,7 +95,6 @@ def test_auth_redis_stores_persist_status_and_ttl(redis_client):
         redis_client.delete(
             qr_key,
             state_key,
-            access_key,
             oauth_result_key,
             login_result_key,
         )

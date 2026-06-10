@@ -17,7 +17,6 @@ VALID_USER_ID = "user-001"
 VALID_LOT_ID = "LOT_GN_01"
 VALID_PLATE = "12가3456"
 VALID_PLATE_NORMALIZED = "12가3456"
-VALID_TRIGGER = "geofence"
 
 
 class FakeTokenValidator:
@@ -149,7 +148,7 @@ def register_pre_notify_service(
 
 
 class TestRegisterPreNotify:
-    """UC-PARK-001 - POST /pre-notify"""
+    """UC-PARK-001 - POST /parking/navigate"""
 
     def test_active_billing_key_stores_redis_and_calls_pms(
         self,
@@ -165,9 +164,7 @@ class TestRegisterPreNotify:
 
         command = RegisterPreNotifyCommand(
             access_token=VALID_ACCESS_TOKEN,
-            car_id=VALID_CAR_ID,
             lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
         )
 
         result = register_pre_notify_service.execute(command)
@@ -190,38 +187,14 @@ class TestRegisterPreNotify:
         assert result.lot_id == VALID_LOT_ID
         assert result.plate == VALID_PLATE_NORMALIZED
 
-    def test_token_car_id_mismatch_raises_error(
-        self,
-        register_pre_notify_service,
-        fake_vehicle_repository,
-    ):
-        """token의 car_id와 요청 car_id가 다르면 403을 반환한다."""
-        fake_vehicle_repository.add_vehicle(VALID_CAR_ID, VALID_PLATE)
-
-        command = RegisterPreNotifyCommand(
-            access_token=VALID_ACCESS_TOKEN,
-            car_id="different-car-id",  # 토큰의 car_id와 다름
-            lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
-        )
-
-        with pytest.raises(ValueError) as exc_info:
-            register_pre_notify_service.execute(command)
-
-        assert str(exc_info.value) == "car_id_token_mismatch"
-
     def test_vehicle_not_found_raises_error(
         self,
         register_pre_notify_service,
     ):
         """차량이 없으면 400을 반환한다."""
-        # vehicle_repository에 차량을 추가하지 않음
-
         command = RegisterPreNotifyCommand(
             access_token=VALID_ACCESS_TOKEN,
-            car_id=VALID_CAR_ID,
             lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
         )
 
         with pytest.raises(ValueError) as exc_info:
@@ -239,35 +212,13 @@ class TestRegisterPreNotify:
 
         command = RegisterPreNotifyCommand(
             access_token=VALID_ACCESS_TOKEN,
-            car_id=VALID_CAR_ID,
             lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
         )
 
         with pytest.raises(ValueError) as exc_info:
             register_pre_notify_service.execute(command)
 
         assert str(exc_info.value) == "plate_not_registered"
-
-    def test_plate_mismatch_raises_error(
-        self,
-        register_pre_notify_service,
-        fake_vehicle_repository,
-    ):
-        """요청 차량번호와 등록 차량번호가 불일치하면 400을 반환한다."""
-        fake_vehicle_repository.add_vehicle(VALID_CAR_ID, "99나9999")
-
-        command = RegisterPreNotifyCommand(
-            access_token=VALID_ACCESS_TOKEN,
-            car_id=VALID_CAR_ID,
-            lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,  # DB에 등록된 것과 다름
-        )
-
-        with pytest.raises(ValueError) as exc_info:
-            register_pre_notify_service.execute(command)
-
-        assert str(exc_info.value) == "plate_mismatch"
 
     def test_no_active_billing_key_raises_error_and_does_not_call_pms(
         self,
@@ -277,13 +228,10 @@ class TestRegisterPreNotify:
     ):
         """billing key가 없으면 400을 반환하고 PMS를 호출하지 않는다."""
         fake_vehicle_repository.add_vehicle(VALID_CAR_ID, VALID_PLATE)
-        # billing_key_repository에 키를 추가하지 않음
 
         command = RegisterPreNotifyCommand(
             access_token=VALID_ACCESS_TOKEN,
-            car_id=VALID_CAR_ID,
             lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
         )
 
         with pytest.raises(ValueError) as exc_info:
@@ -306,9 +254,7 @@ class TestRegisterPreNotify:
 
         command = RegisterPreNotifyCommand(
             access_token=VALID_ACCESS_TOKEN,
-            car_id=VALID_CAR_ID,
             lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
         )
 
         with pytest.raises(Exception) as exc_info:

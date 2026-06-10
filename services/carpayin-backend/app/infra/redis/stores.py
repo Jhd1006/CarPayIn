@@ -76,20 +76,6 @@ class RedisOAuthStateStore(_RedisJsonStore):
         self._update(f"oauth_state:{oauth_state}", status="used")
 
 
-class RedisHyundaiAccessTokenStore(_RedisJsonStore):
-    def save_access_token(
-        self, *, user_id: str, access_token: str, ttl_seconds: int
-    ) -> None:
-        self._save(
-            f"hyundai_access:{user_id}",
-            {"hyundai_access_token": access_token},
-            ttl_seconds,
-        )
-
-    def get_access_token(self, user_id: str) -> dict | None:
-        return self._get(f"hyundai_access:{user_id}")
-
-
 class RedisHyundaiOAuthResultStore(_RedisJsonStore):
     def save_result(
         self,

@@ -67,7 +67,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /parking/lots`
 - `GET /sim/location`
 - `POST /sim/location`
-- `POST /pre-notify`
+- `POST /parking/navigate`
 - `POST /webhook/entry`
 - `GET /fee/{session_id}`
 - `POST /payment`

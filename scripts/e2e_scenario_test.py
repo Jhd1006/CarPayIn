@@ -121,10 +121,8 @@ print("\n=== Step 4: 입차 사전알림 / 주차 세션 생성 ===")
 LOT_ID = "LOT_TEST_01"
 PLATE = "12가3456"
 
-status, body = call("POST", "/pre-notify", {
-    "car_id": "test-car-001",
+status, body = call("POST", "/parking/navigate", {
     "lot_id": LOT_ID,
-    "plate": PLATE,
 })
 check("사전알림 등록 (Backend→PMS pre-register 포함)", status, body, 200, "status")
 print(f"    status: {body.get('status')}, lot_id: {body.get('lot_id')}")
