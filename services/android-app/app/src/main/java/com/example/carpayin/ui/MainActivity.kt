@@ -1204,12 +1204,6 @@ class MainActivity : AppCompatActivity() {
         val token = ParkingStateManager.getAccessToken(this)
         CarPayInService.stop(this)
         handler.removeCallbacks(timerRunnable)
-        token?.let {
-            Thread {
-                runCatching { ApiManager.unregister(it) }
-                    .onFailure { android.util.Log.w(TAG, "Server unregister failed: ${it.message}") }
-            }.start()
-        }
         ParkingStateManager.clearSession(this)
         TransactionStore.clear(this)
         approachingLotId = null
