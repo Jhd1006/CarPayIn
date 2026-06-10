@@ -34,3 +34,4 @@ def health_check() -> dict:
     return {"status": "ok"}
     
 app.include_router(pms_router)
+app.include_router(pms_router, prefix="/pms")
