@@ -1,22 +1,23 @@
 # 05. Fee / Payment / Exit Use Cases
 
-## Payment Notification Outbox Update
+## 알림 실패 재시도
 
-결제 성공 후 앱 결제 완료 알림은 바로 SQS/Lambda/IoT Core에만 의존하지 않고 Car Pay-in DB의 `payment_notification_outbox`에 먼저 저장한다.
+결제 성공과 알림 발송은 분리한다. 알림 실패가 결제 롤백을 유발하지 않는다.
 
 처리 흐름:
 
 - PG 결제가 성공하면 `transactions`를 `success`로 갱신한다.
-- 같은 DB 처리 흐름에서 `payment_notification_outbox`에 `payment.completed` 이벤트를 `pending` 상태로 저장한다.
-- 이후 backend publisher 또는 별도 worker가 `pending` 이벤트를 조회해 SQS로 전송한다.
-- Lambda가 SQS 메시지를 받아 AWS IoT Core로 결제 완료 알림을 발송한다.
-- 발송 상태에 따라 outbox row는 `published`, `delivered`, `failed`, `dead`로 갱신할 수 있다.
+- MQTT로 앱에 결제 완료 알림을 발송한다.
+- PMS에 `POST /payment/complete`로 결제 완료를 통보한다.
+- PMS 통보가 실패하면 `pms_payment_retry:{tx_id}` Redis 키로 저장한다 (TTL 7일).
+- `NotifyRetryWorker`가 60초마다 실패 키를 순회해 PMS 통보를 재시도한다.
+- 재시도 성공 시 해당 키를 삭제한다.
 
 이 구조를 쓰는 이유:
 
-- SQS/Lambda/IoT Core는 전달 경로이고, DB outbox는 보내야 할 알림의 기준 기록이다.
-- 결제 성공은 보존되어야 하므로 `transactions`와 outbox row가 함께 남아야 한다.
-- 알림 발송 실패가 있어도 결제 성공 자체는 유지하고, outbox 기반으로 재시도할 수 있다.
+- 결제 성공 자체는 `transactions`에 보존되고, PMS 통보 실패는 별도로 재시도한다.
+- PMS 통보가 실패하면 출구 차단기가 열리지 않으므로 빠른 재시도가 필요하다.
+- Redis TTL을 쓰는 이유: 재시도 이벤트는 단기 용도이고, 성공 후에는 자동 삭제된다.
 
 ## UC-PAY-001. 현재 주차 요금 조회와 quote 생성
 
@@ -138,7 +139,7 @@ DB 변경:
 
 - Mock PG billing payment API
 - PMS payment complete API
-- MQTT 또는 AWS IoT publish
+- MQTT publish
 
 실패 케이스:
 

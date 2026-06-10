@@ -99,12 +99,16 @@ API:
 - 있으면 `car_id`를 가져온다.
 - 해당 car_id에 active parking session이 이미 있는지 확인한다.
 - 없으면 DB `parking_sessions`에 active 세션을 생성한다.
-- Redis pre-notify를 삭제하거나 complete 처리한다.
-- 앱 알림용 message를 발행한다.
+- Redis pre-notify를 삭제한다.
+- 앱 알림용 message를 MQTT 브로커에 발행한다.
+  - 발행 성공 시 `entry_notify_retry:{session_id}` 키가 있으면 삭제한다 (재시도 중이던 경우).
+  - 발행 실패 시 `entry_notify_retry:{session_id}`에 이벤트를 저장한다 (TTL 1시간).
+  - `NotifyRetryWorker`가 60초마다 재시도해 앱 알림을 보낸다.
 
 Redis 변경:
 
-- `parking_pre_notify:{lot_id}:{plate}` 삭제 또는 complete 처리
+- `parking_pre_notify:{lot_id}:{plate}` 삭제
+- 알림 실패 시 `entry_notify_retry:{session_id}` 저장
 
 DB 변경:
 
@@ -112,7 +116,7 @@ DB 변경:
 
 외부 호출:
 
-- MQTT 또는 AWS IoT publish
+- MQTT publish
 
 실패 케이스:
 

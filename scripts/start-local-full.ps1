@@ -1,38 +1,29 @@
 ##############################################################################
 # start-local-full.ps1  -  Car Pay In full LOCAL test stack launcher
 #
-# Starts everything needed for local E2E testing:
-#   ngrok -> Hyundai OAuth callback
+# Starts everything needed for local E2E testing (without Webots):
+#   ngrok         -> Hyundai OAuth callback
 #   Docker Compose -> backend / pms / mock-pg / mock-card / redis / mqtt
-#   GPS proxy window -> Webots GPS injection to Android emulator
-#   Webots deploy (optional) -> Ubuntu desktop
+#   Android        -> updates local.properties for AAOS emulator
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts\start-local-full.ps1
 #
 # Flags:
 #   -NoRebuild    Skip Docker image rebuild
-#   -NoWebots     Skip Ubuntu Webots deploy
 #   -NotebookIp   Override auto-detected LAN IP
-#   -UbuntuRemote SSH target (default: homeless@192.168.200.201)
 ##############################################################################
 param(
-    [string] $NotebookIp   = "",
-    [string] $UbuntuRemote = "homeless@192.168.200.201",
-    [switch] $NoRebuild,
-    [switch] $NoWebots
+    [string] $NotebookIp = "",
+    [switch] $NoRebuild
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptDir      = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot       = Resolve-Path (Join-Path $ScriptDir "..")
-$EnvFile        = Join-Path $RepoRoot ".env"
-$WebotsEnv      = Join-Path $RepoRoot "services\webots\.env"
-$GpsProxy       = Join-Path $RepoRoot "services\webots\gps_proxy.py"
-$LocalProps     = Join-Path $RepoRoot "services\android-app\local.properties"
-$WebotsZip      = "C:\Users\USER\Desktop\Car Pay In\carpayin-webots-patched.zip"
-$ResetPs1       = "C:\Users\USER\Desktop\Car Pay In\reset_and_reinstall_webots_clean.ps1"
-$BackendPort    = 8000
+$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot    = Resolve-Path (Join-Path $ScriptDir "..")
+$EnvFile     = Join-Path $RepoRoot ".env"
+$LocalProps  = Join-Path $RepoRoot "services\android-app\local.properties"
+$BackendPort = 8000
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 function Step([string]$msg)  { Write-Host ""; Write-Host ">>> $msg" -ForegroundColor Cyan }
@@ -87,12 +78,6 @@ function Set-EnvKey([string]$path, [string]$key, [string]$value) {
     [System.IO.File]::WriteAllLines($path, $out, $Utf8NoBom)
 }
 
-function Find-Python {
-    if (Get-Command py     -ErrorAction SilentlyContinue) { return @("py", "-3") }
-    if (Get-Command python -ErrorAction SilentlyContinue) { return @("python") }
-    throw "Python not found. Add python or py to PATH."
-}
-
 function Get-NgrokUrl {
     try {
         $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 2
@@ -103,7 +88,7 @@ function Get-NgrokUrl {
 }
 
 # ── 0. Firewall ───────────────────────────────────────────────────────────────
-$fwPorts  = @(8000, 8001, 8002, 8003, 5600, 1883)
+$fwPorts  = @(8000, 8001, 8002, 8003, 1883)
 $fwRule   = Get-NetFirewallRule -DisplayName "CarPayIn-Local" -ErrorAction SilentlyContinue
 $fwPorted = if ($fwRule) { ($fwRule | Get-NetFirewallPortFilter).LocalPort } else { @() }
 $missing  = $fwPorts | Where-Object { $_ -notin $fwPorted }
@@ -127,14 +112,51 @@ if ($missing) {
     OK "Firewall: CarPayIn-Local OK (ports $($fwPorts -join ','))"
 }
 
+# ── 0b. Docker Desktop ───────────────────────────────────────────────────────
+Step "0/6  Docker Desktop"
+$dockerOk = $false
+try {
+    docker info 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $dockerOk = $true }
+} catch {}
+
+if (-not $dockerOk) {
+    # Docker Desktop 경로 후보
+    $dockerDesktopExe = @(
+        "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+        "$env:LOCALAPPDATA\Programs\Docker\Docker\Docker Desktop.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($dockerDesktopExe) {
+        INFO "Docker not running. Starting Docker Desktop..."
+        Start-Process -FilePath $dockerDesktopExe
+        Write-Host "  Waiting for Docker engine" -NoNewline
+        for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep 2
+            Write-Host "." -NoNewline
+            try {
+                docker info 2>$null | Out-Null
+                if ($LASTEXITCODE -eq 0) { $dockerOk = $true; break }
+            } catch {}
+        }
+        Write-Host ""
+        if ($dockerOk) { OK "Docker Desktop started" }
+        else { throw "Docker Desktop did not start in time. Launch it manually and re-run." }
+    } else {
+        throw "Docker is not running and Docker Desktop.exe was not found. Start Docker Desktop manually and re-run."
+    }
+} else {
+    OK "Docker Desktop already running"
+}
+
 # ── 1. Detect notebook LAN IP ────────────────────────────────────────────────
-Step "1/8  Detect notebook LAN IP"
+Step "1/6  Detect notebook LAN IP"
 if (-not $NotebookIp) { $NotebookIp = Get-LanIp }
 if (-not $NotebookIp) { throw "Cannot detect IP. Re-run with -NotebookIp 192.168.x.x" }
 OK "Notebook IP: $NotebookIp"
 
 # ── 2. ngrok ─────────────────────────────────────────────────────────────────
-Step "2/8  ngrok (Hyundai OAuth callback)"
+Step "2/6  ngrok (Hyundai OAuth callback)"
 $ngrokUrl = Get-NgrokUrl
 if ($ngrokUrl) {
     OK "ngrok already running: $ngrokUrl"
@@ -160,7 +182,7 @@ if ($ngrokUrl) {
 }
 
 # ── 3. Patch .env ────────────────────────────────────────────────────────────
-Step "3/8  Patch .env"
+Step "3/6  Patch .env"
 Set-EnvKey $EnvFile "PMS_DATABASE_URL"       "postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev"
 Set-EnvKey $EnvFile "MOCK_PG_DATABASE_URL"   "postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev"
 # 서비스 내부 URL: Docker 네트워크 내 컨테이너명으로 통신
@@ -174,25 +196,10 @@ if ($ngrokUrl) {
     Set-EnvKey $EnvFile "PUBLIC_BASE_URL" $ngrokUrl
     OK ".env: PUBLIC_BASE_URL=$ngrokUrl"
 }
-OK ".env: local DB URLs set"
+OK ".env: service URLs patched"
 
-# ── 4. Write webots .env ──────────────────────────────────────────────────────
-Step "4/8  Write services\webots\.env"
-$plate = [System.Text.Encoding]::UTF8.GetString([byte[]]@(49,50,51,234,176,128,52,53,54,55))
-$webotsContent = "# Auto-generated by start-local-full.ps1`n" +
-    "CARPAYIN_NOTEBOOK_IP=$NotebookIp`n" +
-    "BACKEND_URL=http://${NotebookIp}:8000`n" +
-    "PARKING_PMS_URL=http://${NotebookIp}:8001`n" +
-    "GPS_PROXY_URL=http://${NotebookIp}:5600`n" +
-    "ADB_HOST=$NotebookIp`n`n" +
-    "WEBOTS_VIN=TESTVIN001`n" +
-    "WEBOTS_PLATE=$plate`n" +
-    "WEBOTS_LOT_ID=LOT_TEST_01`n"
-[System.IO.File]::WriteAllText($WebotsEnv, $webotsContent, $Utf8NoBom)
-OK "Webots .env written"
-
-# ── 5. Docker Compose up ──────────────────────────────────────────────────────
-Step "5/8  Docker Compose up"
+# ── 4. Docker Compose up ──────────────────────────────────────────────────────
+Step "4/6  Docker Compose up"
 Push-Location $RepoRoot
 try {
     $composeArgs = @("compose", "up", "-d")
@@ -207,12 +214,12 @@ try {
 }
 OK "Docker Compose started"
 
-# ── 6. Wait for services ─────────────────────────────────────────────────────
-Step "6/8  Wait for services"
+# ── 5. Wait for services ─────────────────────────────────────────────────────
+Step "5/6  Wait for services"
 $backendOk  = Wait-Http "Backend   :8000" "http://localhost:8000/health"
-$pmsOk      = Wait-Http "PMS       :8001" "http://localhost:8001/openapi.json"
-$mockPgOk   = Wait-Http "Mock-PG   :8002" "http://localhost:8002/openapi.json"
-$mockCardOk = Wait-Http "Mock-Card :8003" "http://localhost:8003/openapi.json"
+$pmsOk      = Wait-Http "PMS       :8001" "http://localhost:8001/health"
+$mockPgOk   = Wait-Http "Mock-PG   :8002" "http://localhost:8002/health"
+$mockCardOk = Wait-Http "Mock-Card :8003" "http://localhost:8003/health"
 
 # MQTT는 HTTP가 아니므로 TCP 연결로 확인
 Write-Host "  Waiting MQTT      :1883" -NoNewline
@@ -225,71 +232,31 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 if (-not $mqttOk) { Write-Host " TIMEOUT" -ForegroundColor Yellow }
 
-try {
-    Invoke-WebRequest -Uri "http://localhost:8000/sim/location" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop | Out-Null
-    OK "/sim/location endpoint OK"
-} catch {
-    WARN "/sim/location 404 - backend image outdated. Re-run without -NoRebuild."
-}
-
-# ── 7. Android local.properties ──────────────────────────────────────────────
-Step "7/8  Android local.properties"
+# ── 6. Android local.properties ──────────────────────────────────────────────
+Step "6/6  Android local.properties"
 if (-not (Test-Path $LocalProps)) {
     Copy-Item (Join-Path $RepoRoot "services\android-app\local.properties.example") $LocalProps
     INFO "Created local.properties from example"
 }
-Set-EnvKey $LocalProps "CARPAYIN_BACKEND_BASE_URL"          "http://10.0.2.2:$BackendPort"
-Set-EnvKey $LocalProps "CARPAYIN_MQTT_BROKER_URL"           "tcp://10.0.2.2:1883"
+Set-EnvKey $LocalProps "CARPAYIN_BACKEND_BASE_URL"           "http://10.0.2.2:$BackendPort"
+Set-EnvKey $LocalProps "CARPAYIN_MQTT_BROKER_URL"            "tcp://10.0.2.2:1883"
 Set-EnvKey $LocalProps "CARPAYIN_EMULATOR_LOCALHOST_REWRITE" "true"
 if ($ngrokUrl) {
     Set-EnvKey $LocalProps "CARPAYIN_QR_BASE_URL" $ngrokUrl
-    OK "local.properties: backend=10.0.2.2:8000, QR=$ngrokUrl"
+    OK "local.properties: backend=10.0.2.2:8000, MQTT=10.0.2.2:1883, QR=$ngrokUrl"
 } else {
-    OK "local.properties: backend=10.0.2.2:8000 (QR URL not updated, ngrok not running)"
+    OK "local.properties: backend=10.0.2.2:8000, MQTT=10.0.2.2:1883 (QR URL not updated, ngrok not running)"
 }
 
-# ── GPS proxy ─────────────────────────────────────────────────────────────────
-Step "GPS proxy (port 5600)"
-$port5600 = netstat -ano 2>$null | Select-String ":5600 " | Select-String "LISTENING"
-if ($port5600) {
-    OK "GPS proxy already running on port 5600"
-} else {
-    $pyCmd   = Find-Python
-    $pyExe   = $pyCmd[0]
-    $pyArgs  = if ($pyCmd.Length -gt 1) { $pyCmd[1..($pyCmd.Length-1)] } else { @() }
-    $allArgs = $pyArgs + @($GpsProxy)
-    $gpsJob  = Start-Job -ScriptBlock { param($e,$a) & $e @a } -ArgumentList $pyExe,$allArgs
-    Start-Sleep -Seconds 3
-    $check = netstat -ano 2>$null | Select-String ":5600 " | Select-String "LISTENING"
-    if ($check) { OK "GPS proxy running (job $($gpsJob.Id))" }
-    else {
-        WARN "GPS proxy failed. Start manually: python `"$GpsProxy`""
-    }
-}
-
-# ── 8. Webots ─────────────────────────────────────────────────────────────────
-Step "8/8  Webots deploy (Ubuntu)"
-if ($NoWebots) {
-    WARN "-NoWebots flag set, skipping"
-} elseif (-not (Test-Path $ResetPs1) -or -not (Test-Path $WebotsZip)) {
-    WARN "Webots zip or reset script not found, skipping"
-} else {
-    INFO "Deploying to Ubuntu ($UbuntuRemote) ..."
-    & powershell -ExecutionPolicy Bypass -File $ResetPs1 -Remote $UbuntuRemote -NotebookIp $NotebookIp
-    if ($LASTEXITCODE -eq 0) { OK "Webots deployed" }
-    else { WARN "Webots deploy failed. Run reset script manually." }
-}
-
-# ADB check
+# Android emulator 감지
 $adb = Get-Command adb -ErrorAction SilentlyContinue
 if ($adb) {
     $devs = adb devices 2>&1 | Where-Object { $_ -match "emulator|device$" }
     if ($devs) { OK "Android emulator: $devs" }
-    else { WARN "Android emulator not detected - start AAOS emulator first" }
+    else { WARN "Android emulator not detected - start AAOS emulator before running the app" }
 } else {
-    WARN "adb not in PATH"
+    WARN "adb not in PATH - cannot check emulator status"
 }
-
 
 # ── Log windows ──────────────────────────────────────────────────────────────
 $services = @(
@@ -321,7 +288,6 @@ Write-Host ("    PMS       " + $(if ($pmsOk)      { $ok } else { $err }) + "http
 Write-Host ("    Mock-PG   " + $(if ($mockPgOk)   { $ok } else { $err }) + "http://localhost:8002")
 Write-Host ("    Mock-Card " + $(if ($mockCardOk) { $ok } else { $err }) + "http://localhost:8003")
 Write-Host ("    MQTT      " + $(if ($mqttOk) { $ok } else { $err }) + "tcp://localhost:1883  (emulator: tcp://10.0.2.2:1883)")
-Write-Host "    GPS Proxy  http://${NotebookIp}:5600"
 if ($ngrokUrl) {
     Write-Host "    ngrok      $ngrokUrl"
 }
@@ -334,15 +300,17 @@ if ($ngrokUrl) {
     Write-Host ""
 }
 Write-Host "  Test flow:"
-Write-Host "    1) Launch 'CarPayIn Webots' on Ubuntu desktop"
-Write-Host "    2) Run CarPayIn app on AAOS emulator"
-Write-Host "    3) QR login -> card registration"
-Write-Host "    4) Select parking lot -> navigation"
-Write-Host "    5) Arrow keys in Webots -> drive to parking -> LPR"
-Write-Host "    6) Payment notification -> auto payment"
+Write-Host "    1) Run CarPayIn app on AAOS emulator"
+Write-Host "    2) QR login -> vehicle confirmation -> card registration"
+Write-Host "    3) Select parking lot -> tap navigation button (사전 입차 등록)"
+Write-Host "    4) Trigger LPR: POST http://localhost:8001/lpr/entry"
+Write-Host "    5) App receives entry notification (parked=true)"
+Write-Host "    6) App shows fee -> approve payment -> auto payment"
+Write-Host "    7) Trigger exit LPR: POST http://localhost:8001/lpr/exit"
 Write-Host ""
-Write-Host "  Logs:"
-Write-Host "    docker compose logs -f carpayin-backend"
-Write-Host "    docker compose logs -f pms"
-Write-Host "    ssh $UbuntuRemote 'tail -f /tmp/carpayin_vehicle_driver.log'"
+Write-Host "  API docs:"
+Write-Host "    http://localhost:8000/docs   (Backend)"
+Write-Host "    http://localhost:8001/docs   (PMS)"
+Write-Host "    http://localhost:8002/docs   (Mock-PG)"
+Write-Host "    http://localhost:8003/docs   (Mock-Card)"
 Write-Host "================================================================"

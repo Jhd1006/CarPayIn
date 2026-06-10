@@ -26,7 +26,7 @@ Write-Host "  Car Pay In - Stop local stack" -ForegroundColor Cyan
 Write-Host "================================================================"
 
 # ── 1. Log windows (cmd /k docker compose logs ...) ──────────────────────
-Step "1/5  Close log windows"
+Step "1/3  Close log windows"
 $logProcs = Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" |
     Where-Object { $_.CommandLine -match "docker\s+compose\s+logs" }
 if ($logProcs) {
@@ -38,30 +38,8 @@ if ($logProcs) {
     OK "No log windows found"
 }
 
-# ── 2. GPS Proxy (port 5600) ──────────────────────────────────────────────
-Step "2/5  Stop GPS Proxy (:5600)"
-$port5600Lines = netstat -ano 2>$null | Select-String ":5600\s" | Select-String "LISTENING"
-if ($port5600Lines) {
-    $pidList = $port5600Lines | ForEach-Object {
-        ($_.Line -split '\s+') | Where-Object { $_ -match '^\d+$' } | Select-Object -Last 1
-    }
-    $pidList | Sort-Object -Unique | ForEach-Object {
-        $p = [int]$_
-        if ($p -gt 0) {
-            Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
-            OK "PID $p stopped (GPS proxy)"
-        }
-    }
-} else {
-    OK "GPS proxy not running"
-}
-# Clean up PS jobs
-Get-Job -ErrorAction SilentlyContinue |
-    Where-Object { $_.Command -match "gps_proxy" } |
-    ForEach-Object { Stop-Job $_ -ErrorAction SilentlyContinue; Remove-Job $_ -ErrorAction SilentlyContinue }
-
-# ── 3. ngrok ──────────────────────────────────────────────────────────────
-Step "3/5  Stop ngrok"
+# ── 2. ngrok ──────────────────────────────────────────────────────────────
+Step "2/3  Stop ngrok"
 if (-not $KeepNgrok) {
     $ngrokProcs = Get-Process ngrok -ErrorAction SilentlyContinue
     if ($ngrokProcs) {
@@ -74,8 +52,8 @@ if (-not $KeepNgrok) {
     WARN "-KeepNgrok: skipping ngrok"
 }
 
-# ── 4. Docker Compose ─────────────────────────────────────────────────────
-Step "4/5  Docker Compose"
+# ── 3. Docker Compose ─────────────────────────────────────────────────────
+Step "3/3  Docker Compose"
 if ($DownVolumes) {
     Write-Host "  docker compose down -v  (removes containers + volumes)"
     docker compose down -v
@@ -90,8 +68,7 @@ if ($DownVolumes) {
     OK "Services stopped  (restart: docker compose start)"
 }
 
-# ── 5. Status ─────────────────────────────────────────────────────────────
-Step "5/5  Final status"
+# ── Status ─────────────────────────────────────────────────────────────
 $running = docker compose ps -q 2>$null | Where-Object { $_ -ne "" }
 if ($running) {
     WARN "Still running: $($running -join ', ')"
@@ -107,4 +84,6 @@ Write-Host "================================================================"
 Write-Host ""
 Write-Host "  To restart (no rebuild):" -ForegroundColor Yellow
 Write-Host '    powershell -ExecutionPolicy Bypass -File scripts\start-local-full.ps1 -NoRebuild'
+Write-Host "  To reset all DB data:" -ForegroundColor Yellow
+Write-Host '    powershell -ExecutionPolicy Bypass -File scripts\stop-local-full.ps1 -DownVolumes'
 Write-Host ""

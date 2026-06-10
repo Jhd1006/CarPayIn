@@ -207,11 +207,9 @@ ON transactions(pg_tx_id);
 
 ## payment_notification_outbox
 
-결제 성공 이후 앱으로 전달해야 하는 결제 완료 알림 이벤트를 저장한다.
-Amazon SQS, Lambda, AWS IoT Core는 전달 경로이고, 이 테이블은 "보내야 할 알림"의 source of truth 역할을 한다.
-
-`transactions`가 `success`로 확정될 때 같은 DB transaction 안에서 outbox row를 만든다.
-이후 backend publisher 또는 별도 worker가 `pending` 이벤트를 조회해 SQS로 전송하고, Lambda/IoT Core 발송 상태에 따라 `published`, `delivered`, `failed`, `dead` 상태로 갱신한다.
+결제 성공 이후 앱으로 전달해야 하는 결제 완료 알림 이벤트 이력을 저장한다.
+테이블 스키마는 마이그레이션(`002_payment_notification_outbox`)으로 생성되어 있으나,
+현재 로컬 구현에서는 사용하지 않는다. 알림 재시도는 Redis 키(`pms_payment_retry:{tx_id}`)와 `NotifyRetryWorker`로 처리한다.
 
 ```sql
 CREATE TABLE payment_notification_outbox (
@@ -262,7 +260,7 @@ ON payment_notification_outbox(session_id);
 - `event_type`: 현재는 결제 완료 이벤트인 `payment.completed`
 - `channel`: 현재는 IoT 알림 채널인 `iot`
 - `destination`: IoT topic 또는 알림 대상 식별자. 예: `carpayin/cars/{car_id}/payments`
-- `payload`: SQS/Lambda/IoT Core로 전달할 알림 본문 JSON
+- `payload`: 알림 전달 시 사용할 본문 JSON
 - `status`: `pending`, `publishing`, `published`, `delivered`, `failed`, `dead`
 - `attempts`, `max_attempts`, `next_attempt_at`: 재시도 제어 정보
 - `published_at`, `delivered_at`, `failed_reason`: 전달 결과 추적 정보
