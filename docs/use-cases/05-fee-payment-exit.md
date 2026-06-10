@@ -50,7 +50,7 @@ API:
 - quote가 있으면 그대로 반환한다.
 - quote가 없으면 DB `parking_sessions`에서 active session을 조회한다.
 - PMS에 현재 요금을 요청한다.
-- PMS 결과를 Redis `parking_fee_quote:{session_id}`에 TTL 5분으로 저장한다.
+- PMS 결과를 Redis `parking_fee_quote:{session_id}`에 TTL 15분으로 저장한다.
 - 요금 정보를 반환한다.
 
 Redis 변경:
@@ -167,6 +167,8 @@ API:
 
 입력:
 
+- Header `X-Webhook-Timestamp`
+- Header `X-Webhook-Signature`
 - `pms_session_id`
 - `carpay_parking_session_id`
 - `carpay_tx_id`
@@ -182,10 +184,14 @@ API:
 사전 조건:
 
 - Car Pay-in transaction이 success 상태여야 한다.
+- PMS가 검증할 수 있는 payment complete webhook signature가 있어야 한다.
+- timestamp는 PMS 기준 5분 허용 오차 안에 있어야 한다.
 
 처리:
 
-- PMS에 결제 완료를 통보한다.
+- Car Pay-in Backend가 raw request body 기준으로 `HMAC-SHA256(PMS_WEBHOOK_SECRET, "{timestamp}.{sha256(raw_body)}")`를 생성한다.
+- PMS에 결제 완료 body와 `X-Webhook-Timestamp`, `X-Webhook-Signature`를 함께 통보한다.
+- PMS는 같은 방식으로 signature를 검증한 뒤 결제 완료를 기록한다.
 - PMS 응답을 확인한다.
 - 실패 시 재시도 대상 이벤트로 기록한다.
 
@@ -200,6 +206,7 @@ DB 변경:
 
 실패 케이스:
 
+- signature 불일치 또는 timestamp 만료
 - PMS timeout
 - PMS 5xx
 - PMS idempotency conflict
@@ -207,6 +214,7 @@ DB 변경:
 먼저 작성할 테스트:
 
 - 결제 성공 후 PMS paid notify payload가 정확히 생성된다.
+- PMS paid notify에 공통 webhook signature header가 포함된다.
 - PMS 실패 시 결제 성공 자체는 보존되고 재시도 가능 상태가 남는다.
 - 같은 idempotency_key로 PMS 통보가 중복되어도 안전하다.
 

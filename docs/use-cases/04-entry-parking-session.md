@@ -73,6 +73,8 @@ API:
 
 입력:
 
+- Header `X-Webhook-Timestamp`
+- Header `X-Webhook-Signature`
 - `pms_session_id`
 - `lot_id`
 - `plate`
@@ -86,9 +88,12 @@ API:
 사전 조건:
 
 - 요청이 신뢰 가능한 PMS에서 온 것이어야 한다.
+- timestamp는 백엔드 기준 5분 허용 오차 안에 있어야 한다.
 
 처리:
 
+- raw request body의 SHA-256 hash를 계산한다.
+- `HMAC-SHA256(PMS_WEBHOOK_SECRET, "{timestamp}.{sha256(raw_body)}")`를 계산해 `X-Webhook-Signature`와 비교한다.
 - `parking_pre_notify:{lot_id}:{plate}`를 조회한다.
 - 없으면 세션을 만들지 않고 `not_registered`를 반환한다.
 - 있으면 `car_id`를 가져온다.
@@ -111,14 +116,14 @@ DB 변경:
 
 실패 케이스:
 
-- PMS 인증 실패
+- PMS signature 불일치 또는 timestamp 만료
 - 동일 car_id의 active session 중복
 - pms_session_id 중복
 - entry_time 형식 오류
 
 먼저 작성할 테스트:
 
-- PMS 인증이 실패하면 401을 반환한다.
+- PMS signature가 실패하면 401을 반환한다.
 - pre-notify가 있으면 active parking session을 만든다.
 - pre-notify가 없으면 세션을 만들지 않고 not_registered를 반환한다.
 - 같은 pms_session_id webhook이 중복되어도 세션이 중복 생성되지 않는다.

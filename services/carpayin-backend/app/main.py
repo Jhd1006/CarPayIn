@@ -47,6 +47,7 @@ async def value_error_handler(request: Request, exc: ValueError):
         status_code = 404
     elif error_code in {
         "invalid_token",
+        "invalid_signature",
         "pms_auth_failed",
         "refresh_token_not_found",
         "refresh_token_revoked",

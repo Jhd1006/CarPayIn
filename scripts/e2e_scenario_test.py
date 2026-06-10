@@ -13,7 +13,7 @@ TOKEN = open("/tmp/carpayin_token.txt").read().strip()
 CARPAYIN_BASE = "http://127.0.0.1:8000"
 PMS_BASE = "http://pms:8000"
 PG_WEBHOOK_SECRET = "mock-pg-webhook-secret"
-PMS_TOKEN = "pms-webhook-token"
+PMS_WEBHOOK_SECRET = "pms-webhook-secret"
 
 
 def call(method, path, body=None, extra_headers=None, base_url=CARPAYIN_BASE, no_auth=False):

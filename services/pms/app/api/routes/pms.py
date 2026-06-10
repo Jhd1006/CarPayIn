@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Request
 
 from app.api.deps import (
     get_calculate_fee_service,
     get_handle_lpr_entry_service,
     get_handle_lpr_exit_service,
+    get_payment_webhook_signature_verifier,
     get_record_payment_complete_service,
     get_register_pre_notify_service,
 )
@@ -35,6 +36,7 @@ from app.application.pms.register_pre_notify import (
     RegisterPreNotifyCommand,
     RegisterPreNotifyService,
 )
+from app.infra.security import WebhookSignatureVerifier
 
 
 router = APIRouter()
@@ -121,12 +123,26 @@ def calculate_fee(
     response_model=PaymentCompleteResponse,
     response_model_exclude_none=True,
 )
-def record_payment_complete(
+async def record_payment_complete(
     request: PaymentCompleteRequest,
+    http_request: Request,
+    webhook_timestamp: str = Header(alias="X-Webhook-Timestamp"),
+    webhook_signature: str = Header(alias="X-Webhook-Signature"),
     service: RecordPaymentCompleteService = Depends(
         get_record_payment_complete_service,
     ),
+    signature_verifier: WebhookSignatureVerifier = Depends(
+        get_payment_webhook_signature_verifier,
+    ),
 ) -> PaymentCompleteResponse:
+    raw_body = await http_request.body()
+    if not signature_verifier.verify(
+        timestamp=webhook_timestamp,
+        signature=webhook_signature,
+        body=raw_body,
+    ):
+        raise PermissionError("invalid_signature")
+
     result = service.execute(
         RecordPaymentCompleteCommand(
             pms_session_id=request.pms_session_id,

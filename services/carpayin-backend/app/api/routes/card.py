@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Request
 
 from app.api.deps import (
     get_create_card_order_service,
@@ -48,17 +48,23 @@ def create_card_order(
 
 
 @router.post("/webhook", response_model=CardWebhookResponse)
-def handle_card_webhook(
+async def handle_card_webhook(
     request: CardWebhookRequest,
+    http_request: Request,
+    webhook_timestamp: str = Header(alias="X-Webhook-Timestamp"),
+    webhook_signature: str = Header(alias="X-Webhook-Signature"),
     service: HandleCardWebhookService = Depends(get_handle_card_webhook_service),
 ) -> CardWebhookResponse:
+    raw_body = await http_request.body()
     result = service.execute(
         HandleCardWebhookCommand(
             order_id=request.order_id,
             billing_key=request.billing_key,
             card_last_four=request.card_last_four,
             status=request.status,
-            signature=request.signature,
+            signature=webhook_signature,
+            signature_timestamp=webhook_timestamp,
+            raw_body=raw_body,
         )
     )
 

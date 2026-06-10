@@ -21,6 +21,17 @@ async def value_error_handler(request: Request, exc: ValueError):
     )
 
 
+@app.exception_handler(PermissionError)
+async def permission_error_handler(request: Request, exc: PermissionError):
+    return JSONResponse(
+        status_code=401,
+        content={
+            "code": "UNAUTHORIZED",
+            "message": str(exc),
+        },
+    )
+
+
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError):
     # 동시 LPR 진입 등 유니크 제약 위반 — 이미 활성 세션이 있다는 의미

@@ -23,7 +23,7 @@
 
 ## 핵심 개념
 
-`parking_fee_quote:{session_id}`는 앱에 보여준 요금이 결제 요청 시에도 같은지 검증하기 위한 Redis key다. 요금은 시간이 지나면 바뀔 수 있으므로 짧은 TTL로 관리한다.
+`parking_fee_quote:{session_id}`는 앱에 보여준 요금이 결제 요청 시에도 같은지 검증하기 위한 Redis key다. 요금은 시간이 지나면 바뀔 수 있으므로 15분 TTL로 관리한다.
 
 `transactions`는 Car Pay-in 기준 결제 이력이다. 결제 요청이 들어오면 먼저 `pending` 상태로 만들고, PG 결과에 따라 `success` 또는 `failed`로 업데이트한다.
 
@@ -40,7 +40,7 @@
 7. quote가 없으면 백엔드는 Car Pay-in DB의 `parking_sessions`에서 active 세션을 조회한다.
 8. 백엔드는 PMS에 현재 주차 요금을 요청한다.
 9. PMS는 입차 시각과 요금 정책을 기준으로 amount와 duration을 계산해 반환한다.
-10. 백엔드는 이 결과를 Redis의 `parking_fee_quote:{session_id}`에 저장한다.
+10. 백엔드는 이 결과를 Redis의 `parking_fee_quote:{session_id}`에 15분 TTL로 저장한다.
 
 ```json
 {

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Request
 
 from app.api.deps import (
     get_handle_entry_webhook_service,
@@ -112,18 +112,23 @@ def register_pre_notify(
 
 
 @router.post("/webhook/entry", response_model=EntryWebhookResponse)
-def handle_entry_webhook(
+async def handle_entry_webhook(
     request: EntryWebhookRequest,
-    pms_signature: str = Header(alias="X-PMS-Signature"),
+    http_request: Request,
+    webhook_timestamp: str = Header(alias="X-Webhook-Timestamp"),
+    webhook_signature: str = Header(alias="X-Webhook-Signature"),
     service: HandleEntryWebhookService = Depends(get_handle_entry_webhook_service),
 ) -> EntryWebhookResponse:
+    raw_body = await http_request.body()
     result = service.execute(
         HandleEntryWebhookCommand(
-            pms_token=pms_signature,
+            pms_token=webhook_signature,
             pms_session_id=request.pms_session_id,
             lot_id=request.lot_id,
             plate=request.plate,
             entry_time=request.entry_time,
+            signature_timestamp=webhook_timestamp,
+            raw_body=raw_body,
         )
     )
 

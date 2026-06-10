@@ -23,8 +23,10 @@ sequenceDiagram
     PMS->>PMSDB: INSERT parking_sessions (all cars)
     PMS->>PmsRedis: Check pre_reg:{lot_id}:{plate}
     PMS->>PmsRedis: Delete pre_reg key (consume)
-    PMS-->>Backend: POST /webhook/entry
+    PMS->>PMS: Sign raw body with PMS_WEBHOOK_SECRET
+    PMS-->>Backend: POST /webhook/entry with X-Webhook headers
 
+    Backend->>Backend: Verify raw body HMAC and timestamp
     Backend->>CpRedis: Read parking_pre_notify:{lot_id}:{plate}
     Backend->>DB: INSERT parking_sessions
     Backend->>CpRedis: Delete parking_pre_notify:{lot_id}:{plate}
