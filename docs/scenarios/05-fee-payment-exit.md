@@ -70,7 +70,7 @@
 22. Mock PG는 PG 기준 거래를 `success`로 업데이트하고 `pg_tx_id`, `approval_no`를 백엔드에 반환한다.
 23. 백엔드는 Car Pay-in DB의 `transactions`를 `success`로 업데이트한다.
 24. 백엔드는 `parking_sessions`를 `completed`로 업데이트한다.
-25. 백엔드는 PMS에 paid 통보를 보낸다 (`POST /pms/payment/complete`).
+25. 백엔드는 PMS에 paid 통보를 보낸다 (`POST /payment/complete`).
 26. PMS는 PMS DB의 `parking_sessions` 상태를 `paid`로 변경한다. 이 시점에 차단기는 열지 않는다.
 27. 앱은 결제 완료 응답을 받고 로컬 상태를 `parked=false`로 바꾼다.
 28. 차량이 출구에 도착하면 출구 LPR이 번호판을 인식한다 (Webots 시뮬레이션에서는 GPS 근접 감지로 대체).

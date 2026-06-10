@@ -46,10 +46,10 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 ## Main Endpoints
 
-- `POST /pms/parking/pre-register`
-- `POST /pms/lpr/entry`
-- `GET /pms/parking/fee`
-- `POST /pms/payment/complete`
+- `POST /parking/pre-register`
+- `POST /lpr/entry`
+- `GET /parking/fee`
+- `POST /payment/complete`
+- `POST /lpr/exit`
 
-Short aliases without the `/pms` prefix also exist for local simulation.
 The API contract is included in `../../docs/api/car-pay-in-openapi.yaml`.

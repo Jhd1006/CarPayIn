@@ -78,18 +78,6 @@ class TestHandleLprEntryApi:
         assert response.json()["status"] == "created"
         assert response.json()["pms_session_id"] == VALID_PMS_SESSION_ID
 
-    def test_openapi_prefixed_path_returns_created_session(
-        self,
-        api_client_with_created_service_stub,
-    ):
-        response = api_client_with_created_service_stub.post(
-            "/pms/lpr/entry",
-            json=valid_lpr_payload(),
-        )
-
-        assert response.status_code == 200
-        assert response.json()["pms_session_id"] == VALID_PMS_SESSION_ID
-
     def test_active_session_returns_existing_session(
         self,
         api_client_with_existing_service_stub,

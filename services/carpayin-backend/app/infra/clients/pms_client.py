@@ -25,11 +25,11 @@ class HttpxPmsClient:
         """
         PMS에 차량 번호판을 사전 등록한다.
 
-        POST /pms/parking/pre-register
+        POST /parking/pre-register
         """
         try:
             response = httpx.post(
-                f"{self._base_url}/pms/parking/pre-register",
+                f"{self._base_url}/parking/pre-register",
                 json={"lot_id": lot_id, "plate": plate},
                 timeout=self._timeout,
             )
@@ -45,7 +45,7 @@ class HttpxPmsClient:
         """
         PMS에서 현재 주차 요금을 조회한다.
 
-        GET /pms/parking/fee?lot_id=&plate=[&pms_session_id=]
+        GET /parking/fee?lot_id=&plate=[&pms_session_id=]
 
         pms_session_id를 함께 전달하면 PMS 쪽에서 lot+plate 조회 실패 시
         session_id로 폴백 조회할 수 있어 더 안정적이다.
@@ -58,7 +58,7 @@ class HttpxPmsClient:
             params["pms_session_id"] = pms_session_id
         try:
             response = httpx.get(
-                f"{self._base_url}/pms/parking/fee",
+                f"{self._base_url}/parking/fee",
                 params=params,
                 timeout=self._timeout,
             )
@@ -89,11 +89,11 @@ class HttpxPmsClient:
         """
         PMS에 결제 완료를 통보한다.
 
-        POST /pms/payment/complete
+        POST /payment/complete
         """
         try:
             response = httpx.post(
-                f"{self._base_url}/pms/payment/complete",
+                f"{self._base_url}/payment/complete",
                 json={
                     "pms_session_id": pms_session_id,
                     "carpay_parking_session_id": carpay_parking_session_id,
