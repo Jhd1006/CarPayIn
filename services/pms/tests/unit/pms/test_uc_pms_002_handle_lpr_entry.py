@@ -17,24 +17,20 @@ VALID_PLATE = "12가3456"
 VALID_ENTRY_TIME = "2026-05-20T14:30:00"
 
 
-class FakePreRegistrationRepository:
+class FakePreRegistrationStore:
     def __init__(self):
         self.registrations = {
             (VALID_LOT_ID, VALID_PLATE): {
                 "lot_id": VALID_LOT_ID,
                 "plate": VALID_PLATE,
-                "status": "pre_registered",
             }
         }
 
     def get_active_pre_registration(self, *, lot_id: str, plate: str):
-        registration = self.registrations.get((lot_id, plate))
-        if registration is None or registration["status"] != "pre_registered":
-            return None
-        return registration
+        return self.registrations.get((lot_id, plate))
 
     def consume_pre_registration(self, *, lot_id: str, plate: str):
-        self.registrations[(lot_id, plate)]["status"] = "consumed"
+        self.registrations.pop((lot_id, plate), None)
 
 
 class FakePmsSessionRepository:
@@ -101,7 +97,7 @@ class FakeCarPayInWebhookClient:
 
 @pytest.fixture
 def fake_pre_registration_repository():
-    return FakePreRegistrationRepository()
+    return FakePreRegistrationStore()
 
 
 @pytest.fixture
@@ -187,9 +183,9 @@ class TestHandleLprEntry:
         assert second_result.pms_session_id == first_session_id
         assert second_result.status == "existing"
 
-        # 세션이 하나만 존재
+        # 세션이 하나만 존재, webhook은 첫 번째 요청에서만 발생
         assert len(fake_pms_session_repository.sessions) == 1
-        assert len(fake_carpayin_webhook_client.webhook_calls) == 2
+        assert len(fake_carpayin_webhook_client.webhook_calls) == 1
 
     def test_webhook_payload_contains_required_fields(
         self,
@@ -215,15 +211,24 @@ class TestHandleLprEntry:
         assert webhook_payload["plate"] == VALID_PLATE
         assert webhook_payload["entry_time"] == VALID_ENTRY_TIME
 
-    def test_unregistered_plate_is_rejected(self, handle_lpr_entry_service):
+    def test_unregistered_plate_creates_session_without_webhook(
+        self,
+        handle_lpr_entry_service,
+        fake_pms_session_repository,
+        fake_carpayin_webhook_client,
+    ):
+        """사전등록 안 된 차량도 세션은 생성하되 webhook은 전송하지 않는다."""
         command = HandleLprEntryCommand(
             lot_id=VALID_LOT_ID,
             plate="99UNKNOWN",
             entry_time=VALID_ENTRY_TIME,
         )
 
-        with pytest.raises(ValueError, match="pre_registration_not_found"):
-            handle_lpr_entry_service.execute(command)
+        result = handle_lpr_entry_service.execute(command)
+
+        assert result.status == "created"
+        assert result.pms_session_id is not None
+        assert len(fake_carpayin_webhook_client.webhook_calls) == 0
 
     def test_entry_barrier_opens_on_lpr(
         self,
@@ -256,7 +261,7 @@ class TestHandleLprEntry:
         fake_pms_session_repository,
         fake_carpayin_webhook_client,
     ):
-        """사전등록 안 된 차량도 입구 차단기는 열린다."""
+        """사전등록 안 된 차량도 입구 차단기가 열리고 세션이 생성된다."""
         barrier = FakeBarrierPublisher()
         service = HandleLprEntryService(
             pre_registration_repository=fake_pre_registration_repository,
@@ -270,8 +275,8 @@ class TestHandleLprEntry:
             entry_time=VALID_ENTRY_TIME,
         )
 
-        with pytest.raises(ValueError):
-            service.execute(command)
+        result = service.execute(command)
 
-        # 예외가 나도 차단기는 이미 열렸어야 함
+        assert result.status == "created"
         assert len(barrier.entry_calls) == 1
+        assert len(fake_carpayin_webhook_client.webhook_calls) == 0

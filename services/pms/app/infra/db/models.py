@@ -13,24 +13,6 @@ import uuid
 Base = declarative_base()
 
 
-class PreRegistration(Base):
-    __tablename__ = 'pre_registrations'
-
-    lot_id = Column(Text, primary_key=True)
-    plate = Column(String(20), primary_key=True)
-    status = Column(Text, nullable=False, default='pre_registered')
-    registered_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    consumed_at = Column(DateTime(timezone=True), nullable=True)
-
-    __table_args__ = (
-        CheckConstraint(
-            "status IN ('pre_registered', 'consumed', 'cancelled')",
-            name='ck_pms_pre_registrations_status',
-        ),
-        Index('idx_pms_pre_registrations_status', 'status'),
-    )
-
-
 class PMSParkingSession(Base):
     """PMS 기준 주차 세션 정보"""
     __tablename__ = 'parking_sessions'
@@ -49,7 +31,7 @@ class PMSParkingSession(Base):
     
     # Constraints and Indexes
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'exited', 'cancelled')", name='ck_pms_parking_sessions_status'),
+        CheckConstraint("status IN ('active', 'paid', 'exited', 'cancelled')", name='ck_pms_parking_sessions_status'),
         Index('idx_pms_parking_sessions_plate', 'plate'),
         Index('idx_pms_parking_sessions_status', 'status'),
         Index('uniq_active_pms_session_per_plate', 'plate', unique=True, postgresql_where=text("status = 'active'")),

@@ -34,6 +34,15 @@ class SqlAlchemyPmsSessionRepository:
         obj = self.session.scalar(stmt)
         return self._to_dict(obj) if obj else None
 
+    def get_paid_session_by_lot_and_plate(self, *, lot_id, plate):
+        stmt = select(PMSParkingSession).where(
+            PMSParkingSession.lot_id == lot_id,
+            PMSParkingSession.plate == plate,
+            PMSParkingSession.status == "paid",
+        )
+        obj = self.session.scalar(stmt)
+        return self._to_dict(obj) if obj else None
+
     def get_active_session_by_lot_and_plate(self, *, lot_id, plate):
         stmt = select(PMSParkingSession).where(
             PMSParkingSession.lot_id == lot_id,
@@ -50,8 +59,16 @@ class SqlAlchemyPmsSessionRepository:
         obj.status = status
         self.session.commit()
 
+    def mark_paid(self, pms_session_id):
+        """결제 완료 통보 수신 시 paid 상태로 변경. 출차 LPR에서 exited로 전환."""
+        obj = self.session.get(PMSParkingSession, pms_session_id)
+        if obj is None:
+            raise LookupError("session_not_found")
+        obj.status = "paid"
+        self.session.commit()
+
     def mark_exited(self, pms_session_id):
-        """결제 완료 후 세션 exited 상태 + exit_time 기록."""
+        """출차 LPR 확인 후 exited 상태 + exit_time 기록."""
         obj = self.session.get(PMSParkingSession, pms_session_id)
         if obj is None:
             raise LookupError("session_not_found")

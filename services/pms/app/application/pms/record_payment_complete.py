@@ -21,9 +21,8 @@ class RecordPaymentCompleteResult:
 
 
 class RecordPaymentCompleteService:
-    def __init__(self, payment_request_repository, barrier_publisher, pms_session_repository=None):
+    def __init__(self, payment_request_repository, pms_session_repository=None):
         self.payment_request_repository = payment_request_repository
-        self.barrier_publisher = barrier_publisher
         self.pms_session_repository = pms_session_repository
 
     def execute(self, command: RecordPaymentCompleteCommand) -> RecordPaymentCompleteResult:
@@ -43,10 +42,9 @@ class RecordPaymentCompleteService:
 
         if self.pms_session_repository is not None:
             try:
-                self.pms_session_repository.mark_exited(command.pms_session_id)
-                _logger.info("pms_session_exited: %s", command.pms_session_id)
+                self.pms_session_repository.mark_paid(command.pms_session_id)
+                _logger.info("pms_session_paid: %s", command.pms_session_id)
             except LookupError:
                 _logger.warning("session_not_found_on_payment: %s", command.pms_session_id)
 
-        self.barrier_publisher.open_exit(pms_session_id=command.pms_session_id)
         return RecordPaymentCompleteResult(status="success")

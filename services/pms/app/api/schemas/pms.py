@@ -48,3 +48,13 @@ class PaymentCompleteResponse(BaseModel):
     status: str
     pms_session_id: str | None = None
     carpay_tx_id: str | None = None
+
+
+class LprExitRequest(BaseModel):
+    lot_id: str
+    plate: str
+
+
+class LprExitResponse(BaseModel):
+    status: str
+    pms_session_id: str | None = None

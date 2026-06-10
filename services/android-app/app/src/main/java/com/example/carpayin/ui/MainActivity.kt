@@ -613,11 +613,9 @@ class MainActivity : AppCompatActivity() {
                     handler.postDelayed({
                         Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
                     }, 1_500)
-                    val plate = ParkingStateManager.getPlateNumber(this)
                     val token = ParkingStateManager.getAccessToken(this)
-                    val carId = ParkingStateManager.getHyundaiCarId(this)
-                    if (plate != null && token != null && carId.isNotBlank()) {
-                        Thread { runCatching { ApiManager.sendPreNotification(carId, plate, lot.id, "NAVI", token) } }.start()
+                    if (token != null) {
+                        Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
                     }
                     Toast.makeText(this, "🧭 ${lot.name} 경로 안내 시작", Toast.LENGTH_SHORT).show()
                 } else {

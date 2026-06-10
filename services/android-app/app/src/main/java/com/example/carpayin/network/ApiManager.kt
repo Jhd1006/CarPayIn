@@ -206,11 +206,11 @@ object ApiManager {
         }
     }
 
-    fun sendPreNotification(carId: String, plate: String, lotId: String, triggerType: String, accessToken: String) {
+    fun sendPreNotification(lotId: String, accessToken: String) {
         val body = JSONObject().apply {
-            put("car_id", carId); put("plate", plate); put("lot_id", lotId); put("trigger", triggerType.lowercase())
+            put("lot_id", lotId)
         }.toString()
-        postJson(URL("$BASE_URL/pre-notify"), body, accessToken)
+        postJson(URL("$BASE_URL/parking/navigate"), body, accessToken)
     }
 
     fun queryFee(fallbackLotId: String, sessionId: String, accessToken: String): FeeResult {

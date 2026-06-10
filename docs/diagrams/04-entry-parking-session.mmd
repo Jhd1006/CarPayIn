@@ -1,28 +1,31 @@
 sequenceDiagram
     participant App as AAOS App
     participant Backend as Car Pay-in Backend
-    participant Redis as Redis
+    participant CpRedis as carpayin-redis
     participant DB as Car Pay-in DB
     participant PMS as Parking PMS
+    participant PmsRedis as pms-redis
     participant PMSDB as PMS DB
     participant LPR as LPR Camera
 
-    App->>Backend: POST /pre-notify with car_id, lot_id, plate
-    Backend->>DB: Read vehicles
+    App->>Backend: POST /parking/navigate {lot_id}
+    Backend->>DB: Read vehicles (car_id from token)
     Backend->>DB: Check active vehicle_billing_keys
-    Backend->>Redis: Save parking_pre_notify:{lot_id}:{plate}
+    Backend->>CpRedis: Save parking_pre_notify:{lot_id}:{plate}
 
-    Backend->>PMS: Register plate
-    PMS->>PMSDB: Save pre-registered plate
+    Backend->>PMS: POST /parking/pre-register {lot_id, plate}
+    PMS->>PmsRedis: Save pre_reg:{lot_id}:{plate} TTL 1h
     PMS-->>Backend: Return ok
-    Backend-->>App: Return pre-notify ok
+    Backend-->>App: Return registered
 
     LPR->>PMS: Detect plate at entry gate
-    PMS->>PMSDB: INSERT parking_sessions
-    PMS->>PMSDB: Mark pre-registered plate consumed
+    PMS->>PMS: Open entry barrier (all cars)
+    PMS->>PMSDB: INSERT parking_sessions (all cars)
+    PMS->>PmsRedis: Check pre_reg:{lot_id}:{plate}
+    PMS->>PmsRedis: Delete pre_reg key (consume)
     PMS-->>Backend: POST /webhook/entry
 
-    Backend->>Redis: Read parking_pre_notify:{lot_id}:{plate}
+    Backend->>CpRedis: Read parking_pre_notify:{lot_id}:{plate}
     Backend->>DB: INSERT parking_sessions
-    Backend->>Redis: Delete parking_pre_notify:{lot_id}:{plate}
-    Backend-->>App: Notify entry and save parked=true
+    Backend->>CpRedis: Delete parking_pre_notify:{lot_id}:{plate}
+    Backend-->>App: MQTT notify entry → parked=true

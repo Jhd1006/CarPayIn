@@ -3,7 +3,10 @@
 ## 개요
 
 PMS DB는 Mock 주차장 시스템에서 사용하는 간소화된 DB이다.
-입차 예정 차량의 사전등록, 차량 입차/출차 세션, Car Pay-in 결제 요청 이력을 관리한다.
+차량 입차/출차 세션, Car Pay-in 결제 요청 이력을 관리한다.
+
+사전등록(pre-registration)은 임시 상태이므로 DB에 저장하지 않고 pms-redis에 TTL 기반으로 관리한다.
+Redis key 설계는 `docs/DB schemas/05_Redis_Keys.md` 참고.
 
 주차장은 UI상 여러 개처럼 보일 수 있지만, 실제 시뮬레이션에서는 하나의 Mock 주차장으로 처리한다.
 따라서 주차장 정보, 게이트 정보, 요금 정책은 DB에 저장하지 않고 서버 코드에서 하드코딩한다.
@@ -19,32 +22,18 @@ PostgreSQL에서 `gen_random_uuid()`를 사용하려면 `pgcrypto` 확장이 필
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ```
 
-## pre_registrations
-
-Car Pay-in Backend가 입차 전에 전달한 주차장/차량번호 등록 상태를 저장한다.
-LPR 입차 이벤트는 `pre_registered` 상태인 차량만 처리하며, 입차 세션이 생성되면 상태를 `consumed`로 갱신한다.
-
-```sql
-CREATE TABLE pre_registrations (
-  lot_id TEXT NOT NULL,
-  plate VARCHAR(20) NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pre_registered',
-  registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  consumed_at TIMESTAMPTZ,
-  PRIMARY KEY (lot_id, plate),
-  CHECK (status IN ('pre_registered', 'consumed', 'cancelled'))
-);
-
-CREATE INDEX idx_pms_pre_registrations_status
-ON pre_registrations(status);
-```
-
 ## parking_sessions
 
 PMS 기준 주차 세션 정보를 저장한다.
-차량번호, 입차/출차 시각, 주차 세션 상태를 관리한다.
+Car Pay-in 사용자 여부와 관계없이 LPR이 인식한 모든 차량의 입차/출차 세션을 관리한다.
 
 동일 차량번호는 active 주차 세션을 1개만 가질 수 있다.
+
+상태 전이:
+- `active`: 입차 후 결제 전
+- `paid`: Car Pay-in에서 사전 결제 완료 통보를 받은 상태, 출차 차단기 개방 대기 중
+- `exited`: 출차 LPR 확인 후 차단기 개방 완료, `exit_time` 기록됨
+- `cancelled`: 취소된 세션
 
 ```sql
 CREATE TABLE parking_sessions (
@@ -56,7 +45,7 @@ CREATE TABLE parking_sessions (
   status TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ,
-  CHECK (status IN ('active', 'exited', 'cancelled'))
+  CHECK (status IN ('active', 'paid', 'exited', 'cancelled'))
 );
 
 CREATE INDEX idx_pms_parking_sessions_plate
@@ -130,7 +119,12 @@ payment_requests.carpay_tx_id
 ## 최종 정리
 
 PMS DB는 Mock 주차장 시뮬레이션을 위한 DB이다.
-입차 예정 등록은 `pre_registrations`, 입차/출차 정보는 `parking_sessions`, Car Pay-in 결제 요청 및 응답 이력은 `payment_requests`에서 관리한다.
+입차/출차 정보는 `parking_sessions`, Car Pay-in 결제 완료 이력은 `payment_requests`에서 관리한다.
+
+사전등록은 임시 상태이므로 DB 테이블이 아닌 pms-redis에 `pre_reg:{lot_id}:{plate}` 키로 TTL 1시간 관리한다. migration `003_drop_pre_registrations`로 제거되었다.
+
+LPR은 모든 차량에 차단기를 열고 세션을 생성한다. Car Pay-in 사전 등록 차량(Redis에 키 존재)만 백엔드 webhook을 받는다.
+출차 시 `paid` 상태인 세션이 있어야 출구 차단기가 열린다. 사전 정산이 없는 차량은 열리지 않는다.
 
 주차장 정보, 게이트 정보, 요금 정책은 DB에 저장하지 않고 서버 코드에서 하드코딩한다.
 PMS는 카드 정보나 빌링키를 저장하지 않으며, 결제는 Car Pay-in 서버에 요청한다.

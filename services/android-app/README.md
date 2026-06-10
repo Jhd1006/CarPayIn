@@ -74,7 +74,7 @@ The app currently uses these backend endpoints:
 - `POST /auth/refresh`
 - `POST /card/order`
 - `GET /parking/lots`
-- `POST /pre-notify`
+- `POST /parking/navigate`
 - `GET /fee/{session_id}`
 - `POST /payment`
 
@@ -93,7 +93,7 @@ The shared OpenAPI contract lives at `../../docs/api/car-pay-in-openapi.yaml`.
 4. Start registration, scan or open the QR URL, finish Hyundai OAuth, and let
    the app poll `/auth/session/{session_id}/status`.
 5. Confirm a vehicle, register a card, then use navigation/geofence flows to
-   trigger `/pre-notify` and payment.
+   trigger `/parking/navigate` and payment.
 
 ## Generated Files
 

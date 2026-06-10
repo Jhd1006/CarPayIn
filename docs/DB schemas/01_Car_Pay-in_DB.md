@@ -3,7 +3,7 @@
 ## 개요
 
 Car Pay-in DB는 AAOS 차량 결제 서비스에서 사용하는 서비스 DB이다.
-현대 로그인 사용자, 사용자 차량, 차량별 빌링키, 주차 세션, 결제 이력, 앱/현대 인증 토큰 정보를 관리한다.
+현대 로그인 사용자, 사용자 차량, 차량별 빌링키, 주차 세션, 결제 이력, 앱 인증 토큰 정보를 관리한다.
 
 실제 카드 정보는 저장하지 않으며, 차량과 결제수단의 연결은 PG에서 발급한 `billing_key`를 기준으로 관리한다.
 
@@ -308,32 +308,11 @@ ON app_refresh_tokens(expires_at);
 - `status`: `CHECK`로 값 제한
 - `created_at`, `expires_at`, `revoked_at`: `TIMESTAMPTZ`
 
-## hyundai_tokens
-
-현대 API refresh token을 저장한다.
-현대 refresh token은 암호화해서 DB에 저장하고, 현대 access token은 DB에 저장하지 않고 Redis에만 캐시한다.
-
-```sql
-CREATE TABLE hyundai_tokens (
-  user_id TEXT PRIMARY KEY,
-  hyundai_refresh_token_encrypted TEXT NOT NULL,
-  refresh_expires_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ,
-  FOREIGN KEY (user_id) REFERENCES users(user_id)
-);
-```
-
-필드 기준:
-
-- `user_id`: `users.user_id`와 같은 현대 사용자 ID이므로 `TEXT`
-- `hyundai_refresh_token_encrypted`: 암호화된 토큰 문자열이므로 `TEXT`
-- `refresh_expires_at`: 현대 refresh token 만료 시각이므로 `TIMESTAMPTZ`
-- `created_at`, `updated_at`: `TIMESTAMPTZ`
-
 ## 최종 정리
 
-Car Pay-in DB는 서비스 운영에 필요한 사용자, 차량, 빌링키, 주차 세션, 결제 이력, 인증 토큰을 관리하는 핵심 DB이다.
+Car Pay-in DB는 서비스 운영에 필요한 사용자, 차량, 빌링키, 주차 세션, 결제 이력, 앱 인증 토큰을 관리하는 핵심 DB이다.
+
+현대 access/refresh token은 OAuth callback에서 동기 사용 후 버리며, DB에 저장하지 않는다. `hyundai_tokens` 테이블은 `003_drop_hyundai_tokens` migration에서 제거되었다.
 
 카드 원본 정보는 저장하지 않고 PG에서 발급한 `billing_key`만 관리한다.
 차량은 결제 주체이며, `vehicle_billing_keys`에서 차량별 현재 빌링키를 관리한다.

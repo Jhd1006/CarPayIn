@@ -45,12 +45,12 @@
 ```json
 {
   "session_id": "...",
-  "pms_session_id": "...",
-  "car_id": "...",
   "lot_id": "...",
-  "plate": "...",
   "amount": 6000,
+  "duration": 30,
   "currency": "KRW",
+  "entry_time": "...",
+  "status": "active",
   "created_at": "...",
   "expires_at": "..."
 }
@@ -70,10 +70,13 @@
 22. Mock PG는 PG 기준 거래를 `success`로 업데이트하고 `pg_tx_id`, `approval_no`를 백엔드에 반환한다.
 23. 백엔드는 Car Pay-in DB의 `transactions`를 `success`로 업데이트한다.
 24. 백엔드는 `parking_sessions`를 `completed`로 업데이트한다.
-25. 백엔드는 PMS에 paid 통보를 보낸다.
-26. PMS는 PMS DB의 세션 또는 결제 요청 상태를 paid/success로 업데이트한다.
+25. 백엔드는 PMS에 paid 통보를 보낸다 (`POST /pms/payment/complete`).
+26. PMS는 PMS DB의 `parking_sessions` 상태를 `paid`로 변경한다. 이 시점에 차단기는 열지 않는다.
 27. 앱은 결제 완료 응답을 받고 로컬 상태를 `parked=false`로 바꾼다.
-28. 이후 차량이 출구에 도착하면 PMS는 자기 DB의 paid 상태를 보고 차단기를 열 수 있다.
+28. 차량이 출구에 도착하면 출구 LPR이 번호판을 인식한다 (Webots 시뮬레이션에서는 GPS 근접 감지로 대체).
+29. PMS는 해당 번호판의 `parking_sessions`에서 `paid` 상태인 세션을 조회한다.
+30. `paid` 세션이 있으면 PMS는 MQTT로 출구 차단기 개방 명령을 보내고, 세션을 `exited`로 변경하고 `exit_time`을 기록한다.
+31. `paid` 세션이 없으면 차단기를 열지 않는다 (사전 정산이 되지 않은 차량).
 
 ## 이 단계가 끝나면 남는 데이터
 
@@ -96,7 +99,8 @@ Mock Card DB:
 
 PMS DB:
 
-- paid 또는 success 상태의 주차/결제 기록
+- `parking_sessions`: 결제 완료 후 `paid`, 출차 LPR 확인 후 `exited` 상태의 주차 세션
+- `payment_requests`: PMS 기준 결제 완료 이력
 
 앱 로컬 저장소:
 
@@ -104,4 +108,4 @@ PMS DB:
 
 ## 발표 멘트
 
-다섯 번째 단계는 요금 조회와 결제입니다. 앱은 시동 ON 시점에 `parked=true`인지 확인하고, 주차 중일 때만 백엔드에 요금 조회를 요청합니다. 백엔드는 Redis의 요금 quote를 먼저 확인하고, 없으면 DB의 주차 세션과 PMS 요금 정보를 기반으로 quote를 생성합니다. 사용자가 결제를 승인하면 백엔드는 quote와 금액을 검증하고, 결제 요청을 `transactions`에 pending으로 먼저 저장합니다. 이후 billing key로 PG 결제를 요청하고, 승인 결과가 오면 transaction을 success로 확정하고 주차 세션을 completed로 변경합니다. 마지막으로 PMS에 paid 상태를 알려 출구 차단기가 열릴 수 있게 합니다.
+다섯 번째 단계는 요금 조회, 결제, 출차입니다. 앱은 시동 ON 시점에 `parked=true`인지 확인하고, 주차 중일 때만 백엔드에 요금 조회를 요청합니다. 백엔드는 Redis의 요금 quote를 먼저 확인하고, 없으면 DB의 주차 세션과 PMS 요금 정보를 기반으로 quote를 생성합니다. 사용자가 결제를 승인하면 백엔드는 quote와 금액을 검증하고, 결제 요청을 `transactions`에 pending으로 먼저 저장합니다. 이후 billing key로 PG 결제를 요청하고, 승인 결과가 오면 transaction을 success로 확정하고 주차 세션을 completed로 변경합니다. 백엔드는 PMS에 결제 완료를 통보하고, PMS는 세션을 `paid`로 표시합니다. 이후 차량이 출구에 도착하면 출구 LPR이 번호판을 확인하고, PMS는 `paid` 세션이 있으면 차단기를 열고 `exited`로 전환합니다.
