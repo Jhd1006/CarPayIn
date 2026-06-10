@@ -18,7 +18,11 @@ EXISTING_SESSION_ID = "parking-session-existing"
 VALID_LOT_ID = "LOT_GN_01"
 VALID_PLATE = "12가3456"
 VALID_ENTRY_TIME = "2026-05-20T14:30:00"
-PMS_HEADERS = {"X-PMS-Signature": VALID_PMS_SIGNATURE}
+VALID_TIMESTAMP = "1781070000"
+PMS_HEADERS = {
+    "X-Webhook-Timestamp": VALID_TIMESTAMP,
+    "X-Webhook-Signature": VALID_PMS_SIGNATURE,
+}
 
 
 class StubHandleEntryWebhookService:
@@ -178,7 +182,7 @@ class TestHandleEntryWebhookApi:
         assert response.json()["status"] == "confirmed"
         assert response.json()["session_id"] == EXISTING_SESSION_ID
 
-    def test_missing_pms_signature_returns_422(
+    def test_missing_webhook_signature_headers_returns_422(
         self,
         api_client_with_confirmed_service_stub,
     ):

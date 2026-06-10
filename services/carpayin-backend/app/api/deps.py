@@ -94,6 +94,18 @@ def _env_or_default(name: str, default: str) -> str:
     return default
 
 
+def _env_or_legacy_default(name: str, legacy_name: str, default: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    legacy_value = os.getenv(legacy_name, "").strip()
+    if legacy_value:
+        return legacy_value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return default
+
+
 PUBLIC_BASE_URL = _required_env("PUBLIC_BASE_URL").rstrip("/")
 HYUNDAI_AUTHORIZE_URL = os.getenv(
     "HYUNDAI_AUTHORIZE_URL",
@@ -152,7 +164,14 @@ pg_client = HttpxPgClient(
     public_base_url=PG_PUBLIC_BASE_URL,
     card_webhook_url=CARD_WEBHOOK_URL,
 )
-pms_client = HttpxPmsClient(PMS_BASE_URL)
+pms_client = HttpxPmsClient(
+    PMS_BASE_URL,
+    webhook_secret=_env_or_legacy_default(
+        "PMS_WEBHOOK_SECRET",
+        "PMS_WEBHOOK_TOKEN",
+        "pms-webhook-secret",
+    ),
+)
 order_id_generator = UuidOrderIdGenerator()
 plate_normalizer = PlateNormalizer()
 notification_publisher = build_notification_publisher()

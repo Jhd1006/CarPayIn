@@ -31,8 +31,10 @@ sequenceDiagram
     Card-->>PG: Return card_token and last_four
 
     PG->>PGDB: INSERT billing_keys
-    PG-->>Backend: POST /webhook/card
+    PG->>PG: Sign raw body with PG_WEBHOOK_SECRET
+    PG-->>Backend: POST /card/webhook with X-Webhook headers
 
+    Backend->>Backend: Verify raw body HMAC and timestamp
     Backend->>Redis: Read mock_pg_card_register:{order_id}
     Backend->>DB: UPSERT vehicle_billing_keys
     Backend->>Redis: Delete mock_pg_card_register:{order_id}

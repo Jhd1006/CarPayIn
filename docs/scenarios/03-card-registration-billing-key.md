@@ -59,12 +59,13 @@
 14. Mock Card는 카드 정보를 검증하고, 카드 원본 대신 `card_token`을 만든다.
 15. Mock Card DB에는 카드 token과 카드 검증 결과가 저장된다.
 16. Mock PG는 `card_token`을 기반으로 `billing_key`를 만들고 Mock PG DB의 `billing_keys`에 저장한다.
-17. Mock PG는 카드 등록 완료 웹훅을 Car Pay-in Backend로 보낸다.
-18. 백엔드는 웹훅의 HMAC을 검증해서 신뢰할 수 있는 PG 요청인지 확인한다.
-19. 백엔드는 Redis의 `mock_pg_card_register:{order_id}`를 조회해서 이 order가 어떤 차량의 요청인지 확인한다.
-20. 백엔드는 `vehicle_billing_keys`에 차량별 billing key와 카드 뒤 4자리를 저장하거나 갱신한다.
-21. 백엔드는 사용이 끝난 `mock_pg_card_register:{order_id}`를 Redis에서 삭제한다.
-22. PG는 앱 WebView에 카드 등록 완료를 알려주고, 앱은 `registered=true` 상태로 전환한다.
+17. Mock PG는 카드 등록 완료 웹훅 body를 만들고 `PG_WEBHOOK_SECRET`으로 `X-Webhook-Timestamp`, `X-Webhook-Signature`를 생성한다.
+18. Mock PG는 카드 등록 완료 웹훅을 Car Pay-in Backend로 보낸다.
+19. 백엔드는 같은 raw body와 timestamp로 HMAC을 다시 계산해 신뢰할 수 있는 PG 요청인지 확인한다.
+20. 백엔드는 Redis의 `mock_pg_card_register:{order_id}`를 조회해서 이 order가 어떤 차량의 요청인지 확인한다.
+21. 백엔드는 `vehicle_billing_keys`에 차량별 billing key와 카드 뒤 4자리를 저장하거나 갱신한다.
+22. 백엔드는 사용이 끝난 `mock_pg_card_register:{order_id}`를 Redis에서 삭제한다.
+23. PG는 앱 WebView에 카드 등록 완료를 알려주고, 앱은 `registered=true` 상태로 전환한다.
 
 ## 이 단계가 끝나면 남는 데이터
 

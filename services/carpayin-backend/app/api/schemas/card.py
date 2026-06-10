@@ -20,7 +20,6 @@ class CardWebhookRequest(BaseModel):
     billing_key: str
     card_last_four: str
     status: Literal["active"]
-    signature: str
 
 
 class CardWebhookResponse(BaseModel):

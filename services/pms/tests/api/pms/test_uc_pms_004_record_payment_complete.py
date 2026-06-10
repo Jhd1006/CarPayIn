@@ -6,7 +6,10 @@ UC-PMS-004: POST /payment/complete
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_record_payment_complete_service
+from app.api.deps import (
+    get_payment_webhook_signature_verifier,
+    get_record_payment_complete_service,
+)
 from app.application.pms.record_payment_complete import RecordPaymentCompleteResult
 from app.main import app
 
@@ -18,6 +21,10 @@ VALID_AMOUNT = 5000
 VALID_CURRENCY = "KRW"
 VALID_APPROVAL_NO = "APPR-001"
 VALID_IDEMPOTENCY_KEY = "idem-001"
+VALID_HEADERS = {
+    "X-Webhook-Timestamp": "1781070000",
+    "X-Webhook-Signature": "valid-hmac-signature",
+}
 
 
 class StubRecordPaymentCompleteService:
@@ -25,11 +32,19 @@ class StubRecordPaymentCompleteService:
         return RecordPaymentCompleteResult(status="success")
 
 
+class StubSignatureVerifier:
+    def verify(self, *, timestamp: str, signature: str, body: bytes) -> bool:
+        return signature == VALID_HEADERS["X-Webhook-Signature"]
+
+
 @pytest.fixture
 def api_client_with_service_stub():
     original = app.dependency_overrides.copy()
     app.dependency_overrides[get_record_payment_complete_service] = (
         lambda: StubRecordPaymentCompleteService()
+    )
+    app.dependency_overrides[get_payment_webhook_signature_verifier] = (
+        lambda: StubSignatureVerifier()
     )
     try:
         with TestClient(app) as client:
@@ -56,6 +71,7 @@ class TestRecordPaymentCompleteApi:
     def test_payment_complete_returns_success(self, api_client_with_service_stub):
         response = api_client_with_service_stub.post(
             "/payment/complete",
+            headers=VALID_HEADERS,
             json=valid_payment_payload(),
         )
 
@@ -72,10 +88,12 @@ class TestRecordPaymentCompleteApi:
     ):
         first_response = api_client_with_service_stub.post(
             "/payment/complete",
+            headers=VALID_HEADERS,
             json=valid_payment_payload(),
         )
         second_response = api_client_with_service_stub.post(
             "/payment/complete",
+            headers=VALID_HEADERS,
             json=valid_payment_payload(),
         )
 
@@ -89,6 +107,7 @@ class TestRecordPaymentCompleteApi:
 
         response = api_client_with_service_stub.post(
             "/payment/complete",
+            headers=VALID_HEADERS,
             json=payload,
         )
 

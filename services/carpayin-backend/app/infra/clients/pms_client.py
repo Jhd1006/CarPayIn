@@ -4,13 +4,22 @@ PMS(Parking Management System) HTTP 클라이언트.
 유닛 테스트의 FakePmsClient와 동일한 인터페이스를 구현한다.
 """
 
+import json
+
 import httpx
+
+from app.infra.security import sign_webhook_headers
 
 
 class HttpxPmsClient:
     """httpx 기반 PMS HTTP 클라이언트."""
 
-    def __init__(self, base_url: str, timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        webhook_secret: str | None = None,
+    ):
         """
         Args:
             base_url: PMS 서버 base URL (예: http://pms:8000)
@@ -18,6 +27,7 @@ class HttpxPmsClient:
         """
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._webhook_secret = webhook_secret
 
     # ── UC-PARK-001: 사전 입차 알림 등록 ──────────────────────────────────
 
@@ -91,18 +101,30 @@ class HttpxPmsClient:
 
         POST /payment/complete
         """
+        payload = {
+            "pms_session_id": pms_session_id,
+            "carpay_parking_session_id": carpay_parking_session_id,
+            "carpay_tx_id": carpay_tx_id,
+            "amount": amount,
+            "currency": currency,
+            "approval_no": approval_no,
+            "idempotency_key": idempotency_key,
+        }
+        body = json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if self._webhook_secret:
+            headers.update(sign_webhook_headers(secret=self._webhook_secret, body=body))
+
         try:
             response = httpx.post(
                 f"{self._base_url}/payment/complete",
-                json={
-                    "pms_session_id": pms_session_id,
-                    "carpay_parking_session_id": carpay_parking_session_id,
-                    "carpay_tx_id": carpay_tx_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "approval_no": approval_no,
-                    "idempotency_key": idempotency_key,
-                },
+                content=body,
+                headers=headers,
                 timeout=self._timeout,
             )
             response.raise_for_status()

@@ -15,6 +15,7 @@ from app.infra.mqtt import build_barrier_publisher
 from app.infra.redis import RedisPreRegistrationStore, redis_client
 from app.infra.repositories.payment_request_repository import SqlAlchemyPaymentRequestRepository
 from app.infra.repositories.pms_session_repository import SqlAlchemyPmsSessionRepository
+from app.infra.security import WebhookSignatureVerifier
 
 
 def _requires_explicit_env():
@@ -30,10 +31,30 @@ def _env_or_default(name, default):
     return default
 
 
+def _env_or_legacy_default(name, legacy_name, default):
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    legacy_value = os.getenv(legacy_name, "").strip()
+    if legacy_value:
+        return legacy_value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return default
+
+
+PMS_WEBHOOK_SECRET = _env_or_legacy_default(
+    "PMS_WEBHOOK_SECRET",
+    "PMS_WEBHOOK_TOKEN",
+    "pms-webhook-secret",
+)
+
+
 carpayin_webhook_client = HttpxCarPayInWebhookClient(
     base_url=_env_or_default("CARPAYIN_BACKEND_BASE_URL", "http://localhost:8000"),
-    webhook_token=_env_or_default("PMS_WEBHOOK_TOKEN", "pms-webhook-token"),
+    webhook_token=PMS_WEBHOOK_SECRET,
 )
+payment_webhook_signature_verifier = WebhookSignatureVerifier(PMS_WEBHOOK_SECRET)
 fee_calculator = SimpleFeeCalculator(
     amount_per_30_minutes=int(os.getenv("PMS_FEE_PER_30_MINUTES", "500")),
 )
@@ -75,3 +96,7 @@ def get_record_payment_complete_service(session: Session = Depends(get_db_sessio
         payment_request_repository=SqlAlchemyPaymentRequestRepository(session),
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
     )
+
+
+def get_payment_webhook_signature_verifier() -> WebhookSignatureVerifier:
+    return payment_webhook_signature_verifier

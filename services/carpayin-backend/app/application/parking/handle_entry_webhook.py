@@ -10,6 +10,8 @@ class HandleEntryWebhookCommand:
     lot_id: str
     plate: str
     entry_time: str
+    signature_timestamp: str = "0"
+    raw_body: bytes = b"{}"
 
 
 @dataclass(frozen=True)
@@ -35,7 +37,11 @@ class HandleEntryWebhookService:
 
     def execute(self, command: HandleEntryWebhookCommand) -> HandleEntryWebhookResult:
         # PMS 인증 검증
-        self.pms_auth_validator.validate(command.pms_token)
+        self.pms_auth_validator.validate(
+            timestamp=command.signature_timestamp,
+            signature=command.pms_token,
+            body=command.raw_body,
+        )
 
         # entry_time 형식 검증
         try:

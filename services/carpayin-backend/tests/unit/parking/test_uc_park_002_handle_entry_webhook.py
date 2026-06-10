@@ -24,8 +24,8 @@ class FakePmsAuthValidator:
     def __init__(self):
         self.valid_tokens = {VALID_PMS_TOKEN}
 
-    def validate(self, pms_token: str):
-        if pms_token not in self.valid_tokens:
+    def validate(self, *, timestamp: str, signature: str, body: bytes):
+        if signature not in self.valid_tokens:
             raise ValueError("pms_auth_failed")
 
 

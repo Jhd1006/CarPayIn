@@ -46,11 +46,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: App Access Token (JWT)
-    PmsWebhookSignature:
+    WebhookTimestamp:
       type: apiKey
       in: header
-      name: X-PMS-Signature
-      description: PMS webhook 요청 검증용 HMAC signature
+      name: X-Webhook-Timestamp
+      description: Unix timestamp seconds. 요청 생성 시각이며 5분 허용 오차 안에 있어야 합니다.
+    WebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: HMAC-SHA256(secret, "{timestamp}.{sha256(raw_body)}") 형식의 webhook signature
 
   # ─────────────────────────────────────────────
   # Reusable Schemas
@@ -210,7 +215,7 @@ components:
 
     CardWebhookRequest:
       type: object
-      required: [order_id, billing_key, card_last_four, status, signature]
+      required: [order_id, billing_key, card_last_four, status]
       properties:
         order_id:
           type: string
@@ -225,10 +230,6 @@ components:
           type: string
           enum: [active]
           example: active
-        signature:
-          type: string
-          description: PG webhook HMAC signature
-          example: "9b1f..."
 
     # ── Parking ───────────────────────────────
     ParkingLotResponse:
@@ -813,9 +814,9 @@ paths:
         2. 현대 token API로 access/refresh token 발급
         3. 현대 사용자 정보 API 호출 (user_id, name)
         4. 현대 내 차량 리스트 조회 API 호출
-        5. RDS users upsert, hyundai_tokens에 암호화된 refresh token 저장
-        6. Redis hyundai_access:{user_id}에 access token 캐시
-        7. Redis hyundai_oauth:{session_id}, app_login_result:{session_id}에 차량 목록과 임시 토큰 저장
+        5. RDS users upsert
+        6. 현대 access/refresh token은 사용자·차량 조회 직후 폐기하며 Redis/DB에 저장하지 않음
+        7. Redis hyundai_oauth:{session_id}, app_login_result:{session_id}에 차량 목록과 임시 app access token 저장
         8. oauth_state:{state}는 used 처리 또는 삭제
       parameters:
         - name: code
@@ -1046,7 +1047,9 @@ paths:
         카드 원문 정보는 Car Pay-in Backend에 전달되지 않으며, billing_key만 수신합니다.
         
         Backend 처리:
-        1. webhook signature 또는 HMAC 검증
+        1. `X-Webhook-Timestamp`, `X-Webhook-Signature` 헤더로 raw body HMAC 검증
+           - signature = HMAC-SHA256(PG_WEBHOOK_SECRET, "{timestamp}.{sha256(raw_body)}")
+           - timestamp 허용 오차는 5분
         2. Redis에서 order_id로 카드 등록 세션 조회 및 status=pending 확인
         3. RDS vehicles에서 car_id 유효성 재확인
         4. RDS vehicle_billing_keys upsert
@@ -1055,6 +1058,9 @@ paths:
         5. Redis 카드 등록 세션 완료 처리 또는 삭제
         
         **멱등성**: Redis의 order_id 상태 + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
+      security:
+        - WebhookTimestamp: []
+          WebhookSignature: []
       requestBody:
         required: true
         content:
@@ -1198,7 +1204,9 @@ paths:
         PMS LPR 카메라가 차량번호 인식 후 입차 이벤트를 이 endpoint로 전송합니다.
         
         Backend 처리:
-        1. X-PMS-Signature 등으로 PMS 신뢰 요청 여부 확인
+        1. `X-Webhook-Timestamp`, `X-Webhook-Signature` 헤더로 raw body HMAC 검증
+           - signature = HMAC-SHA256(PMS_WEBHOOK_SECRET, "{timestamp}.{sha256(raw_body)}")
+           - timestamp 허용 오차는 5분
         2. Redis에서 parking_pre_notify:{lot_id}:{plate} 조회
            - 없으면: Car Pay-in 비등록 차량으로 판단, 세션 미생성
         3. Redis의 user_id, car_id를 기준으로 처리
@@ -1218,13 +1226,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/EntryWebhookRequest'
-      parameters:
-        - name: X-PMS-Signature
-          in: header
-          required: true
-          schema:
-            type: string
-          description: PMS webhook HMAC signature
+      security:
+        - WebhookTimestamp: []
+          WebhookSignature: []
       responses:
         '200':
           description: 입차 처리 완료. pre-notify가 없으면 status=not_registered로 반환하고 세션은 생성하지 않음.
@@ -1260,7 +1264,7 @@ paths:
         5. 세션의 car_id와 토큰의 car_id 일치 확인
         6. 세션 status=active 확인
         7. PMS에 요금 조회 요청 (lot_id, plate 기준)
-        8. PMS 결과를 Redis parking_fee_quote:{session_id}에 TTL 5분으로 저장
+        8. PMS 결과를 Redis parking_fee_quote:{session_id}에 TTL 15분으로 저장
       security:
         - BearerAuth: []
       parameters:

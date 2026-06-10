@@ -130,7 +130,7 @@ services:
       APP_REFRESH_TOKEN_HASH_SECRET: ${APP_REFRESH_TOKEN_HASH_SECRET:-}
       HYUNDAI_TOKEN_ENCRYPTION_SECRET: ${HYUNDAI_TOKEN_ENCRYPTION_SECRET:-hyundai-dev-token-secret}
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
-      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
+      PMS_WEBHOOK_SECRET: ${PMS_WEBHOOK_SECRET:-pms-webhook-secret}
       MQTT_ENABLED: ${MQTT_ENABLED:-true}
       MQTT_HOST: ${MQTT_HOST:-mqtt}
       MQTT_PORT: ${MQTT_PORT:-1883}
@@ -206,7 +206,7 @@ services:
       APP_ENV: ${APP_ENV:-local}
       PMS_DATABASE_URL: ${PMS_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev}
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
-      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
+      PMS_WEBHOOK_SECRET: ${PMS_WEBHOOK_SECRET:-pms-webhook-secret}
       PMS_FEE_PER_30_MINUTES: ${PMS_FEE_PER_30_MINUTES:-500}
       PMS_REDIS_URL: ${PMS_REDIS_URL:-redis://pms-redis:6379/0}
       MQTT_HOST: ${MQTT_HOST:-mqtt}
