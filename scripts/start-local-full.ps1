@@ -251,8 +251,18 @@ if ($ngrokUrl) {
 # Android emulator 감지
 $adb = Get-Command adb -ErrorAction SilentlyContinue
 if ($adb) {
-    $devs = adb devices 2>&1 | Where-Object { $_ -match "emulator|device$" }
-    if ($devs) { OK "Android emulator: $devs" }
+    # ADB 서버 버전 불일치 시 자동 재시작
+    $adbTest = adb devices 2>&1
+    if ($adbTest -match "protocol fault|failed to check server|cannot connect") {
+        INFO "ADB server mismatch - restarting..."
+        adb kill-server 2>$null | Out-Null
+        Start-Sleep 1
+        adb start-server 2>$null | Out-Null
+        Start-Sleep 1
+        $adbTest = adb devices 2>&1
+    }
+    $devs = $adbTest | Where-Object { $_ -match "emulator|device$" }
+    if ($devs) { OK "Android emulator: $($devs -join ', ')" }
     else { WARN "Android emulator not detected - start AAOS emulator before running the app" }
 } else {
     WARN "adb not in PATH - cannot check emulator status"
