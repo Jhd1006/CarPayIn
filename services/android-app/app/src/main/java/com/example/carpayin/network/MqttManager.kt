@@ -78,7 +78,7 @@ object MqttManager {
             })
 
             val options = MqttConnectOptions().apply {
-                isCleanSession = true          // 세션 충돌 방지
+                isCleanSession = false         // 오프라인 중 QoS 1 메시지를 브로커가 버퍼링
                 keepAliveInterval = 60
                 connectionTimeout = 10
                 isAutomaticReconnect = false   // 서비스 watchdog이 재연결 담당
@@ -86,6 +86,8 @@ object MqttManager {
             }
             newClient.connect(options)
             client = newClient
+            // persistent session이므로 브로커가 이미 구독 정보를 갖고 있을 수 있지만
+            // 재구독은 멱등적이므로 항상 호출해도 안전
             subscribeTopics(carId)
             Log.d(TAG, "MQTT 연결 성공: carId ${carId.takeLast(8)}")
         } catch (e: Exception) {

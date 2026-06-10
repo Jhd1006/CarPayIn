@@ -71,6 +71,9 @@ class HttpxPgClient:
         except httpx.HTTPError as e:
             raise RuntimeError(f"pg_charge_failed: {e}") from e
 
+        if response.status_code >= 500:
+            raise RuntimeError(f"pg_charge_failed: HTTP {response.status_code}")
+
         data = response.json()
 
         if response.status_code == 400 or data.get("status") == "failed":

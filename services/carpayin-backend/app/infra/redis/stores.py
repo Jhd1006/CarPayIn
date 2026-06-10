@@ -228,6 +228,35 @@ class RedisFeeQuoteStore(_RedisJsonStore):
         return self._get(f"parking_fee_quote:{session_id}")
 
 
+class RedisEntryNotifyRetryStore(_RedisJsonStore):
+    def record_retry_event(
+        self,
+        *,
+        car_id: str,
+        session_id: str,
+        lot_id: str,
+        entry_time: str,
+        ttl_seconds: int = 60 * 60,
+    ) -> None:
+        self._save(
+            f"entry_notify_retry:{session_id}",
+            {
+                "car_id": car_id,
+                "session_id": session_id,
+                "lot_id": lot_id,
+                "entry_time": entry_time,
+                "status": "pending",
+            },
+            ttl_seconds,
+        )
+
+    def get_retry_event(self, session_id: str) -> dict | None:
+        return self._get(f"entry_notify_retry:{session_id}")
+
+    def clear_retry_event(self, session_id: str) -> None:
+        self.client.delete(f"entry_notify_retry:{session_id}")
+
+
 class RedisPaymentNotifyRetryStore(_RedisJsonStore):
     def record_retry_event(
         self,

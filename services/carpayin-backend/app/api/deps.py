@@ -1,6 +1,6 @@
 import os
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
 from app.application.auth.confirm_vehicle import ConfirmVehicleService
@@ -25,6 +25,7 @@ from app.infra.db.session import get_db_session
 from app.infra.redis import (
     RedisAppLoginResultStore,
     RedisCardOrderStore,
+    RedisEntryNotifyRetryStore,
     RedisFeeQuoteStore,
     RedisHyundaiOAuthResultStore,
     RedisOAuthStateStore,
@@ -47,6 +48,7 @@ from app.infra.repositories.transaction_repository import (
 )
 from app.infra.repositories.user_repository import SqlAlchemyUserRepository
 from app.infra.repositories.vehicle_repository import SqlAlchemyVehicleRepository
+from app.api.utils import extract_bearer_token
 from app.infra.security import create_default_security_components
 from app.infra.support import (
     PlateNormalizer,
@@ -117,6 +119,7 @@ app_login_result_store = RedisAppLoginResultStore(redis_client)
 card_order_store = RedisCardOrderStore(redis_client)
 pre_notify_store = RedisPreNotifyStore(redis_client)
 fee_quote_store = RedisFeeQuoteStore(redis_client)
+entry_notify_retry_store = RedisEntryNotifyRetryStore(redis_client)
 payment_notify_retry_store = RedisPaymentNotifyRetryStore(redis_client)
 security_components = create_default_security_components()
 hyundai_oauth_client = HttpxHyundaiOAuthClient(
@@ -158,25 +161,7 @@ notification_publisher = build_notification_publisher()
 def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-
-    token = authorization.removeprefix("Bearer ").strip()
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-
+    token = extract_bearer_token(authorization)
     return security_components["app_access_token_validator"].validate_and_extract(token)
 
 
@@ -288,6 +273,7 @@ def get_handle_entry_webhook_service(
         pre_notify_store=pre_notify_store,
         parking_session_repository=SqlAlchemyParkingSessionRepository(session),
         notification_publisher=notification_publisher,
+        entry_notify_retry_store=entry_notify_retry_store,
     )
 
 

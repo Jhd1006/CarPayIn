@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -5,9 +7,30 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.card import router as card_router
 from app.api.routes.parking import router as parking_router
 from app.api.routes.payment import router as payment_router
+from app.infra.redis import redis_client
+from app.infra.workers.notify_retry_worker import NotifyRetryWorker
 
 
-app = FastAPI(title="Car Pay-in Backend")
+def _build_retry_worker() -> NotifyRetryWorker:
+    from app.api.deps import notification_publisher, pms_client
+    return NotifyRetryWorker(
+        redis_client=redis_client,
+        notification_publisher=notification_publisher,
+        pms_client=pms_client,
+    )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    worker = _build_retry_worker()
+    worker.start()
+    try:
+        yield
+    finally:
+        worker.stop()
+
+
+app = FastAPI(title="Car Pay-in Backend", lifespan=lifespan)
 
 
 @app.get("/health")

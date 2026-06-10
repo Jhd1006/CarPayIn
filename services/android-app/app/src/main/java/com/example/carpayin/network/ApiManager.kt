@@ -175,10 +175,6 @@ object ApiManager {
         )
     }
 
-    fun unregister(accessToken: String) {
-        postJson(URL("$BASE_URL/auth/unregister"), "{}", accessToken)
-    }
-
     fun createCardOrder(plate: String, bankName: String, agreeTerms: Boolean, accessToken: String): CardOrderResult {
         val body = JSONObject().apply {
             put("plate", plate)

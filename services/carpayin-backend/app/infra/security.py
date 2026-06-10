@@ -8,8 +8,6 @@ import secrets
 import time
 from typing import Any
 
-from cryptography.fernet import Fernet
-
 
 TEMP_ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 APP_ACCESS_TOKEN_TTL_SECONDS = 60 * 60
@@ -145,18 +143,6 @@ class RefreshTokenHasher:
         ).hexdigest()
 
 
-class RefreshTokenEncryptor:
-    def __init__(self, secret: str):
-        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
-        self._cipher = Fernet(key)
-
-    def encrypt(self, token: str) -> str:
-        return self._cipher.encrypt(token.encode("utf-8")).decode("ascii")
-
-    def decrypt(self, token: str) -> str:
-        return self._cipher.decrypt(token.encode("ascii")).decode("utf-8")
-
-
 class WebhookSignatureVerifier:
     def __init__(self, secret: str):
         self._secret = secret.encode("utf-8")
@@ -208,9 +194,6 @@ def create_default_security_components() -> dict:
         "app_access_token_validator": AppAccessTokenValidator(token_codec),
         "refresh_token_hasher": RefreshTokenHasher(
             os.getenv("APP_REFRESH_TOKEN_HASH_SECRET", "").strip() or token_secret
-        ),
-        "refresh_token_encryptor": RefreshTokenEncryptor(
-            _secret_env("HYUNDAI_TOKEN_ENCRYPTION_SECRET", "hyundai-dev-token-secret")
         ),
         "card_webhook_signature_verifier": WebhookSignatureVerifier(
             _secret_env("PG_WEBHOOK_SECRET", "mock-pg-webhook-secret")
