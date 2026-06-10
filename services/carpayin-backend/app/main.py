@@ -31,7 +31,7 @@ async def value_error_handler(request: Request, exc: ValueError):
         "temp_token_expired",
     }:
         status_code = 401
-    elif error_code in {"car_id_token_mismatch", "session_car_id_mismatch"}:
+    elif error_code == "session_car_id_mismatch":
         status_code = 403
     elif error_code in {"quote_not_found", "amount_currency_mismatch"}:
         status_code = 409

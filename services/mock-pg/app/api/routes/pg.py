@@ -47,10 +47,6 @@ def _pg_public_base_url(request: Request) -> str:
     "/pg/internal/card-registration/sessions",
     response_model=CardRegistrationSessionResponse,
 )
-@router.post(
-    "/internal/card-registration/sessions",
-    response_model=CardRegistrationSessionResponse,
-)
 def create_card_registration_session(
     request: Request,
     payload: CardRegistrationSessionRequest,
@@ -73,7 +69,6 @@ def create_card_registration_session(
 
 
 @router.get("/pg/card-register", response_class=HTMLResponse)
-@router.get("/card-register", response_class=HTMLResponse)
 def card_registration_webview(
     order_id: str,
     card_brand: str = "현대카드",
@@ -469,7 +464,6 @@ def card_registration_webview(
 
 
 @router.post("/pg/card-register", response_model=CardRegistrationResponse)
-@router.post("/card-register", response_model=CardRegistrationResponse)
 def complete_card_registration(
     request: CardRegistrationRequest,
     service: CompleteCardRegistrationService = Depends(
@@ -492,11 +486,6 @@ def complete_card_registration(
 
 @router.post(
     "/pg/payments/billing",
-    response_model=BillingPaymentResponse,
-    response_model_exclude_none=True,
-)
-@router.post(
-    "/payments/billing",
     response_model=BillingPaymentResponse,
     response_model_exclude_none=True,
 )

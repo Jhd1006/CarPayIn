@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import (
@@ -19,6 +19,7 @@ from app.api.schemas.auth import (
     RefreshAccessTokenResponse,
     SessionStatusResponse,
 )
+from app.api.utils import extract_bearer_token
 from app.application.auth.confirm_vehicle import (
     ConfirmVehicleCommand,
     ConfirmVehicleService,
@@ -46,28 +47,6 @@ from app.application.auth.start_hyundai_oauth import (
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
-
-def extract_bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-
-    token = authorization.removeprefix("Bearer ").strip()
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-    return token
 
 
 @router.post("/qr-session", response_model=QrSessionCreateResponse)

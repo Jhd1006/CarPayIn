@@ -22,7 +22,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
     )
 
 @app.get("/health")
-def health_check():
+def health_check() -> dict:
     return {"status": "ok"}
 
 app.include_router(card_router)
