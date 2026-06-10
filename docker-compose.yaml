@@ -12,7 +12,7 @@ services:
       - carpayin_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${CARPAYIN_POSTGRES_USER:-dev_user} -d ${CARPAYIN_POSTGRES_DB:-carpayin_dev}"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -29,7 +29,7 @@ services:
       - mock_card_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${MOCK_CARD_POSTGRES_USER:-dev_user} -d ${MOCK_CARD_POSTGRES_DB:-mock_card_dev}"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -46,7 +46,7 @@ services:
       - mock_pg_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${MOCK_PG_POSTGRES_USER:-dev_user} -d ${MOCK_PG_POSTGRES_DB:-mock_pg_dev}"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -63,7 +63,7 @@ services:
       - pms_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PMS_POSTGRES_USER:-dev_user} -d ${PMS_POSTGRES_DB:-pms_dev}"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -76,7 +76,7 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -89,7 +89,7 @@ services:
       - pms_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -145,7 +145,7 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -165,7 +165,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -193,7 +193,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
@@ -225,7 +225,7 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
 
