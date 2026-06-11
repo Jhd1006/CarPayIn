@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layoutUnregistered: LinearLayout
     private lateinit var layoutRegistered: ScrollView
     private lateinit var tvHeaderTitle: RelativeLayout
+    private lateinit var mainHeaderLogoTapArea: View
     private lateinit var tvFeatureHint: TextView
     private lateinit var sectionCard: LinearLayout
     private lateinit var sectionVehicle: LinearLayout
@@ -111,6 +112,7 @@ class MainActivity : AppCompatActivity() {
         layoutUnregistered = findViewById(R.id.layoutUnregistered)
         layoutRegistered   = findViewById(R.id.layoutRegistered)
         tvHeaderTitle      = findViewById(R.id.tvHeaderTitle)
+        mainHeaderLogoTapArea = findViewById(R.id.mainHeaderLogoTapArea)
         tvFeatureHint      = findViewById(R.id.tvFeatureHint)
         sectionCard        = findViewById(R.id.sectionCard)
         sectionVehicle     = findViewById(R.id.sectionVehicle)
@@ -574,6 +576,7 @@ class MainActivity : AppCompatActivity() {
 
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14)); background = rowBg; isClickable = true; isFocusable = true
+                foreground = TypedValue().let { tv -> theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true); getDrawable(tv.resourceId) }
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.setMargins(0, 0, 0, dp(8)) }
             }
 
@@ -955,6 +958,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupDevTrigger() {
         btnResetApp.setOnClickListener { confirmReset() }
+        mainHeaderLogoTapArea.setOnClickListener { showDevMenu() }
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
