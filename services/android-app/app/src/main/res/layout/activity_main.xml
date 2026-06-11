@@ -76,12 +76,12 @@
             android:paddingStart="0dp"
             android:paddingEnd="0dp"
             android:paddingTop="0dp"
-            android:paddingBottom="0dp">
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
+                android:layout_gravity="center_horizontal|bottom"
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
@@ -122,7 +122,7 @@
                 android:textSize="13sp"
                 android:gravity="center"
                 android:lineSpacingExtra="2dp"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="16dp"/>
 
             <Button
                 android:id="@+id/btnRegister"
@@ -178,7 +178,7 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:src="@drawable/ic_logo"
+            android:src="@drawable/ic_logo_cropped"
             android:scaleType="fitCenter"
             android:padding="16dp"/>
 
@@ -556,7 +556,7 @@
                     <View
                         android:layout_width="8dp"
                         android:layout_height="8dp"
-                        android:background="#12B981"/>
+                        android:background="@drawable/bg_dot_green"/>
                 </LinearLayout>
             </LinearLayout>
 
