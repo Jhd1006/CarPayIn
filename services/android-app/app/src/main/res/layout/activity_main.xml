@@ -69,23 +69,33 @@
         android:visibility="visible">
 
         <!-- 로고 — 화면 절반 -->
-        <ImageView
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:src="@drawable/ic_logo"
-            android:scaleType="fitCenter"
-            android:padding="16dp"/>
+            android:layout_weight="1.25"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp">
+
+            <ImageView
+                android:layout_width="352dp"
+                android:layout_height="272dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_logo_cropped"
+                android:scaleType="fitCenter"/>
+        </FrameLayout>
 
         <!-- 하단 컨텐츠 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="0.75"
             android:orientation="vertical"
-            android:gravity="center"
+            android:gravity="top|center_horizontal"
             android:paddingStart="28dp"
             android:paddingEnd="28dp"
+            android:paddingTop="0dp"
             android:paddingBottom="20dp">
 
             <TextView
