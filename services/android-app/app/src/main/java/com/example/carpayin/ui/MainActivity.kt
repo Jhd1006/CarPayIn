@@ -2,6 +2,7 @@ package com.example.carpayin.ui
 
 import com.example.carpayin.R
 import android.content.Intent
+import android.location.Location
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
@@ -569,7 +570,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun populateParkingLots() {
         layoutParkingLots.removeAllViews()
-        GeofenceManager.cachedParkingLots.sortedBy { it.name }.forEach { lot ->
+        val hasLocation = NaviHelper.currentLat != 0.0 && NaviHelper.currentLng != 0.0
+
+        fun distMeters(lot: GeofenceManager.ParkingLot): Float {
+            val results = FloatArray(1)
+            Location.distanceBetween(NaviHelper.currentLat, NaviHelper.currentLng, lot.lat, lot.lng, results)
+            return results[0]
+        }
+
+        val lots = if (hasLocation)
+            GeofenceManager.cachedParkingLots.sortedBy { distMeters(it) }
+        else
+            GeofenceManager.cachedParkingLots.sortedBy { it.name }
+
+        lots.forEach { lot ->
+            val distM = if (hasLocation) distMeters(lot) else null
+            val distText = when {
+                distM == null -> "탭하여 내비게이션 시작"
+                distM < 1000  -> "${distM.toInt()} m · 약 ${(distM / 500).toInt() + 1}분"
+                else          -> "${"%.1f".format(distM / 1000)} km · 약 ${(distM / 500).toInt() + 1}분"
+            }
+
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14))
                 background = getDrawable(R.drawable.bg_card_dark); isClickable = true; isFocusable = true
@@ -578,7 +599,7 @@ class MainActivity : AppCompatActivity() {
             }
             val tvIcon = TextView(this).apply { text = "📍"; textSize = 16f }
             val tvInfo = TextView(this).apply {
-                text = "${lot.name}\n탭하여 내비게이션 시작"
+                text = "${lot.name}\n$distText"
                 setTextColor(Color.parseColor("#191F28")); textSize = 13f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also { it.setMargins(dp(10), 0, 0, 0) }
             }
