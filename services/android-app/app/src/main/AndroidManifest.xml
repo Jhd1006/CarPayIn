@@ -12,6 +12,9 @@
     <!-- Pleos STT (음성 인식) -->
     <uses-permission android:name="pleos.car.permission.STT_SERVICE"/>
 
+    <!-- Pleos LLM (자연어 이해) -->
+    <uses-permission android:name="pleos.car.permission.LLM_SERVICE"/>
+
     <!-- 네트워크 (MQTT 브로커 / 백엔드 REST API) -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
