@@ -36,7 +36,8 @@ class CardRegistrationActivity : Activity() {
     private val TAG = "CardRegActivity"
     private val handler = Handler(Looper.getMainLooper())
 
-    private lateinit var webView: WebView
+    private var webView: WebView? = null
+    private lateinit var webViewContainer: android.widget.FrameLayout
     private lateinit var progressBar: ProgressBar
     private lateinit var tvStatus: TextView
     private lateinit var tvStepIndicator: TextView
@@ -101,7 +102,7 @@ class CardRegistrationActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_card_registration)
 
-        webView           = findViewById(R.id.webViewCard)
+        webViewContainer  = findViewById(R.id.webViewContainer)
         progressBar       = findViewById(R.id.progressBarCard)
         tvStatus          = findViewById(R.id.tvCardStatus)
         tvStepIndicator   = findViewById(R.id.tvStepIndicator)
@@ -418,7 +419,7 @@ class CardRegistrationActivity : Activity() {
         layoutConsent.visibility     = View.GONE
         layoutPlateInput.visibility  = View.GONE
         layoutBrandSelect.visibility = View.GONE
-        webView.visibility           = View.GONE
+        webViewContainer.visibility  = View.GONE
         progressBar.visibility       = View.GONE
 
         when (step) {
@@ -438,8 +439,8 @@ class CardRegistrationActivity : Activity() {
                 tvStepIndicator.text = "3 / 4"
             }
             Step.WEBVIEW -> {
-                setupWebView()  // 실제 필요한 시점에 초기화
-                webView.visibility = View.INVISIBLE
+                setupWebView()
+                webViewContainer.visibility = View.INVISIBLE
                 progressBar.visibility = View.VISIBLE
                 tvStatus.text        = "카드 정보 입력"
                 tvStepIndicator.text = "4 / 4"
@@ -462,7 +463,7 @@ class CardRegistrationActivity : Activity() {
             Step.PLATE   -> goToStep(Step.CONSENT)
             Step.BRAND   -> goToStep(Step.PLATE)
             Step.WEBVIEW -> {
-                if (webView.canGoBack()) webView.goBack() else goToStep(Step.BRAND)
+                if (webView?.canGoBack() == true) webView?.goBack() else goToStep(Step.BRAND)
             }
         }
     }
@@ -581,51 +582,56 @@ class CardRegistrationActivity : Activity() {
     private fun setupWebView() {
         if (webViewReady) return
         webViewReady = true
-        webView.settings.apply {
-            javaScriptEnabled    = true
-            domStorageEnabled    = true
-            loadWithOverviewMode = true
-            useWideViewPort      = true
+
+        val wv = WebView(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            settings.apply {
+                javaScriptEnabled    = true
+                domStorageEnabled    = true
+                loadWithOverviewMode = true
+                useWideViewPort      = true
+            }
+            setBackgroundColor(Color.TRANSPARENT)
+            isVerticalScrollBarEnabled = false
+            addJavascriptInterface(PgJsInterface(), "Android")
+            webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    progressBar.visibility = View.VISIBLE
+                }
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    progressBar.visibility = View.GONE
+                    webViewContainer.visibility = View.VISIBLE
+                }
+                override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                    handler.post {
+                        Toast.makeText(this@CardRegistrationActivity, "페이지 로딩 실패. 서버를 확인해 주세요.", Toast.LENGTH_LONG).show()
+                        goToStep(Step.BRAND)
+                    }
+                }
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    if (request?.isForMainFrame != true) return
+                    Log.e(TAG, "WebView load failed: ${error?.description} url=${request.url}")
+                    handler.post {
+                        Toast.makeText(this@CardRegistrationActivity, "페이지 로딩 실패: ${error?.description}", Toast.LENGTH_LONG).show()
+                        goToStep(Step.BRAND)
+                    }
+                }
+                override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                    if (request?.isForMainFrame != true) return
+                    Log.e(TAG, "WebView HTTP ${errorResponse?.statusCode} url=${request.url}")
+                    handler.post {
+                        Toast.makeText(this@CardRegistrationActivity, "PG 페이지 오류: HTTP ${errorResponse?.statusCode}", Toast.LENGTH_LONG).show()
+                        goToStep(Step.BRAND)
+                    }
+                }
+            }
+            webChromeClient = WebChromeClient()
         }
-        webView.setBackgroundColor(Color.TRANSPARENT)
-        webView.isVerticalScrollBarEnabled = false
-
-        webView.addJavascriptInterface(PgJsInterface(), "Android")
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                progressBar.visibility = View.VISIBLE
-            }
-            override fun onPageFinished(view: WebView?, url: String?) {
-                progressBar.visibility = View.GONE
-                webView.visibility     = View.VISIBLE
-            }
-            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
-                handler.post {
-                    Toast.makeText(this@CardRegistrationActivity, "페이지 로딩 실패. 서버를 확인해 주세요.", Toast.LENGTH_LONG).show()
-                    goToStep(Step.BRAND)
-                }
-            }
-
-            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                if (request?.isForMainFrame != true) return
-                Log.e(TAG, "WebView load failed: ${error?.description} url=${request.url}")
-                handler.post {
-                    Toast.makeText(this@CardRegistrationActivity, "페이지 로딩 실패: ${error?.description}", Toast.LENGTH_LONG).show()
-                    goToStep(Step.BRAND)
-                }
-            }
-
-            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
-                if (request?.isForMainFrame != true) return
-                Log.e(TAG, "WebView HTTP ${errorResponse?.statusCode} url=${request.url}")
-                handler.post {
-                    Toast.makeText(this@CardRegistrationActivity, "PG 페이지 오류: HTTP ${errorResponse?.statusCode}", Toast.LENGTH_LONG).show()
-                    goToStep(Step.BRAND)
-                }
-            }
-        }
-        webView.webChromeClient = WebChromeClient()
+        webView = wv
+        webViewContainer.addView(wv)
     }
 
     private fun loadCardRegistrationPage(brand: BrandInfo) {
@@ -645,7 +651,7 @@ class CardRegistrationActivity : Activity() {
                 Log.d(TAG, "Loading PG url: $fixedPgUrl")
                 handler.post {
                     tvStatus.text = "카드 정보 입력"
-                    webView.loadUrl(fixedPgUrl)
+                    webView?.loadUrl(fixedPgUrl)
                 }
             } catch (e: SessionExpiredException) {
                 handler.post {
@@ -762,7 +768,7 @@ class CardRegistrationActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
-        webView.destroy()
+        webView?.destroy()
     }
 
     private fun returnToOAuthPending() {

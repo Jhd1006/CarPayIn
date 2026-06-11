@@ -7,8 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -54,7 +52,6 @@ class CarPayInService : Service() {
         var onParkingConfirmed: ((lotId: String, sessionId: String) -> Unit)? = null
         var onPaymentComplete: ((txId: String, approvalNo: String, lotId: String, amount: Int) -> Unit)? = null
         var onConnectionChanged: ((connected: Boolean) -> Unit)? = null
-        var onLotApproaching: ((lotId: String, lotName: String) -> Unit)? = null
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, CarPayInService::class.java))
@@ -137,8 +134,6 @@ class CarPayInService : Service() {
             handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
         }.start()
 
-        GeofenceManager.start(this)
-
         handler.postDelayed(feePollRunnable, FEE_POLL_MS)
         handler.postDelayed(mqttWatchRunnable, MQTT_WATCH_MS)
 
@@ -151,31 +146,12 @@ class CarPayInService : Service() {
         return START_STICKY
     }
 
-    /**
-     * Android 14(targetSdk 34) 부터 foregroundServiceType="location" 인 서비스를
-     *  위치 권한 없이 시작하면 SecurityException 뿐 아니라
-     *  MissingForegroundServiceTypeException / ForegroundServiceStartNotAllowedException
-     *  같은 RuntimeException 이 발생해 앱이 그대로 종료된다.
-     *
-     * → 단계적으로 폴백을 시도하고, 어떠한 Throwable 도 호출자에게 던지지 않는다.
-     *   반환값: 포그라운드 진입에 성공했으면 true.
-     */
     private fun startForegroundSafely(notif: Notification): Boolean {
-        // 1차: 매니페스트에 선언된 location 타입으로 시도
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                startForeground(NOTIF_SERVICE, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-                return true
-            } catch (t: Throwable) {
-                Log.w(TAG, "location 타입 포그라운드 실패 → fallback: ${t.javaClass.simpleName} ${t.message}")
-            }
-        }
-        // 2차: 타입 없이 (구 API 또는 타입 매칭 실패 시)
         try {
             startForeground(NOTIF_SERVICE, notif)
             return true
         } catch (t: Throwable) {
-            Log.e(TAG, "기본 포그라운드도 실패: ${t.javaClass.simpleName} ${t.message}")
+            Log.e(TAG, "포그라운드 진입 실패: ${t.javaClass.simpleName} ${t.message}")
         }
         return false
     }
@@ -187,7 +163,6 @@ class CarPayInService : Service() {
         isRunning = false
         handler.removeCallbacks(feePollRunnable)
         handler.removeCallbacks(mqttWatchRunnable)
-        GeofenceManager.stop()
         MqttManager.disconnect()
         VehicleDataManager.release()
         Log.d(TAG, "서비스 종료")
@@ -229,7 +204,6 @@ class CarPayInService : Service() {
             Log.d(TAG, "결제 완료 수신: $txId / ${"%,d".format(amount)}원")
             TransactionStore.save(this, txId, lotId, amount)
             ParkingStateManager.saveParkingState(this, false)
-            GeofenceManager.clearDetectedLots() // 같은 주차장 재방문 시 지오펜스 재활성화
             handler.post {
                 onPaymentComplete?.invoke(txId, approvalNo, lotId, amount)
                 updateServiceNotif("CarPayIn 주차 감시 중")
@@ -241,11 +215,6 @@ class CarPayInService : Service() {
             )
         }
 
-        GeofenceManager.onParkingLotApproach = { lotId, lotName, _ ->
-            // 지오펜스 접근 감지는 UI 알림 용도로만 사용한다.
-            // 사전 등록은 사용자가 길안내 버튼을 탭할 때 navigateToParkingLot()에서 처리한다.
-            handler.post { onLotApproaching?.invoke(lotId, lotName) }
-        }
     }
 
     fun navigateToParkingLot(lotId: String, lotName: String) {

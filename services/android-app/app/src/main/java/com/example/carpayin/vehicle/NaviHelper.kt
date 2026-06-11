@@ -149,7 +149,6 @@ object NaviHelper {
         val started = tryPleosSdk(lat, lng, lotName)
         if (started) {
             onNavigationStarted?.invoke(lotName, lat, lng)
-            GeofenceManager.onNaviDestinationChanged(lotName, lat, lng)
         }
         return started
     }

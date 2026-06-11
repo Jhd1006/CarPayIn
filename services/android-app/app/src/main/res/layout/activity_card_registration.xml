@@ -381,9 +381,11 @@
 
     <!-- ══════════════════════════════════════════
          STEP 3 — Mock PG WebView (카드 정보 입력)
+         WebView는 실제 필요한 시점에 프로그래밍 방식으로 생성하여 이 컨테이너에 추가한다.
+         XML에 WebView를 두면 setContentView() 시점에 WebView 초기화가 발생해 CONSENT 화면이 늦게 뜬다.
          ══════════════════════════════════════════ -->
-    <WebView
-        android:id="@+id/webViewCard"
+    <FrameLayout
+        android:id="@+id/webViewContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
