@@ -18,7 +18,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.carpayin.data.ParkingStateManager
 import com.example.carpayin.data.TransactionStore
@@ -42,7 +41,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var vin: String = ""
-    private var approachingLotId: String? = null
     private var navigatingLotId: String? = null
 
     private lateinit var tvStatusDot: TextView
@@ -93,7 +91,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val REQ_LOCATION_PERM = 300
+
 
     data class BrandTheme(val shortName: String, val bgColor: Int, val brandTextColor: Int, val network: String)
     private enum class RegisteredFeature { CARD, VEHICLE, PARKING, HISTORY }
@@ -562,35 +560,31 @@ class MainActivity : AppCompatActivity() {
     private fun populateParkingLots() {
         layoutParkingLots.removeAllViews()
         val sorted = GeofenceManager.cachedParkingLots.sortedWith(
-            compareByDescending<GeofenceManager.ParkingLot> { it.id == approachingLotId }.thenByDescending { it.id == navigatingLotId }
+            compareByDescending<GeofenceManager.ParkingLot> { it.id == navigatingLotId }
         )
 
         sorted.forEach { lot ->
-            val isNearby    = lot.id == approachingLotId
             val isNavigating = lot.id == navigatingLotId
 
-            val rowBg = when {
-                isNearby -> roundedBackground(0xFFFFF8E6.toInt(), 0xFFF2C46D.toInt())
-                isNavigating -> roundedBackground(0xFFEEF6FF.toInt(), 0xFF9BC8FF.toInt())
-                else -> getDrawable(R.drawable.bg_card_dark)
-            }
+            val rowBg = if (isNavigating) roundedBackground(0xFFEEF6FF.toInt(), 0xFF9BC8FF.toInt())
+                        else getDrawable(R.drawable.bg_card_dark)
 
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14)); background = rowBg; isClickable = true; isFocusable = true
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.setMargins(0, 0, 0, dp(8)) }
             }
 
-            val tvIcon = TextView(this).apply { text = when { isNavigating -> "🧭"; isNearby -> "🚗"; else -> "📍" }; textSize = 16f }
-            val subText = when { isNavigating -> "내비게이션 안내 중 · 탭하여 취소"; isNearby -> "접근 중 · 사전 등록됨"; else -> "탭하여 내비게이션 시작" }
+            val tvIcon = TextView(this).apply { text = if (isNavigating) "🧭" else "📍"; textSize = 16f }
+            val subText = if (isNavigating) "내비게이션 안내 중 · 탭하여 취소" else "탭하여 내비게이션 시작"
             val tvInfo = TextView(this).apply {
                 text = "${lot.name}\n$subText"
-                setTextColor(when { isNavigating -> Color.parseColor("#1B64DA"); isNearby -> Color.parseColor("#8A6200"); else -> Color.parseColor("#191F28") })
+                setTextColor(if (isNavigating) Color.parseColor("#1B64DA") else Color.parseColor("#191F28"))
                 textSize = 13f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also { it.setMargins(dp(10), 0, 0, 0) }
             }
             val tvBadge = TextView(this).apply {
-                text = when { isNavigating -> "안내 중"; isNearby -> "사전 등록됨"; else -> "제휴" }
-                setTextColor(when { isNavigating -> Color.parseColor("#1B64DA"); isNearby -> Color.parseColor("#8A6200"); else -> Color.parseColor("#0F8F68") })
+                text = if (isNavigating) "안내 중" else "제휴"
+                setTextColor(if (isNavigating) Color.parseColor("#1B64DA") else Color.parseColor("#0F8F68"))
                 textSize = 11f
             }
 
@@ -730,71 +724,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startServicesAndListeners() {
-        // 콜백/UI 업데이트는 권한과 무관하므로 먼저 등록한다.
         registerServiceCallbacks()
         handler.postDelayed({
             tvStatusDot.setTextColor(
                 if (MqttManager.isConnected()) 0xFF12B981.toInt() else 0xFF8B95A1.toInt()
             )
         }, 2_000)
-
-        val fineGranted = ContextCompat.checkSelfPermission(
-            this, android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (fineGranted) {
-            // 위치 권한이 이미 있으면 location-type 포그라운드 서비스를 안전하게 시작할 수 있다.
-            safeStartCarPayInService()
-        } else {
-            // ⚠️ Android 14(targetSdk 34) 에서 foregroundServiceType="location" 인 서비스를
-            //    위치 권한이 없는 상태로 startForegroundService 하면 SecurityException 또는
-            //    MissingForegroundServiceTypeException 으로 앱이 즉시 종료된다.
-            //    → 권한 다이얼로그 응답이 올 때까지 서비스 시작을 미룬다.
-            Log.d(TAG, "위치 권한 미부여 → 권한 요청 후 서비스 시작 예정")
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(
-                    android.Manifest.permission.ACCESS_FINE_LOCATION,
-                    android.Manifest.permission.ACCESS_COARSE_LOCATION
-                ),
-                REQ_LOCATION_PERM
-            )
-        }
-    }
-
-    /**
-     * Foreground Service 시작 시도. AAOS / 에뮬레이터 별로 OS 정책이 달라
-     * 예기치 못한 RuntimeException 이 발생하더라도 앱이 죽지 않도록 방어한다.
-     */
-    private fun safeStartCarPayInService() {
         try {
             CarPayInService.start(this)
         } catch (t: Throwable) {
             Log.e(TAG, "CarPayInService 시작 실패 (앱은 계속 동작): ${t.javaClass.simpleName} ${t.message}")
-            // 서비스가 안 떠도 화면 자체는 정상 동작하도록 유지.
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_LOCATION_PERM) {
-            val granted = grantResults.isNotEmpty() &&
-                grantResults[0] == PackageManager.PERMISSION_GRANTED
-            if (granted) {
-                Log.d(TAG, "위치 권한 부여됨 → CarPayInService 시작")
-                safeStartCarPayInService()
-            } else {
-                Log.w(TAG, "위치 권한 거부 → 자동 결제 감시는 제한적으로 동작")
-                Toast.makeText(
-                    this,
-                    "위치 권한이 없어 자동 입차 감지는 제한됩니다.\n수동 정산은 계속 사용할 수 있습니다.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
         }
     }
 
@@ -809,7 +748,6 @@ class MainActivity : AppCompatActivity() {
             updateParkingBadge(false); refreshTransactionHistory(); showPaymentComplete(txId, approvalNo, lotId, amount)
         }
         CarPayInService.onConnectionChanged = { connected -> tvStatusDot.setTextColor(if (connected) 0xFF12B981.toInt() else 0xFF8B95A1.toInt()) }
-        CarPayInService.onLotApproaching = { lotId, _ -> approachingLotId = lotId; populateParkingLots() }
     }
 
     private fun showEntryConfirmed(lotId: String) {
@@ -1008,13 +946,12 @@ class MainActivity : AppCompatActivity() {
         CarPayInService.onParkingConfirmed = null
         CarPayInService.onPaymentComplete  = null
         CarPayInService.onConnectionChanged= null
-        CarPayInService.onLotApproaching   = null
         NaviHelper.release()
         VehicleDataManager.release()
     }
 
     private fun setupDevTrigger() {
-        DevTapGate.install(this, tvHeaderTitle) { showDevMenu() }
+        DevTapGate.install(this, findViewById(R.id.headerLogoArea)) { showDevMenu() }
         btnResetApp.setOnClickListener { confirmReset() }
     }
 
@@ -1206,7 +1143,6 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(timerRunnable)
         ParkingStateManager.clearSession(this)
         TransactionStore.clear(this)
-        approachingLotId = null
         navigatingLotId = null
     }
 
