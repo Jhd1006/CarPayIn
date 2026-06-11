@@ -26,10 +26,19 @@
             android:foreground="?android:attr/selectableItemBackground">
 
             <ImageView
-                android:layout_width="110dp"
-                android:layout_height="40dp"
-                android:src="@drawable/ic_logo"
-                android:scaleType="fitCenter"/>
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_car_icon"
+                android:scaleType="fitCenter"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Car Pay In"
+                android:textColor="#191F28"
+                android:textSize="17sp"
+                android:textStyle="bold"/>
         </LinearLayout>
 
         <Button
@@ -66,10 +75,7 @@
             android:layout_weight="1"
             android:src="@drawable/ic_logo"
             android:scaleType="fitCenter"
-            android:paddingStart="60dp"
-            android:paddingEnd="60dp"
-            android:paddingTop="16dp"
-            android:paddingBottom="8dp"/>
+            android:padding="16dp"/>
 
         <!-- 하단 컨텐츠 -->
         <LinearLayout
@@ -151,10 +157,7 @@
             android:layout_weight="1"
             android:src="@drawable/ic_logo"
             android:scaleType="fitCenter"
-            android:paddingStart="60dp"
-            android:paddingEnd="60dp"
-            android:paddingTop="16dp"
-            android:paddingBottom="8dp"/>
+            android:padding="16dp"/>
 
         <!-- 하단 컨텐츠 -->
         <LinearLayout
