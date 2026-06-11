@@ -19,6 +19,7 @@ import com.example.carpayin.network.ApiManager
 import com.example.carpayin.network.MqttManager
 import com.example.carpayin.ui.MainActivity
 import com.example.carpayin.vehicle.GeofenceManager
+import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
 
 /**
@@ -198,6 +199,7 @@ class CarPayInService : Service() {
         MqttManager.onParkingConfirmed = { lotId, sessionId ->
             Log.d(TAG, "입차 확정 수신: $lotId / $sessionId")
             ParkingStateManager.saveParkingState(this, true, lotId, sessionId)
+            TtsHelper.speak("${lotId} 입차가 확인되었습니다")
             handler.post {
                 onParkingConfirmed?.invoke(lotId, sessionId)
                 updateServiceNotif("🅿 주차 중 — $lotId")
@@ -208,6 +210,7 @@ class CarPayInService : Service() {
 
         MqttManager.onPaymentComplete = { txId, approvalNo, lotId, amount ->
             Log.d(TAG, "결제 완료 수신: $txId / ${"%,d".format(amount)}원")
+            TtsHelper.speak("${"%,d".format(amount)}원 결제가 완료되었습니다")
             TransactionStore.save(this, txId, lotId, amount)
             ParkingStateManager.saveParkingState(this, false)
             handler.post {

@@ -29,6 +29,7 @@ import com.example.carpayin.network.MqttManager
 import com.example.carpayin.service.CarPayInService
 import com.example.carpayin.vehicle.GeofenceManager
 import com.example.carpayin.vehicle.NaviHelper
+import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
 
 class MainActivity : AppCompatActivity() {
@@ -162,8 +163,9 @@ class MainActivity : AppCompatActivity() {
 
         val appContext = applicationContext
         Thread {
-            NaviHelper.takePanelControl(appContext)   // ← 패널 소유권 먼저 취득 (없으면 모든 터치가 nav app으로 흘러감)
-            NaviHelper.init(appContext)               // Pleos 라우팅 SDK 초기화
+            NaviHelper.takePanelControl(appContext)
+            NaviHelper.init(appContext)
+            TtsHelper.init(appContext)
             VehicleDataManager.init(appContext)
             val realVin = VehicleDataManager.readVin(appContext)
             if (realVin.isNotBlank() && realVin != vin) {
@@ -617,7 +619,7 @@ class MainActivity : AppCompatActivity() {
             "시작" to {
                 val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
                 if (navStarted) {
-                    // 내비 앱이 새 태스크로 실행될 경우 터치 소유권 재취득
+                    TtsHelper.speak("${lot.name}으로 경로 안내를 시작합니다")
                     handler.postDelayed({
                         Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
                     }, 1_500)
