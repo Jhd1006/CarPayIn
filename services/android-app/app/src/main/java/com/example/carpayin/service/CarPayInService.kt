@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -148,7 +150,11 @@ class CarPayInService : Service() {
 
     private fun startForegroundSafely(notif: Notification): Boolean {
         try {
-            startForeground(NOTIF_SERVICE, notif)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIF_SERVICE, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIF_SERVICE, notif)
+            }
             return true
         } catch (t: Throwable) {
             Log.e(TAG, "포그라운드 진입 실패: ${t.javaClass.simpleName} ${t.message}")
