@@ -29,8 +29,10 @@ import com.example.carpayin.network.MqttManager
 import com.example.carpayin.service.CarPayInService
 import com.example.carpayin.vehicle.GeofenceManager
 import com.example.carpayin.vehicle.NaviHelper
+import com.example.carpayin.vehicle.SttManager
 import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
+import com.example.carpayin.vehicle.VoiceCommandHandler
 
 class MainActivity : AppCompatActivity() {
 
@@ -55,6 +57,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layoutRegistered: ScrollView
     private lateinit var tvHeaderTitle: RelativeLayout
     private lateinit var mainHeaderLogoTapArea: View
+    private lateinit var btnVoiceMic: Button
     private lateinit var tvFeatureHint: TextView
     private lateinit var sectionCard: LinearLayout
     private lateinit var sectionVehicle: LinearLayout
@@ -130,6 +133,7 @@ class MainActivity : AppCompatActivity() {
         btnOAuthPendingCancel = findViewById(R.id.btnOAuthPendingCancel)
 
         btnResetApp        = findViewById(R.id.btnResetApp)
+        btnVoiceMic        = findViewById(R.id.btnVoiceMic)
         mainCardBody       = findViewById(R.id.mainCardBody)
         mainCardBrand      = findViewById(R.id.mainCardBrand)
         mainCardNetwork    = findViewById(R.id.mainCardNetwork)
@@ -161,11 +165,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        setupVoiceCommand()
+
         val appContext = applicationContext
         Thread {
             NaviHelper.takePanelControl(appContext)
             NaviHelper.init(appContext)
             TtsHelper.init(appContext)
+            SttManager.init(appContext)
             VehicleDataManager.init(appContext)
             val realVin = VehicleDataManager.readVin(appContext)
             if (realVin.isNotBlank() && realVin != vin) {
@@ -956,8 +963,40 @@ class MainActivity : AppCompatActivity() {
         CarPayInService.onParkingConfirmed = null
         CarPayInService.onPaymentComplete  = null
         CarPayInService.onConnectionChanged= null
+        SttManager.release()
         NaviHelper.release()
         VehicleDataManager.release()
+        VoiceCommandHandler.onShowParkingSection = null
+        VoiceCommandHandler.onNavigateTo = null
+    }
+
+    private fun setupVoiceCommand() {
+        VoiceCommandHandler.onShowParkingSection = {
+            handler.post {
+                showRegisteredFeature(RegisteredFeature.PARKING)
+            }
+        }
+        VoiceCommandHandler.onNavigateTo = { lot ->
+            handler.post { startNavigationTo(lot) }
+        }
+
+        SttManager.onResult = { text ->
+            handler.post { VoiceCommandHandler.handle(text) }
+        }
+        SttManager.onListeningChanged = { listening ->
+            handler.post {
+                btnVoiceMic.text = if (listening) "🔴" else "🎤"
+            }
+        }
+
+        btnVoiceMic.setOnClickListener {
+            if (SttManager.isListening) {
+                SttManager.toggleListening()
+            } else {
+                TtsHelper.speak("말씀하세요")
+                SttManager.toggleListening()
+            }
+        }
     }
 
     private fun setupDevTrigger() {

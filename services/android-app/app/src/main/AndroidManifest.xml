@@ -9,8 +9,8 @@
     <!-- Pleos 내비게이션 경로 탐색 -->
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH"/>
 
-    <!-- Pleos TTS (음성 안내) -->
-    <uses-permission android:name="pleos.car.permission.TTS_SERVICE"/>
+    <!-- Pleos STT (음성 인식) -->
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE"/>
 
     <!-- 네트워크 (MQTT 브로커 / 백엔드 REST API) -->
     <uses-permission android:name="android.permission.INTERNET"/>
