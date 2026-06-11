@@ -209,9 +209,9 @@ services:
       PMS_WEBHOOK_SECRET: ${PMS_WEBHOOK_SECRET:-pms-webhook-secret}
       PMS_FEE_PER_30_MINUTES: ${PMS_FEE_PER_30_MINUTES:-500}
       PMS_REDIS_URL: ${PMS_REDIS_URL:-redis://pms-redis:6379/0}
-      MQTT_HOST: ${MQTT_HOST:-mqtt}
-      MQTT_PORT: ${MQTT_PORT:-1883}
-      MQTT_ENABLED: ${MQTT_ENABLED:-true}
+      BARRIER_ENTRY_URL: ${BARRIER_ENTRY_URL:-http://host.docker.internal:8100/open}
+      BARRIER_EXIT_URL: ${BARRIER_EXIT_URL:-http://host.docker.internal:8101/open}
+      BARRIER_ENABLED: ${BARRIER_ENABLED:-true}
     ports:
       - "8001:8000"
     depends_on:
@@ -221,8 +221,6 @@ services:
         condition: service_healthy
       carpayin-backend:
         condition: service_healthy
-      mqtt:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
       interval: 60s
