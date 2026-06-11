@@ -951,7 +951,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupDevTrigger() {
-        DevTapGate.install(this, findViewById(R.id.headerLogoArea)) { showDevMenu() }
+        DevTapGate.install(this, tvHeaderTitle) { showDevMenu() }
         btnResetApp.setOnClickListener { confirmReset() }
     }
 

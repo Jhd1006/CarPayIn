@@ -8,9 +8,6 @@ object DevTapGate {
     fun install(activity: Activity, target: View, onUnlocked: () -> Unit) {
         target.isClickable = true
         target.isFocusable = true
-        target.setOnLongClickListener {
-            onUnlocked()
-            true
-        }
+        target.setOnClickListener { onUnlocked() }
     }
 }
