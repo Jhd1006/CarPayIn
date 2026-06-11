@@ -328,6 +328,18 @@
             android:textSize="16sp"
             android:textStyle="bold"/>
 
+        <!-- 테스트 자동입력 버튼 -->
+        <Button
+            android:id="@+id/btnTestPlate"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_button_secondary"
+            android:text="테스트 번호 입력 (123가4567)"
+            android:textAllCaps="false"
+            android:textColor="@color/button_on_secondary"
+            android:textSize="13sp"/>
+
     </LinearLayout>
 
     <!-- ══════════════════════════════════════════
