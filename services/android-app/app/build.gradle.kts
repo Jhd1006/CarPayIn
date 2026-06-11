@@ -72,7 +72,7 @@ dependencies {
     // Pleos SDKs (에뮬레이터용 VHAL + 패널 소유권/내비 연동)
     implementation("ai.pleos.playground:Vehicle:2.0.3")
     implementation("ai.pleos.playground:NaviHelper:2.0.3")
-    implementation("ai.pleos.playground:TextToSpeech:2.1.5.1")
+    // Android 기본 TTS 사용 (android.speech.tts) — 별도 의존성 불필요
 
     // MQTT (입차 확정 / 결제 완료 실시간 푸시)
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
