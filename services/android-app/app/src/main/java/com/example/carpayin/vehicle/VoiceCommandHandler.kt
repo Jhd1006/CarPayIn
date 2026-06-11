@@ -40,22 +40,16 @@ action 종류:
         val lots = GeofenceManager.cachedParkingLots
         val parkingContext = buildParkingContext(lots)
 
-        // 대화 기록 + 현재 주차장 정보를 프롬프트에 주입
-        val historyText = if (history.isEmpty()) ""
-        else history.joinToString("\n") { (role, msg) ->
-            if (role == "user") "사용자: $msg" else "어시스턴트: $msg"
-        } + "\n"
+        // 첫 발화면 세션 시작
+        if (history.isEmpty()) {
+            LlmManager.startChat(SYSTEM_PROMPT)
+        }
 
-        val fullPrompt = """
-$SYSTEM_PROMPT
+        // 주차장 현황을 매 발화에 주입 (위치 변화 반영)
+        val message = "$parkingContext\n\n사용자: $userText"
 
-$parkingContext
-
-$historyText사용자: $userText
-        """.trimIndent()
-
-        LlmManager.generate(
-            prompt = fullPrompt,
+        LlmManager.send(
+            text = message,
             onComplete = { responseText ->
                 onThinking?.invoke(false)
                 handleLlmResponse(userText, responseText, lots)
@@ -82,10 +76,8 @@ $historyText사용자: $userText
         val message = json.optString("message", "")
         val lotId   = json.optString("lot_id").takeIf { it.isNotBlank() && it != "null" }
 
-        // 대화 기록 누적
+        // 세션 활성 여부 추적 (startChat 중복 방지용)
         history.add("user" to userText)
-        history.add("assistant" to responseText)
-        if (history.size > 10) repeat(2) { history.removeAt(0) } // 최근 5턴만 유지
 
         // 메시지 음성 출력
         if (message.isNotBlank()) TtsHelper.speak(message)

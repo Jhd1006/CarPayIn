@@ -42,10 +42,7 @@ object SttManager {
     }
 
     fun toggleListening() {
-        if (!isReady) {
-            Log.d(TAG, "STT 미준비")
-            return
-        }
+        if (!isReady) { Log.d(TAG, "STT 미준비"); return }
         if (isListening) stopListening() else startListening()
     }
 
@@ -61,11 +58,7 @@ object SttManager {
     }
 
     private fun stopListening() {
-        try {
-            stt?.stop()
-        } catch (e: Exception) {
-            Log.w(TAG, "STT stop 실패: ${e.message}")
-        }
+        try { stt?.stop() } catch (e: Exception) { Log.w(TAG, "STT stop 실패: ${e.message}") }
         isListening = false
         onListeningChanged?.invoke(false)
     }
@@ -83,9 +76,7 @@ object SttManager {
     private val resultListener = object : ResultListener {
         override fun onReady() { Log.d(TAG, "onReady") }
 
-        override fun onStartedRecognition() {
-            Log.d(TAG, "onStartedRecognition")
-        }
+        override fun onStartedRecognition() { Log.d(TAG, "onStartedRecognition") }
 
         override fun onEndedRecognition() {
             Log.d(TAG, "onEndedRecognition")
@@ -93,18 +84,16 @@ object SttManager {
             onListeningChanged?.invoke(false)
         }
 
-        override fun onUpdated(results: List<*>, isFinal: Boolean) {
-            if (!isFinal || results.isEmpty()) return
-            val text = results.first()?.toString()?.trim() ?: return
-            if (text.isBlank()) return
-            Log.d(TAG, "STT 결과: \"$text\"")
-            onResult?.invoke(text)
+        override fun onUpdated(stt: String, completed: Boolean) {
+            if (!completed || stt.isBlank()) return
+            Log.d(TAG, "STT 결과: \"$stt\"")
+            onResult?.invoke(stt.trim())
         }
 
-        override fun onUpdatedEpdData(data: Any?) {}
+        override fun onUpdatedEpdData(on: Long, off: Long) {}
 
-        override fun onError(errMsg: String) {
-            Log.w(TAG, "STT 오류: $errMsg")
+        override fun onError() {
+            Log.w(TAG, "STT 오류")
             isListening = false
             onListeningChanged?.invoke(false)
         }
