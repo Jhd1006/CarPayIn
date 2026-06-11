@@ -122,7 +122,7 @@ class CardRegistrationActivity : Activity() {
         accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN) ?: ""
         userName    = intent.getStringExtra(EXTRA_USER_NAME)    ?: "고객"
 
-        // DevTapGate 대신 dispatchTouchEvent에서 헤더 영역 터치를 직접 처리
+        // 헤더 영역 터치는 dispatchTouchEvent에서 직접 처리한다.
 
         val savedPlate = ParkingStateManager.getPlateNumber(this)
         if (!savedPlate.isNullOrEmpty()) {

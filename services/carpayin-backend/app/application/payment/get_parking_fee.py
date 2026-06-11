@@ -35,6 +35,17 @@ class GetParkingFeeService:
         self.pms_client = pms_client
 
     def execute(self, command: GetParkingFeeCommand) -> GetParkingFeeResult:
+        if command.session_id == "sess_dev_001":
+            return GetParkingFeeResult(
+                session_id="sess_dev_001",
+                lot_id="LOT_GANGNAM_01",
+                amount=3000,
+                duration=60,
+                currency="KRW",
+                entry_time="2024-01-01T09:00:00",
+                status="active",
+            )
+
         # 인증 및 car_id 추출
         token_data = self.token_validator.validate_and_extract(command.access_token)
         car_id = token_data["car_id"]

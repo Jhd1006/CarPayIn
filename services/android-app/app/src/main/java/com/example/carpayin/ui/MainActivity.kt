@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
 
     private var lastAmount: Int = 0
     private var parkingStartMs: Long = 0L
+    private var isDevMenuVisible = false
     private val timerRunnable = object : Runnable {
         override fun run() {
             updateParkingTimer()
@@ -957,6 +958,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (isDevMenuVisible) return super.dispatchTouchEvent(ev)
         if (ev.action == MotionEvent.ACTION_UP) {
             val headerBounds = Rect()
             tvHeaderTitle.getGlobalVisibleRect(headerBounds)
@@ -976,6 +978,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDevMenu() {
+        if (isDevMenuVisible) return
+        isDevMenuVisible = true
         val decorView = window.decorView as android.widget.FrameLayout
 
         val overlay = android.widget.FrameLayout(this).apply {
@@ -986,7 +990,12 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(0xAA000000.toInt())
             elevation = 999f
         }
-        fun dismissOverlay() { runOnUiThread { decorView.removeView(overlay) } }
+        fun dismissOverlay() {
+            runOnUiThread {
+                isDevMenuVisible = false
+                decorView.removeView(overlay)
+            }
+        }
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1025,7 +1034,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         addBtn("Mock 입차 확정") {
-            ParkingStateManager.saveParkingState(this, true, "DEV_LOT_01", "sess_dev_001")
+            ParkingStateManager.saveParkingState(this, true, "LOT_GANGNAM_01", "sess_dev_001")
             showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show()
         }
         addBtn("Mock 결제 완료") {

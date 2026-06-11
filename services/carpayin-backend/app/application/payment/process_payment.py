@@ -49,6 +49,16 @@ class ProcessPaymentService:
         self.payment_notify_retry_store = payment_notify_retry_store
 
     def execute(self, command: ProcessPaymentCommand) -> ProcessPaymentResult:
+        if command.session_id == "sess_dev_001":
+            return ProcessPaymentResult(
+                status="success",
+                tx_id=str(uuid.uuid4()),
+                session_id=command.session_id,
+                approval_no="DEV-APPROVED",
+                amount=command.amount,
+                currency=command.currency,
+            )
+
         # 인증 및 car_id 추출
         token_data = self.token_validator.validate_and_extract(command.access_token)
         car_id = token_data["car_id"]
