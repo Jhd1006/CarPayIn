@@ -20,8 +20,6 @@
             android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:clickable="true"
-            android:focusable="true"
             android:paddingEnd="16dp">
 
             <ImageView
