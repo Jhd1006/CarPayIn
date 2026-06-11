@@ -156,6 +156,7 @@ object NaviHelper {
         }
         override fun onRouteCancelled() {
             Log.d(TAG, "onRouteCancelled")
+            TtsHelper.speak("경로 안내가 취소되었습니다")
             onNavigationEnded?.invoke()
         }
         override fun onDestinationArrived(info: DestinationArrivedInfo) {

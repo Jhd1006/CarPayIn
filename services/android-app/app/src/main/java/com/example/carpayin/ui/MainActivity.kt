@@ -612,6 +612,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startNavigationTo(lot: GeofenceManager.ParkingLot) {
+        if (!hasCompletedCardRegistration()) {
+            TtsHelper.speak("결제 카드가 등록되지 않았습니다. 주차 요금이 자동으로 결제되지 않을 수 있습니다")
+        }
         showAaosDialog(
             "🧭 내비게이션 시작",
             "${lot.name}\n\n목적지로 경로 안내를 시작합니다.\n도착 전 차량 정보가 주차장에 자동으로 등록됩니다.",

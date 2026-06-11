@@ -177,6 +177,7 @@ class CarPayInService : Service() {
 
     private fun setupCallbacks() {
         MqttManager.onConnectionLost = {
+            TtsHelper.speak("서버 연결이 끊어졌습니다. 자동 결제가 일시 중단됩니다")
             handler.post { onConnectionChanged?.invoke(false) }
             handler.postDelayed({
                 if (!MqttManager.isConnected() && carId.isNotEmpty()) {
