@@ -35,6 +35,9 @@ object NaviHelper {
     var onNavigationStarted: ((lotName: String, lat: Double, lng: Double) -> Unit)? = null
     var onNavigationEnded: (() -> Unit)? = null
 
+    var currentLat: Double = 0.0
+    var currentLng: Double = 0.0
+
     // ── 패널 소유권 ───────────────────────────────────────────────────────────
 
     fun takePanelControl(context: Context) {
@@ -169,7 +172,10 @@ object NaviHelper {
         override fun onBookMarkChanged() {}
         override fun onDestinationChanged() {}
         override fun onApplicationVisibilityChangeRequest(info: ApplicationVisibleInfo) {}
-        override fun onCurrentLocationInfo(info: CurrentLocationInfo) {}
+        override fun onCurrentLocationInfo(info: CurrentLocationInfo) {
+            currentLat = info.latitude
+            currentLng = info.longitude
+        }
         override fun onRouteStateInfo(info: RouteStateInfo) {}
         override fun onDestinationInfo(info: DestinationInfo) {}
         override fun onWayPointInfo(list: List<WaypointInfo>) {}
