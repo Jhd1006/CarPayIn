@@ -9,7 +9,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
+import android.graphics.Rect
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
@@ -88,18 +90,25 @@ class RegistrationActivity : Activity() {
             startPolling()
         }
 
-        DevTapGate.install(this, ivRegistrationLogo) { openDevMenu() }
-
         renderQrCode()
         startPolling()
     }
 
-    private fun openDevMenu() {
-        startActivity(Intent(this, MainActivity::class.java).apply {
-            action = MainActivity.ACTION_SHOW_DEV_MENU
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(MainActivity.EXTRA_SHOW_DEV_MENU, true)
-        })
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_UP) {
+            val logoBounds = Rect()
+            ivRegistrationLogo.getGlobalVisibleRect(logoBounds)
+            logoBounds.inset(-dp(32), -dp(32))
+            if (logoBounds.contains(ev.rawX.toInt(), ev.rawY.toInt())) {
+                startActivity(Intent(this, MainActivity::class.java).apply {
+                    action = MainActivity.ACTION_SHOW_DEV_MENU
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra(MainActivity.EXTRA_SHOW_DEV_MENU, true)
+                })
+                return true
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun sha256(input: String): String {
