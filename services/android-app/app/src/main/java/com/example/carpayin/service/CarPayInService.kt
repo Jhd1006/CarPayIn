@@ -177,7 +177,6 @@ class CarPayInService : Service() {
 
     private fun setupCallbacks() {
         MqttManager.onConnectionLost = {
-            TtsHelper.speak("서버 알림 연결이 끊어졌습니다. 입차 및 결제 알림을 받지 못할 수 있습니다")
             handler.post { onConnectionChanged?.invoke(false) }
             handler.postDelayed({
                 if (!MqttManager.isConnected() && carId.isNotEmpty()) {
