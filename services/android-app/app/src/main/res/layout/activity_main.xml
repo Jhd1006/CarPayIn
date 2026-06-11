@@ -15,11 +15,15 @@
         android:background="@drawable/bg_header_soft">
 
         <LinearLayout
+            android:id="@+id/mainHeaderLogoTapArea"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingEnd="16dp">
+            android:paddingEnd="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground">
 
             <ImageView
                 android:layout_width="28dp"

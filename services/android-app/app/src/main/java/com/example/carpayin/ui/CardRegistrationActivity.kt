@@ -8,7 +8,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
-import android.graphics.Rect
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -43,7 +42,7 @@ class CardRegistrationActivity : Activity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var tvStatus: TextView
     private lateinit var tvStepIndicator: TextView
-    private lateinit var ivHeaderLogo: ImageView
+    private lateinit var headerLogoTapArea: View
     private lateinit var btnCancel: TextView
     private lateinit var btnPrevStep: TextView
 
@@ -61,6 +60,7 @@ class CardRegistrationActivity : Activity() {
     private lateinit var accessToken: String
     private lateinit var userName: String
     private var selectedBrandName: String = ""
+    private var isDevMenuVisible = false
 
     companion object {
         const val EXTRA_ACCESS_TOKEN = "extra_access_token"
@@ -109,7 +109,8 @@ class CardRegistrationActivity : Activity() {
         progressBar       = findViewById(R.id.progressBarCard)
         tvStatus          = findViewById(R.id.tvCardStatus)
         tvStepIndicator   = findViewById(R.id.tvStepIndicator)
-        ivHeaderLogo      = findViewById(R.id.ivCardHeaderLogo)
+        headerLogoTapArea = findViewById(R.id.cardHeaderLogoTapArea)
+        headerLogoTapArea.setOnClickListener { openDevMenu() }
         btnCancel         = findViewById(R.id.btnCancelCard)
         btnPrevStep       = findViewById(R.id.btnPrevStep)
         layoutConsent     = findViewById(R.id.layoutConsent)
@@ -188,19 +189,17 @@ class CardRegistrationActivity : Activity() {
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.action == MotionEvent.ACTION_UP) {
-            val logoBounds = Rect()
-            ivHeaderLogo.getGlobalVisibleRect(logoBounds)
-            logoBounds.inset(-dp(24), -dp(24))
-            if (logoBounds.contains(ev.rawX.toInt(), ev.rawY.toInt())) {
-                openDevMenu()
-                return true
-            }
+        if (!isDevMenuVisible && DevLogoTapTarget.consumeTap(ev, headerLogoTapArea) {
+            openDevMenu()
+        }) {
+            return true
         }
         return super.dispatchTouchEvent(ev)
     }
 
     private fun openDevMenu() {
+        if (isDevMenuVisible) return
+        isDevMenuVisible = true
         val decorView = window.decorView as android.widget.FrameLayout
 
         val overlay = android.widget.FrameLayout(this).apply {
@@ -211,7 +210,12 @@ class CardRegistrationActivity : Activity() {
             setBackgroundColor(0xAA000000.toInt())
             elevation = 999f
         }
-        fun dismissOverlay() { runOnUiThread { decorView.removeView(overlay) } }
+        fun dismissOverlay() {
+            runOnUiThread {
+                isDevMenuVisible = false
+                decorView.removeView(overlay)
+            }
+        }
 
         val card = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL

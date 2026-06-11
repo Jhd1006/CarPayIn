@@ -9,7 +9,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
-import android.graphics.Rect
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -58,6 +57,7 @@ class RegistrationActivity : Activity() {
 
         ivQrCode = findViewById(R.id.ivQrCode)
         ivRegistrationLogo = findViewById(R.id.ivRegistrationLogo)
+        ivRegistrationLogo.setOnClickListener { openMainDevMenu() }
         tvPollingStatus = findViewById(R.id.tvPollingStatus)
         tvSubMessage = findViewById(R.id.tvSubMessage)
         btnCancel = findViewById(R.id.btnCancel)
@@ -95,20 +95,20 @@ class RegistrationActivity : Activity() {
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.action == MotionEvent.ACTION_UP) {
-            val logoBounds = Rect()
-            ivRegistrationLogo.getGlobalVisibleRect(logoBounds)
-            logoBounds.inset(-dp(32), -dp(32))
-            if (logoBounds.contains(ev.rawX.toInt(), ev.rawY.toInt())) {
-                startActivity(Intent(this, MainActivity::class.java).apply {
-                    action = MainActivity.ACTION_SHOW_DEV_MENU
-                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra(MainActivity.EXTRA_SHOW_DEV_MENU, true)
-                })
-                return true
-            }
+        if (DevLogoTapTarget.consumeTap(ev, ivRegistrationLogo, dp(32)) {
+            openMainDevMenu()
+        }) {
+            return true
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    private fun openMainDevMenu() {
+        startActivity(Intent(this, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_SHOW_DEV_MENU
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_SHOW_DEV_MENU, true)
+        })
     }
 
     private fun sha256(input: String): String {

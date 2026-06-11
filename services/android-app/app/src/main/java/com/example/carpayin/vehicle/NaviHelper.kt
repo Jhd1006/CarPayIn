@@ -63,18 +63,22 @@ object NaviHelper {
     // ── SDK 초기화 ────────────────────────────────────────────────────────────
 
     fun init(context: Context) {
-        if (isInitialized) return
+        if (isInitialized) { Log.d(TAG, "init: already initialized"); return }
         try {
             if (navi == null) {
+                Log.d(TAG, "init: creating PleosNaviHelper instance")
                 navi = PleosNaviHelper(context.applicationContext)
+                Log.d(TAG, "init: calling initialize()")
                 navi?.initialize()
                 isPanelControlActive = true
+                Log.d(TAG, "init: initialize() returned")
             }
+            Log.d(TAG, "init: adding listener")
             navi?.addListener(routeListener)
             isInitialized = true
-            Log.d(TAG, "NaviHelper initialized")
+            Log.d(TAG, "NaviHelper initialized (navi=$navi)")
         } catch (e: Exception) {
-            Log.w(TAG, "NaviHelper init failed: ${e.message}")
+            Log.w(TAG, "NaviHelper init failed: ${e.javaClass.simpleName}: ${e.message}")
         }
     }
 
@@ -87,7 +91,11 @@ object NaviHelper {
         lotName: String,
         lotId: String
     ): Boolean {
-        val n = navi ?: return false
+        val n = navi
+        if (n == null) {
+            Log.w(TAG, "setDestination: navi is null — NaviHelper was not initialized successfully")
+            return false
+        }
         return try {
             // RouteInfo 생성자 순서: longitude, latitude, poiName, poiId, address, poiSubId, routeOption
             val routeInfo = RouteInfo(

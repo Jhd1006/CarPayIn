@@ -43,7 +43,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var vin: String = ""
-    private var navigatingLotId: String? = null
 
     private lateinit var tvStatusDot: TextView
     private lateinit var tvPaymentStatus: TextView
@@ -154,6 +153,12 @@ class MainActivity : AppCompatActivity() {
 
         // 백그라운드: Pleos 패널 소유권 + Car API 바인딩
         // takePanelControl()은 Pleos IPC 호출 → 메인 스레드에서 실행 시 500ms+ 블로킹
+        NaviHelper.onNavigationEnded = {
+            handler.post {
+                Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
+            }
+        }
+
         val appContext = applicationContext
         Thread {
             NaviHelper.takePanelControl(appContext)   // ← 패널 소유권 먼저 취득 (없으면 모든 터치가 nav app으로 흘러감)
@@ -564,38 +569,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun populateParkingLots() {
         layoutParkingLots.removeAllViews()
-        val sorted = GeofenceManager.cachedParkingLots.sortedWith(
-            compareByDescending<GeofenceManager.ParkingLot> { it.id == navigatingLotId }
-        )
-
-        sorted.forEach { lot ->
-            val isNavigating = lot.id == navigatingLotId
-
-            val rowBg = if (isNavigating) roundedBackground(0xFFEEF6FF.toInt(), 0xFF9BC8FF.toInt())
-                        else getDrawable(R.drawable.bg_card_dark)
-
+        GeofenceManager.cachedParkingLots.sortedBy { it.name }.forEach { lot ->
             val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14)); background = rowBg; isClickable = true; isFocusable = true
+                orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = getDrawable(R.drawable.bg_card_dark); isClickable = true; isFocusable = true
                 foreground = TypedValue().let { tv -> theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true); getDrawable(tv.resourceId) }
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.setMargins(0, 0, 0, dp(8)) }
             }
-
-            val tvIcon = TextView(this).apply { text = if (isNavigating) "🧭" else "📍"; textSize = 16f }
-            val subText = if (isNavigating) "내비게이션 안내 중 · 탭하여 취소" else "탭하여 내비게이션 시작"
+            val tvIcon = TextView(this).apply { text = "📍"; textSize = 16f }
             val tvInfo = TextView(this).apply {
-                text = "${lot.name}\n$subText"
-                setTextColor(if (isNavigating) Color.parseColor("#1B64DA") else Color.parseColor("#191F28"))
-                textSize = 13f
+                text = "${lot.name}\n탭하여 내비게이션 시작"
+                setTextColor(Color.parseColor("#191F28")); textSize = 13f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also { it.setMargins(dp(10), 0, 0, 0) }
             }
-            val tvBadge = TextView(this).apply {
-                text = if (isNavigating) "안내 중" else "제휴"
-                setTextColor(if (isNavigating) Color.parseColor("#1B64DA") else Color.parseColor("#0F8F68"))
-                textSize = 11f
-            }
-
+            val tvBadge = TextView(this).apply { text = "제휴"; setTextColor(Color.parseColor("#0F8F68")); textSize = 11f }
             row.addView(tvIcon); row.addView(tvInfo); row.addView(tvBadge); layoutParkingLots.addView(row)
-            row.setOnClickListener { if (isNavigating) confirmCancelNavigation(lot) else startNavigationTo(lot) }
+            row.setOnClickListener { startNavigationTo(lot) }
         }
     }
 
@@ -607,8 +596,6 @@ class MainActivity : AppCompatActivity() {
             "시작" to {
                 val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
                 if (navStarted) {
-                    navigatingLotId = lot.id
-                    populateParkingLots()
                     // 내비 앱이 새 태스크로 실행될 경우 터치 소유권 재취득
                     handler.postDelayed({
                         Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
@@ -622,15 +609,6 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
                 }
             }
-        )
-    }
-
-    private fun confirmCancelNavigation(lot: GeofenceManager.ParkingLot) {
-        showAaosDialog(
-            "내비게이션 취소",
-            "${lot.name} 경로 안내를 취소하시겠습니까?",
-            "계속 안내" to {},
-            "취소" to { NaviHelper.cancelNavigation(); navigatingLotId = null; populateParkingLots(); Toast.makeText(this, "경로 안내가 취소되었습니다", Toast.LENGTH_SHORT).show() }
         )
     }
 
@@ -1176,7 +1154,6 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(timerRunnable)
         ParkingStateManager.clearSession(this)
         TransactionStore.clear(this)
-        navigatingLotId = null
     }
 
     private fun hasCompletedCardRegistration(): Boolean {
