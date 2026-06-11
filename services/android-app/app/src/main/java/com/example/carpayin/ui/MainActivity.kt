@@ -1043,10 +1043,12 @@ class MainActivity : AppCompatActivity() {
 
         addBtn("Mock 입차 확정") {
             ParkingStateManager.saveParkingState(this, true, "LOT_GANGNAM_01", "sess_dev_001")
+            TtsHelper.speak("강남 주차장 입차가 확인되었습니다")
             showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show()
         }
         addBtn("Mock 결제 완료") {
             ParkingStateManager.saveParkingState(this, false)
+            TtsHelper.speak("3,000원 결제가 완료되었습니다")
             showRegisteredState(); Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
         }
         addBtn("등록 초기화 (즉시)") {
