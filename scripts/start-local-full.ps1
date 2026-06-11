@@ -316,7 +316,7 @@ if ($ngrokUrl) {
 Write-Host "  Test flow:"
 Write-Host "    1) Run CarPayIn app on AAOS emulator"
 Write-Host "    2) QR login -> vehicle confirmation -> card registration"
-Write-Host "    3) Select parking lot -> tap navigation button (사전 입차 등록)"
+Write-Host "    3) Select parking lot -> tap navigation button (pre-entry registration)"
 Write-Host "    4) Trigger LPR: POST http://localhost:8001/lpr/entry"
 Write-Host "    5) App receives entry notification (parked=true)"
 Write-Host "    6) App shows fee -> approve payment -> auto payment"
