@@ -1047,9 +1047,14 @@ class MainActivity : AppCompatActivity() {
             showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show()
         }
         addBtn("Mock 결제 완료") {
+            val mockAmount = 3000
+            val mockTxId = "dev_tx_${System.currentTimeMillis()}"
+            TransactionStore.save(this, mockTxId, "LOT_GANGNAM_01", mockAmount)
             ParkingStateManager.saveParkingState(this, false)
-            TtsHelper.speak("3,000원 결제가 완료되었습니다")
-            showRegisteredState(); Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
+            TtsHelper.speak("${"%,d".format(mockAmount)}원 결제가 완료되었습니다")
+            showRegisteredState()
+            showPaymentComplete(mockTxId, "DEV-APPROVED", "LOT_GANGNAM_01", mockAmount)
+            Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
         }
         addBtn("등록 초기화 (즉시)") {
             clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java)); renderStateFromStorage()

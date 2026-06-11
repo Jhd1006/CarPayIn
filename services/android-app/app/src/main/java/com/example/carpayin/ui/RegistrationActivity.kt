@@ -84,8 +84,8 @@ class RegistrationActivity : Activity() {
             btnRefreshQr.visibility = View.VISIBLE
             btnCancel.visibility = View.VISIBLE
             ivQrCode.setImageBitmap(null)
-            tvPollingStatus.text = "Scan this QR with MyHyundai"
-            tvSubMessage.text = "Log in with your MyHyundai account to link a vehicle."
+            tvPollingStatus.text = ""
+            tvSubMessage.text = ""
             renderQrCode()
             startPolling()
         }
@@ -127,10 +127,10 @@ class RegistrationActivity : Activity() {
                     "${ApiManager.QR_BASE_URL}/auth/hyundai/start?session_id=$loginSessionId"
                 }
                 val bits = QRCodeWriter().encode(authStartUrl, BarcodeFormat.QR_CODE, 512, 512)
-                val bitmap = Bitmap.createBitmap(bits.width, bits.height, Bitmap.Config.RGB_565)
+                val bitmap = Bitmap.createBitmap(bits.width, bits.height, Bitmap.Config.ARGB_8888)
                 for (x in 0 until bits.width) {
                     for (y in 0 until bits.height) {
-                        bitmap.setPixel(x, y, if (bits[x, y]) Color.BLACK else Color.WHITE)
+                        bitmap.setPixel(x, y, if (bits[x, y]) 0xFF191F28.toInt() else Color.TRANSPARENT)
                     }
                 }
                 handler.post {
@@ -141,8 +141,8 @@ class RegistrationActivity : Activity() {
                 Log.e(TAG, "Failed to render QR: ${e.message}")
                 handler.post {
                     progressBarReg.visibility = View.GONE
-                    tvPollingStatus.text = "QR session creation failed"
-                    tvSubMessage.text = e.message ?: "Check backend connection and try again."
+                    tvPollingStatus.text = ""
+                    tvSubMessage.text = ""
                     btnRefreshQr.visibility = View.VISIBLE
                     btnCancel.visibility = View.VISIBLE
                 }
@@ -168,8 +168,8 @@ class RegistrationActivity : Activity() {
         if (!isPolling || didCompleteLogin) return
         if (System.currentTimeMillis() - pollStartTime > POLL_TIMEOUT_MS) {
             isPolling = false
-            tvPollingStatus.text = "Login timed out"
-            tvSubMessage.text = "Refresh the QR and try again."
+            tvPollingStatus.text = ""
+            tvSubMessage.text = ""
             return
         }
 
@@ -187,26 +187,24 @@ class RegistrationActivity : Activity() {
                     handler.post {
                         isPolling = false
                         showAuthorizedProgress(result.status)
-                        tvPollingStatus.text = "MyHyundai processing failed"
-                        tvSubMessage.text = result.debugMessage.ifBlank { "Refresh the QR and try again." }
+                        tvPollingStatus.text = ""
+                        tvSubMessage.text = ""
                         btnRefreshQr.visibility = View.VISIBLE
                         btnCancel.visibility = View.VISIBLE
                     }
                 } else {
                     handler.post {
                         pollCount += 1
-                        tvPollingStatus.text = "Waiting for login... ($pollCount)"
-                        if (pollCount >= 2 && result.debugMessage.isNotBlank()) {
-                            tvSubMessage.text = result.debugMessage
-                        }
+                        tvPollingStatus.text = ""
+                        tvSubMessage.text = ""
                         scheduleNextPoll()
                     }
                 }
             } catch (e: Exception) {
                 handler.post {
                     pollCount += 1
-                    tvPollingStatus.text = "Checking login status..."
-                    tvSubMessage.text = e.message ?: "Failed to check login status"
+                    tvPollingStatus.text = ""
+                    tvSubMessage.text = ""
                     scheduleNextPoll()
                 }
             }
@@ -222,8 +220,8 @@ class RegistrationActivity : Activity() {
         ivQrCode.visibility = View.GONE
         btnCancel.visibility = View.GONE
         btnRefreshQr.visibility = View.GONE
-        tvPollingStatus.text = "MyHyundai login complete"
-        tvSubMessage.text = "Linking the vehicle selected in MyHyundai."
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
 
         val linkedVehicles = result.vehicleList.filter { it.carId.isNotBlank() }
         when {
@@ -231,8 +229,8 @@ class RegistrationActivity : Activity() {
                 didCompleteLogin = false
                 btnRefreshQr.visibility = View.VISIBLE
                 btnCancel.visibility = View.VISIBLE
-                tvPollingStatus.text = "No Hyundai vehicle found"
-                tvSubMessage.text = "No linked vehicle was returned. Check the backend vehicle-list log."
+                tvPollingStatus.text = ""
+                tvSubMessage.text = ""
             }
             linkedVehicles.size == 1 -> {
                 completeRegistration(result, linkedVehicles.first())
@@ -250,12 +248,8 @@ class RegistrationActivity : Activity() {
             btnRefreshQr.visibility = View.GONE
             btnCancel.visibility = View.GONE
         }
-        tvPollingStatus.text = "MyHyundai login complete"
-        tvSubMessage.text = if (status == "agreement_required") {
-            "Waiting for Hyundai data agreement..."
-        } else {
-            "Fetching Hyundai vehicle list..."
-        }
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
     }
 
     /**
@@ -282,8 +276,8 @@ class RegistrationActivity : Activity() {
             didCompleteLogin = false
             btnRefreshQr.visibility = View.VISIBLE
             btnCancel.visibility = View.VISIBLE
-            tvPollingStatus.text = "Vehicle selection required"
-            tvSubMessage.text = "Choose the Hyundai vehicle to link with this car."
+            tvPollingStatus.text = ""
+            tvSubMessage.text = ""
         }
 
         val card = LinearLayout(this).apply {
@@ -362,8 +356,8 @@ class RegistrationActivity : Activity() {
             return
         }
 
-        tvPollingStatus.text = "Linking Hyundai vehicle"
-        tvSubMessage.text = "Confirming that this QR session matches the selected vehicle."
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
         btnRefreshQr.visibility = View.GONE
         btnCancel.visibility = View.GONE
 
@@ -430,15 +424,8 @@ class RegistrationActivity : Activity() {
         isPolling = false
         btnRefreshQr.visibility = View.VISIBLE
         btnCancel.visibility = View.VISIBLE
-        tvPollingStatus.text = "Vehicle link failed"
-        tvSubMessage.text = when {
-            rawMessage.orEmpty().contains("vin_hash_mismatch") ->
-                "This QR session no longer matches the vehicle. Refresh the QR and try again."
-            rawMessage.orEmpty().contains("car_id_not_in_hyundai_list") ->
-                "The selected vehicle was not returned by MyHyundai. Refresh the QR and try again."
-            else ->
-                "Refresh the QR and try again."
-        }
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
     }
 
     override fun onDestroy() {

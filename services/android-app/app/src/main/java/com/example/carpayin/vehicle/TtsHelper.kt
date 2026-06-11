@@ -2,8 +2,8 @@ package com.example.carpayin.vehicle
 
 import ai.pleos.playground.tts.TextToSpeech
 import ai.pleos.playground.tts.constant.Mode
+import ai.pleos.playground.tts.listener.EventListener
 import ai.pleos.playground.tts.listener.OnServerConnectionListener
-import ai.pleos.playground.tts.listener.TtsEventListener
 import android.content.Context
 import android.util.Log
 
@@ -19,37 +19,15 @@ object TtsHelper {
     fun init(context: Context) {
         if (tts != null) return
         try {
-            tts = TextToSpeech(context.applicationContext, Mode.HYBRID)
-            tts?.initialize()
-            tts?.addEventListener(eventListener)
-            tts?.registerApp(CLIENT_ID, CLIENT_SECRET, object : OnServerConnectionListener {
-                override fun onConnected() {
-                    isReady = true
-                    Log.d(TAG, "TTS 서버 연결 완료")
-                }
-                override fun onFailed(msg: String) {
-                    Log.w(TAG, "TTS 서버 연결 실패: $msg — ON_DEVICE 모드로 재시도")
-                    retryOnDevice(context)
-                }
-            })
-        } catch (e: Exception) {
-            Log.w(TAG, "TTS 초기화 실패: ${e.message}")
-        }
-    }
-
-    private fun retryOnDevice(context: Context) {
-        try {
-            tts?.removeEventListener(eventListener)
-            tts?.release()
             tts = TextToSpeech(context.applicationContext, Mode.ON_DEVICE)
             tts?.initialize()
             tts?.addEventListener(eventListener)
             tts?.registerApp(CLIENT_ID, CLIENT_SECRET, object : OnServerConnectionListener {
-                override fun onConnected() { isReady = true; Log.d(TAG, "TTS ON_DEVICE 연결 완료") }
-                override fun onFailed(msg: String) { Log.w(TAG, "TTS ON_DEVICE 실패: $msg") }
+                override fun onConnected() { isReady = true; Log.d(TAG, "TTS 준비 완료") }
+                override fun onFailed(msg: String) { Log.w(TAG, "TTS 초기화 실패: $msg") }
             })
         } catch (e: Exception) {
-            Log.w(TAG, "TTS ON_DEVICE 초기화 실패: ${e.message}")
+            Log.w(TAG, "TTS 초기화 실패: ${e.message}")
         }
     }
 
@@ -76,9 +54,12 @@ object TtsHelper {
         isReady = false
     }
 
-    private val eventListener = object : TtsEventListener {
-        override fun onSpeakStart() { Log.d(TAG, "onSpeakStart") }
-        override fun onSpeakDone()  { Log.d(TAG, "onSpeakDone") }
-        override fun onSpeakError(msg: String) { Log.w(TAG, "onSpeakError: $msg") }
+    private val eventListener = object : EventListener {
+        override fun onReady()  { Log.d(TAG, "onReady") }
+        override fun onStart()  { Log.d(TAG, "onStart") }
+        override fun onDone()   { Log.d(TAG, "onDone") }
+        override fun onStop()   { Log.d(TAG, "onStop") }
+        override fun onError(errMsg: String) { Log.w(TAG, "onError: $errMsg") }
+        override fun onUpdatedRms(rms: Double) {}
     }
 }
