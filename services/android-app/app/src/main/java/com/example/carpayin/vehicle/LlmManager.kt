@@ -1,6 +1,8 @@
 package com.example.carpayin.vehicle
 
 import ai.pleos.playground.llm.LLM
+import ai.pleos.playground.llm.data.LLMContent
+import ai.pleos.playground.llm.data.TextPart
 import ai.pleos.playground.llm.listener.OnServerConnectionListener
 import ai.pleos.playground.llm.listener.ResultListener
 import android.content.Context
@@ -35,29 +37,39 @@ object LlmManager {
         }
     }
 
-    fun generate(prompt: String, onComplete: (String) -> Unit, onError: () -> Unit = {}) {
-        if (!isReady) { Log.d(TAG, "LLM 미준비"); onError(); return }
+    fun startChat(systemPrompt: String, onReady: () -> Unit = {}) {
         try {
-            llm?.generateContent(prompt, object : ResultListener {
-                private val buffer = StringBuilder()
+            val history = mutableListOf(
+                LLMContent(role = "user",      parts = mutableListOf(TextPart(systemPrompt))),
+                LLMContent(role = "assistant", parts = mutableListOf(TextPart("네, 도와드리겠습니다.")))
+            )
+            llm?.startChat(history, { onReady() }, { reason -> Log.w(TAG, "startChat 실패: $reason") })
+        } catch (e: Exception) {
+            Log.w(TAG, "startChat 실패: ${e.message}")
+        }
+    }
 
-                override fun onPartialResult(text: String) {
-                    buffer.append(text)
+    fun send(text: String, onComplete: (String) -> Unit, onError: () -> Unit = {}) {
+        if (!isReady) { Log.d(TAG, "LLM 미준비"); onError(); return }
+        val buffer = StringBuilder()
+        try {
+            val content = LLMContent(role = "user", parts = mutableListOf(TextPart(text)))
+            llm?.sendMessage(content, object : ResultListener {
+                override fun onResponse(response: String, completed: Boolean) {
+                    buffer.append(response)
+                    if (completed) {
+                        val full = buffer.toString().trim()
+                        Log.d(TAG, "LLM 응답: $full")
+                        onComplete(full)
+                    }
                 }
-
-                override fun onResult(text: String) {
-                    val full = text.ifBlank { buffer.toString() }.trim()
-                    Log.d(TAG, "LLM 응답: $full")
-                    onComplete(full)
-                }
-
-                override fun onError(errMsg: String) {
-                    Log.w(TAG, "LLM 오류: $errMsg")
+                override fun onError(reason: String) {
+                    Log.w(TAG, "LLM 오류: $reason")
                     onError()
                 }
             })
         } catch (e: Exception) {
-            Log.w(TAG, "generate 실패: ${e.message}")
+            Log.w(TAG, "send 실패: ${e.message}")
             onError()
         }
     }
