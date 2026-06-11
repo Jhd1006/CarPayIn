@@ -1,7 +1,3 @@
-# UTF-8 출력 (한글 깨짐 방지)
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-
 ##############################################################################
 # start-local-full.ps1  -  Car Pay In full LOCAL test stack launcher
 #
@@ -21,6 +17,10 @@ param(
     [string] $NotebookIp = "",
     [switch] $NoRebuild
 )
+
+# UTF-8 출력 (한글 깨짐 방지)
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $ErrorActionPreference = "Stop"
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path

@@ -195,9 +195,9 @@ object ApiManager {
             }
         } catch (e: Exception) {
             listOf(
-                ParkingLotInfo("LOT_TEST_01", "42dot 테스트 주차장", 37.48544722, 127.03636666),
-                ParkingLotInfo("LOT_GN_01", "강남 CarPayIn 주차장", 37.4979, 127.0276),
-                ParkingLotInfo("LOT_HD_01", "홍대 CarPayIn 주차장", 37.5567, 126.9236)
+                ParkingLotInfo("LOT_GANGNAM_01",      "강남주차장",  37.4979, 127.0276),
+                ParkingLotInfo("LOT_HONGDAE_01",      "홍대주차장",  37.5567, 126.9236),
+                ParkingLotInfo("LOT_YEONGDEUNGPO_01", "영등포주차장", 37.5258, 126.8962)
             )
         }
     }

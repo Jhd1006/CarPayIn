@@ -13,10 +13,9 @@ object GeofenceManager {
     )
 
     var cachedParkingLots: List<ParkingLot> = listOf(
-        ParkingLot("LOT_TEST_01",         "42dot 테스트 주차장", 37.48544722, 127.03636666),
-        ParkingLot("LOT_GANGNAM_01",      "강남 아이파킹",    37.4979,   127.0276),
-        ParkingLot("LOT_SEOCHO_01",       "서초 아이파킹",    37.4837,   127.0324),
-        ParkingLot("LOT_YEONGDEUNGPO_01", "영등포 아이파킹",  37.5258,   126.8962)
+        ParkingLot("LOT_GANGNAM_01",   "강남주차장",  37.4979, 127.0276),
+        ParkingLot("LOT_HONGDAE_01",   "홍대주차장",  37.5567, 126.9236),
+        ParkingLot("LOT_YEONGDEUNGPO_01", "영등포주차장", 37.5258, 126.8962)
     )
 
     var onParkingLotsUpdated: ((List<ParkingLot>) -> Unit)? = null
