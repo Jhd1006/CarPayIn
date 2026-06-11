@@ -8,7 +8,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
+import android.graphics.Rect
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
@@ -120,7 +122,7 @@ class CardRegistrationActivity : Activity() {
         accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN) ?: ""
         userName    = intent.getStringExtra(EXTRA_USER_NAME)    ?: "고객"
 
-        DevTapGate.install(this, ivHeaderLogo) { openDevMenu() }
+        // DevTapGate 대신 dispatchTouchEvent에서 헤더 영역 터치를 직접 처리
 
         val savedPlate = ParkingStateManager.getPlateNumber(this)
         if (!savedPlate.isNullOrEmpty()) {
@@ -176,6 +178,19 @@ class CardRegistrationActivity : Activity() {
 
         // 시작은 무조건 Step 0(동의)부터
         goToStep(Step.CONSENT)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_UP) {
+            val logoBounds = Rect()
+            ivHeaderLogo.getGlobalVisibleRect(logoBounds)
+            logoBounds.inset(-dp(24), -dp(24))
+            if (logoBounds.contains(ev.rawX.toInt(), ev.rawY.toInt())) {
+                openDevMenu()
+                return true
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun openDevMenu() {

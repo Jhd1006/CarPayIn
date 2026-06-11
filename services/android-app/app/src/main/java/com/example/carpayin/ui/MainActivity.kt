@@ -9,6 +9,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
+import android.graphics.Rect
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -951,8 +953,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupDevTrigger() {
-        DevTapGate.install(this, tvHeaderTitle) { showDevMenu() }
         btnResetApp.setOnClickListener { confirmReset() }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_UP) {
+            val headerBounds = Rect()
+            tvHeaderTitle.getGlobalVisibleRect(headerBounds)
+            val x = ev.rawX.toInt()
+            val y = ev.rawY.toInt()
+            if (headerBounds.contains(x, y)) {
+                val resetBounds = Rect()
+                btnResetApp.getGlobalVisibleRect(resetBounds)
+                val tappedReset = btnResetApp.visibility == View.VISIBLE && resetBounds.contains(x, y)
+                if (!tappedReset) {
+                    showDevMenu()
+                    return true
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun showDevMenu() {
