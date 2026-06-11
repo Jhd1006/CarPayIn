@@ -29,6 +29,7 @@ import com.example.carpayin.network.MqttManager
 import com.example.carpayin.service.CarPayInService
 import com.example.carpayin.vehicle.GeofenceManager
 import com.example.carpayin.vehicle.NaviHelper
+import com.example.carpayin.vehicle.LlmManager
 import com.example.carpayin.vehicle.SttManager
 import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
@@ -173,6 +174,7 @@ class MainActivity : AppCompatActivity() {
             NaviHelper.init(appContext)
             TtsHelper.init(appContext)
             SttManager.init(appContext)
+            LlmManager.init(appContext)
             VehicleDataManager.init(appContext)
             val realVin = VehicleDataManager.readVin(appContext)
             if (realVin.isNotBlank() && realVin != vin) {
@@ -964,10 +966,12 @@ class MainActivity : AppCompatActivity() {
         CarPayInService.onPaymentComplete  = null
         CarPayInService.onConnectionChanged= null
         SttManager.release()
+        LlmManager.release()
         NaviHelper.release()
         VehicleDataManager.release()
         VoiceCommandHandler.onShowParkingSection = null
         VoiceCommandHandler.onNavigateTo = null
+        VoiceCommandHandler.onThinking = null
     }
 
     private fun setupVoiceCommand() {
@@ -985,7 +989,14 @@ class MainActivity : AppCompatActivity() {
         }
         SttManager.onListeningChanged = { listening ->
             handler.post {
-                btnVoiceMic.text = if (listening) "🔴" else "🎤"
+                if (listening) btnVoiceMic.text = "🔴"
+                else if (btnVoiceMic.text == "🔴") btnVoiceMic.text = "🎤"
+            }
+        }
+        VoiceCommandHandler.onThinking = { thinking ->
+            handler.post {
+                btnVoiceMic.text = if (thinking) "⏳" else "🎤"
+                btnVoiceMic.isEnabled = !thinking
             }
         }
 
