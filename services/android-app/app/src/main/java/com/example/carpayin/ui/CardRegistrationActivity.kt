@@ -53,6 +53,7 @@ class CardRegistrationActivity : Activity() {
     private lateinit var layoutPlateInput: LinearLayout
     private lateinit var etPlateNumber: EditText
     private lateinit var btnPlateNext: Button
+    private lateinit var btnTestPlate: Button
 
     private lateinit var layoutBrandSelect: LinearLayout
     private lateinit var brandGrid: LinearLayout
@@ -116,6 +117,7 @@ class CardRegistrationActivity : Activity() {
         layoutPlateInput  = findViewById(R.id.layoutPlateInput)
         etPlateNumber     = findViewById(R.id.etPlateNumber)
         btnPlateNext      = findViewById(R.id.btnPlateNext)
+        btnTestPlate      = findViewById(R.id.btnTestPlate)
         layoutBrandSelect = findViewById(R.id.layoutBrandSelect)
         brandGrid         = findViewById(R.id.brandGrid)
 
@@ -153,6 +155,11 @@ class CardRegistrationActivity : Activity() {
         }
 
         btnConsentAgree.setOnClickListener { goToStep(Step.PLATE) }
+
+        btnTestPlate.setOnClickListener {
+            etPlateNumber.setText("123가4567")
+            etPlateNumber.setSelection(etPlateNumber.text.length)
+        }
 
         btnPlateNext.setOnClickListener {
             // 공백/하이픈/점 등 구분자 제거 + NFC 정규화(AAOS IME가 NFD로 입력할 수 있음)
