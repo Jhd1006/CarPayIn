@@ -6,6 +6,9 @@
     <uses-permission android:name="pleos.car.permission.CAR_INFO"/>
     <uses-permission android:name="android.car.permission.CAR_POWERTRAIN"/>
 
+    <!-- Pleos 내비게이션 경로 탐색 -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH"/>
+
     <!-- 네트워크 (MQTT 브로커 / 백엔드 REST API) -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
