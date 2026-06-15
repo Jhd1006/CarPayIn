@@ -3,14 +3,13 @@ stages:
   - build
   - deploy
 
-default:
-  tags:
-    - ec2-docker
-
 variables:
   DOCKER_BUILDKIT: "1"
   DOCKER_DRIVER: overlay2
 
+# ──────────────────────────────────────────────
+# TEST
+# ──────────────────────────────────────────────
 .test_service:
   stage: test
   image: python:3.12-slim
@@ -42,8 +41,65 @@ test:pms:
   variables:
     SERVICE_NAME: pms
 
+# ──────────────────────────────────────────────
+# BUILD → GitLab Container Registry
+# main 브랜치 push 또는 버전 태그(x.y.z)에 실행
+# ──────────────────────────────────────────────
+.build_registry_service:
+  stage: build
+  image: docker:27.5.1
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - IMAGE="$CI_REGISTRY_IMAGE/$IMAGE_NAME"
+    - TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - docker build --pull -f "services/$SERVICE_NAME/Dockerfile"
+        -t "$IMAGE:$TAG"
+        -t "$IMAGE:latest"
+        "services/$SERVICE_NAME"
+    - docker push "$IMAGE:$TAG"
+    - docker push "$IMAGE:latest"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
+
+build:registry:carpayin-backend:
+  extends: .build_registry_service
+  needs:
+    - test:carpayin-backend
+  variables:
+    SERVICE_NAME: carpayin-backend
+    IMAGE_NAME: carpayin-backend
+
+build:registry:mock-pg:
+  extends: .build_registry_service
+  needs:
+    - test:mock-pg
+  variables:
+    SERVICE_NAME: mock-pg
+    IMAGE_NAME: mock-pg
+
+build:registry:pms:
+  extends: .build_registry_service
+  needs:
+    - test:pms
+  variables:
+    SERVICE_NAME: pms
+    IMAGE_NAME: pms
+
+# ──────────────────────────────────────────────
+# BUILD → AWS ECR (버전 태그 + EC2 러너 있을 때만)
+# ──────────────────────────────────────────────
 .build_ecr_service:
   stage: build
+  tags:
+    - ec2-docker
   image:
     name: public.ecr.aws/aws-cli/aws-cli:latest
     entrypoint: [""]
@@ -70,6 +126,7 @@ test:pms:
     - docker push "$IMAGE:latest"
   rules:
     - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
+      when: on_success
 
 build:ecr:carpayin-backend:
   extends: .build_ecr_service
@@ -95,8 +152,13 @@ build:ecr:pms:
     SERVICE_NAME: pms
     IMAGE_NAME: pms
 
+# ──────────────────────────────────────────────
+# DEPLOY → ECS (버전 태그 + 수동 승인)
+# ──────────────────────────────────────────────
 deploy:ecs:carpayin-backend:
   stage: deploy
+  tags:
+    - ec2-docker
   image:
     name: public.ecr.aws/aws-cli/aws-cli:latest
     entrypoint: [""]
