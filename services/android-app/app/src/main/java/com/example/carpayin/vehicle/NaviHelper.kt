@@ -23,7 +23,6 @@ import ai.pleos.playground.navi.helper.NaviHelper as PleosNaviHelper
 import ai.pleos.playground.navi.helper.listener.NaviHelperEventListener
 import android.content.Context
 import android.util.Log
-import com.example.carpayin.vehicle.TtsHelper
 
 object NaviHelper {
 
@@ -156,12 +155,10 @@ object NaviHelper {
         }
         override fun onRouteCancelled() {
             Log.d(TAG, "onRouteCancelled")
-            TtsHelper.speak("경로 안내가 취소되었습니다")
             onNavigationEnded?.invoke()
         }
         override fun onDestinationArrived(info: DestinationArrivedInfo) {
             Log.d(TAG, "onDestinationArrived")
-            TtsHelper.speak("목적지에 도착했습니다")
             onNavigationEnded?.invoke()
         }
         override fun onError(code: NaviErrorCode) {

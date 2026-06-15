@@ -29,10 +29,7 @@ import com.example.carpayin.network.MqttManager
 import com.example.carpayin.service.CarPayInService
 import com.example.carpayin.vehicle.GeofenceManager
 import com.example.carpayin.vehicle.NaviHelper
-import com.example.carpayin.vehicle.LlmManager
-import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
-import com.example.carpayin.vehicle.VoiceCommandHandler
 
 class MainActivity : AppCompatActivity() {
 
@@ -163,15 +160,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // TTS는 메인 스레드에서 초기화
-        TtsHelper.init(applicationContext)
-        setupVoiceCommand()
 
         val appContext = applicationContext
         Thread {
             NaviHelper.takePanelControl(appContext)
             NaviHelper.init(appContext)
-            LlmManager.init(appContext)
             VehicleDataManager.init(appContext)
             val realVin = VehicleDataManager.readVin(appContext)
             if (realVin.isNotBlank() && realVin != vin) {
@@ -619,33 +612,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun startNavigationTo(lot: GeofenceManager.ParkingLot) {
         if (!hasCompletedCardRegistration()) {
-            TtsHelper.speak("결제 카드가 등록되지 않았습니다. 주차 요금이 자동으로 결제되지 않을 수 있습니다")
+            Log.w(TAG, "카드 미등록 상태에서 내비 시작")
         }
         showAaosDialog(
             "🧭 내비게이션 시작",
             "${lot.name}\n\n목적지로 경로 안내를 시작합니다.\n도착 전 차량 정보가 주차장에 자동으로 등록됩니다.",
             "취소" to {},
             "시작" to {
-                val navResId = VoiceCommandHandler.navAudio[lot.id]
-                val launchNav = {
-                    val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
-                    if (navStarted) {
-                        handler.postDelayed({
-                            Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
-                        }, 1_500)
-                        val token = ParkingStateManager.getAccessToken(this)
-                        if (token != null) {
-                            Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
-                        }
-                    } else {
-                        Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
+                val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
+                if (navStarted) {
+                    handler.postDelayed({
+                        Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
+                    }, 1_500)
+                    val token = ParkingStateManager.getAccessToken(this)
+                    if (token != null) {
+                        Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
                     }
-                }
-                if (navResId != null) {
-                    // MP3 완전히 끝난 후 내비 시작 → Pleos 음성과 겹침 방지
-                    TtsHelper.playRaw(navResId) { handler.post { launchNav() } }
                 } else {
-                    launchNav()
+                    Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -969,22 +953,8 @@ class MainActivity : AppCompatActivity() {
         CarPayInService.onParkingConfirmed = null
         CarPayInService.onPaymentComplete  = null
         CarPayInService.onConnectionChanged= null
-        LlmManager.release()
         NaviHelper.release()
         VehicleDataManager.release()
-        VoiceCommandHandler.onShowParkingSection = null
-        VoiceCommandHandler.onNavigateTo = null
-    }
-
-    private fun setupVoiceCommand() {
-        VoiceCommandHandler.onShowParkingSection = {
-            handler.post {
-                showRegisteredFeature(RegisteredFeature.PARKING)
-            }
-        }
-        VoiceCommandHandler.onNavigateTo = { lot ->
-            handler.post { startNavigationTo(lot) }
-        }
     }
 
     private fun setupDevTrigger() {
@@ -1070,7 +1040,7 @@ class MainActivity : AppCompatActivity() {
 
         addBtn("Mock 입차 확정") {
             ParkingStateManager.saveParkingState(this, true, "LOT_GANGNAM_01", "sess_dev_001")
-            TtsHelper.speak("강남 주차장 입차가 확인되었습니다")
+            Log.d(TAG, "Mock: 강남 주차장 입차 확인")
             showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show()
         }
         addBtn("Mock 결제 완료") {
@@ -1078,7 +1048,7 @@ class MainActivity : AppCompatActivity() {
             val mockTxId = "dev_tx_${System.currentTimeMillis()}"
             TransactionStore.save(this, mockTxId, "LOT_GANGNAM_01", mockAmount)
             ParkingStateManager.saveParkingState(this, false)
-            TtsHelper.speak("${"%,d".format(mockAmount)}원 결제가 완료되었습니다")
+            Log.d(TAG, "Mock: ${"%,d".format(mockAmount)}원 결제 완료")
             showRegisteredState()
             showPaymentComplete(mockTxId, "DEV-APPROVED", "LOT_GANGNAM_01", mockAmount)
             Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
