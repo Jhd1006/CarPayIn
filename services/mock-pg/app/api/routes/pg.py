@@ -485,6 +485,12 @@ def complete_card_registration(
 
 
 @router.post(
+    "/payments/billing",
+    response_model=BillingPaymentResponse,
+    response_model_exclude_none=True,
+    include_in_schema=False,
+)
+@router.post(
     "/pg/payments/billing",
     response_model=BillingPaymentResponse,
     response_model_exclude_none=True,
