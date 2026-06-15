@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Request
 
 from app.api.deps import (
     get_calculate_fee_service,
     get_handle_lpr_entry_service,
+    get_handle_lpr_exit_service,
+    get_payment_webhook_signature_verifier,
     get_record_payment_complete_service,
     get_register_pre_notify_service,
 )
@@ -10,6 +12,8 @@ from app.api.schemas.pms import (
     CalculateFeeResponse,
     LprEntryRequest,
     LprEntryResponse,
+    LprExitRequest,
+    LprExitResponse,
     PaymentCompleteRequest,
     PaymentCompleteResponse,
     PreRegisterRequest,
@@ -20,6 +24,10 @@ from app.application.pms.handle_lpr_entry import (
     HandleLprEntryCommand,
     HandleLprEntryService,
 )
+from app.application.pms.handle_lpr_exit import (
+    HandleLprExitCommand,
+    HandleLprExitService,
+)
 from app.application.pms.record_payment_complete import (
     RecordPaymentCompleteCommand,
     RecordPaymentCompleteService,
@@ -28,12 +36,12 @@ from app.application.pms.register_pre_notify import (
     RegisterPreNotifyCommand,
     RegisterPreNotifyService,
 )
+from app.infra.security import WebhookSignatureVerifier
 
 
 router = APIRouter()
 
 
-@router.post("/pms/parking/pre-register", response_model=PreRegisterResponse)
 @router.post("/parking/pre-register", response_model=PreRegisterResponse)
 def pre_register_plate(
     request: PreRegisterRequest,
@@ -49,7 +57,6 @@ def pre_register_plate(
     )
 
 
-@router.post("/pms/lpr/entry", response_model=LprEntryResponse)
 @router.post("/lpr/entry", response_model=LprEntryResponse)
 def handle_lpr_entry(
     request: LprEntryRequest,
@@ -68,11 +75,17 @@ def handle_lpr_entry(
     )
 
 
-@router.get(
-    "/pms/parking/fee",
-    response_model=CalculateFeeResponse,
-    response_model_exclude_none=True,
-)
+@router.post("/lpr/exit", response_model=LprExitResponse)
+def handle_lpr_exit(
+    request: LprExitRequest,
+    service: HandleLprExitService = Depends(get_handle_lpr_exit_service),
+) -> LprExitResponse:
+    result = service.execute(
+        HandleLprExitCommand(lot_id=request.lot_id, plate=request.plate)
+    )
+    return LprExitResponse(status=result.status, pms_session_id=result.pms_session_id)
+
+
 @router.get(
     "/parking/fee",
     response_model=CalculateFeeResponse,
@@ -106,21 +119,30 @@ def calculate_fee(
 
 
 @router.post(
-    "/pms/payment/complete",
-    response_model=PaymentCompleteResponse,
-    response_model_exclude_none=True,
-)
-@router.post(
     "/payment/complete",
     response_model=PaymentCompleteResponse,
     response_model_exclude_none=True,
 )
-def record_payment_complete(
+async def record_payment_complete(
     request: PaymentCompleteRequest,
+    http_request: Request,
+    webhook_timestamp: str = Header(alias="X-Webhook-Timestamp"),
+    webhook_signature: str = Header(alias="X-Webhook-Signature"),
     service: RecordPaymentCompleteService = Depends(
         get_record_payment_complete_service,
     ),
+    signature_verifier: WebhookSignatureVerifier = Depends(
+        get_payment_webhook_signature_verifier,
+    ),
 ) -> PaymentCompleteResponse:
+    raw_body = await http_request.body()
+    if not signature_verifier.verify(
+        timestamp=webhook_timestamp,
+        signature=webhook_signature,
+        body=raw_body,
+    ):
+        raise PermissionError("invalid_signature")
+
     result = service.execute(
         RecordPaymentCompleteCommand(
             pms_session_id=request.pms_session_id,

@@ -14,6 +14,12 @@
 .cxx
 local.properties
 
+# Local UI captures and Android view hierarchy dumps
+/*.png
+/*_dump.xml
+/window_dump*.xml
+/home_dump.xml
+
 # Python 서버
 __pycache__/
 *.pyc

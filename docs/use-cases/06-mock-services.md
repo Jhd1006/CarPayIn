@@ -30,12 +30,15 @@ API:
 
 - LPR이 plate를 감지하면 PMS DB `parking_sessions`에 active 세션을 만든다.
 - Car Pay-in Backend에 entry webhook을 보낸다.
+- webhook에는 `X-Webhook-Timestamp`, `X-Webhook-Signature`를 포함한다.
+- signature는 `PMS_WEBHOOK_SECRET`과 raw request body로 생성한다.
 
 먼저 작성할 테스트:
 
 - active PMS session을 생성한다.
 - 같은 plate에 active session이 있으면 중복 생성하지 않는다.
 - webhook payload에 `pms_session_id`, `lot_id`, `plate`, `entry_time`이 포함된다.
+- webhook signature header가 포함된다.
 
 ## UC-PMS-003. 현재 요금 계산
 
@@ -70,11 +73,13 @@ API:
 처리:
 
 - PMS DB `payment_requests`에 success 이력을 저장한다.
+- `X-Webhook-Timestamp`, `X-Webhook-Signature`로 Car Pay-in Backend의 결제 완료 통보를 검증한다.
 - idempotency_key로 중복 저장을 막는다.
 
 먼저 작성할 테스트:
 
 - 결제 완료 요청을 success로 저장한다.
+- signature가 틀리면 401을 반환한다.
 - 같은 idempotency_key 재요청은 기존 결과를 반환한다.
 
 ## UC-PG-001. 카드 등록 WebView 완료와 billing key 발급
@@ -89,11 +94,14 @@ API:
 - Mock Card에 카드 검증과 token 생성을 요청한다.
 - 받은 card_token으로 Mock PG DB `billing_keys`를 생성한다.
 - Car Pay-in Backend에 card webhook을 보낸다.
+- webhook에는 `X-Webhook-Timestamp`, `X-Webhook-Signature`를 포함한다.
+- signature는 `PG_WEBHOOK_SECRET`과 raw request body로 생성한다.
 
 먼저 작성할 테스트:
 
 - 카드 검증 성공이면 billing_key를 저장한다.
 - 같은 order_id는 billing_key를 중복 생성하지 않는다.
+- webhook signature header가 포함된다.
 - 카드 검증 실패면 webhook 성공을 보내지 않는다.
 
 ## UC-PG-002. billing key 결제 승인

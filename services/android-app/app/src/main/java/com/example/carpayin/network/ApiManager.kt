@@ -175,10 +175,6 @@ object ApiManager {
         )
     }
 
-    fun unregister(accessToken: String) {
-        postJson(URL("$BASE_URL/auth/unregister"), "{}", accessToken)
-    }
-
     fun createCardOrder(plate: String, bankName: String, agreeTerms: Boolean, accessToken: String): CardOrderResult {
         val body = JSONObject().apply {
             put("plate", plate)
@@ -186,11 +182,6 @@ object ApiManager {
             put("agree_terms", agreeTerms)
         }.toString()
         val response = postJson(URL("$BASE_URL/card/order"), body, accessToken)
-        return CardOrderResult(response.getString("order_id"), response.getString("pg_url"))
-    }
-
-    fun fetchCardOrderLegacy(accessToken: String): CardOrderResult {
-        val response = getJson(URL("$BASE_URL/card/order"), accessToken)
         return CardOrderResult(response.getString("order_id"), response.getString("pg_url"))
     }
 
@@ -204,17 +195,18 @@ object ApiManager {
             }
         } catch (e: Exception) {
             listOf(
-                ParkingLotInfo("LOT_GN_01", "강남 CarPayIn 주차장", 37.4979, 127.0276),
-                ParkingLotInfo("LOT_HD_01", "홍대 CarPayIn 주차장", 37.5567, 126.9236)
+                ParkingLotInfo("LOT_GANGNAM_01",      "강남주차장",  37.4979, 127.0276),
+                ParkingLotInfo("LOT_HONGDAE_01",      "홍대주차장",  37.5567, 126.9236),
+                ParkingLotInfo("LOT_YEONGDEUNGPO_01", "영등포주차장", 37.5258, 126.8962)
             )
         }
     }
 
-    fun sendPreNotification(carId: String, plate: String, lotId: String, triggerType: String, accessToken: String) {
+    fun sendPreNotification(lotId: String, accessToken: String) {
         val body = JSONObject().apply {
-            put("car_id", carId); put("plate", plate); put("lot_id", lotId); put("trigger", triggerType.lowercase())
+            put("lot_id", lotId)
         }.toString()
-        postJson(URL("$BASE_URL/pre-notify"), body, accessToken)
+        postJson(URL("$BASE_URL/parking/navigate"), body, accessToken)
     }
 
     fun queryFee(fallbackLotId: String, sessionId: String, accessToken: String): FeeResult {

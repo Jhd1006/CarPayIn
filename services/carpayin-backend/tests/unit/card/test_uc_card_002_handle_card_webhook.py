@@ -89,8 +89,10 @@ class FakeSignatureVerifier:
         self._valid_signature = valid_signature
         self.verify_calls: list[dict] = []
 
-    def verify(self, *, order_id: str, signature: str) -> bool:
-        self.verify_calls.append({"order_id": order_id, "signature": signature})
+    def verify(self, *, timestamp: str, signature: str, body: bytes) -> bool:
+        self.verify_calls.append(
+            {"timestamp": timestamp, "signature": signature, "body": body}
+        )
         return signature == self._valid_signature
 
 

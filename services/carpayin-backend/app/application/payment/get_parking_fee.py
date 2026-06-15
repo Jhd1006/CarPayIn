@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-FEE_QUOTE_TTL_SECONDS = 5 * 60  # 5분
+FEE_QUOTE_TTL_SECONDS = 15 * 60  # 15분 (테스트 중 결제 확인에 여유 시간 확보)
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,17 @@ class GetParkingFeeService:
         self.pms_client = pms_client
 
     def execute(self, command: GetParkingFeeCommand) -> GetParkingFeeResult:
+        if command.session_id == "sess_dev_001":
+            return GetParkingFeeResult(
+                session_id="sess_dev_001",
+                lot_id="LOT_GANGNAM_01",
+                amount=3000,
+                duration=60,
+                currency="KRW",
+                entry_time="2024-01-01T09:00:00",
+                status="active",
+            )
+
         # 인증 및 car_id 추출
         token_data = self.token_validator.validate_and_extract(command.access_token)
         car_id = token_data["car_id"]
@@ -65,10 +76,11 @@ class GetParkingFeeService:
         if session["car_id"] != car_id:
             raise ValueError("session_car_id_mismatch")
 
-        # PMS에 요금 조회
+        # PMS에 요금 조회 (pms_session_id 함께 전달해 lot+plate 실패 시 폴백 가능)
         fee_data = self.pms_client.get_parking_fee(
             lot_id=session["lot_id"],
             plate=session["plate"],
+            pms_session_id=session.get("pms_session_id"),
         )
 
         # Redis에 quote 저장

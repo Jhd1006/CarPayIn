@@ -10,6 +10,8 @@ class HandleEntryWebhookCommand:
     lot_id: str
     plate: str
     entry_time: str
+    signature_timestamp: str = "0"
+    raw_body: bytes = b"{}"
 
 
 @dataclass(frozen=True)
@@ -25,15 +27,21 @@ class HandleEntryWebhookService:
         pre_notify_store,
         parking_session_repository,
         notification_publisher,
+        entry_notify_retry_store=None,
     ):
         self.pms_auth_validator = pms_auth_validator
         self.pre_notify_store = pre_notify_store
         self.parking_session_repository = parking_session_repository
         self.notification_publisher = notification_publisher
+        self.entry_notify_retry_store = entry_notify_retry_store
 
     def execute(self, command: HandleEntryWebhookCommand) -> HandleEntryWebhookResult:
         # PMS 인증 검증
-        self.pms_auth_validator.validate(command.pms_token)
+        self.pms_auth_validator.validate(
+            timestamp=command.signature_timestamp,
+            signature=command.pms_token,
+            body=command.raw_body,
+        )
 
         # entry_time 형식 검증
         try:
@@ -88,13 +96,24 @@ class HandleEntryWebhookService:
         # pre-notify 삭제
         self.pre_notify_store.delete_pre_notify(command.lot_id, command.plate)
 
-        # 앱 알림 발행
-        self.notification_publisher.publish_entry_notification(
-            session_id=session_id,
-            car_id=car_id,
-            lot_id=command.lot_id,
-            entry_time=command.entry_time,
-        )
+        # 앱 알림 발행 — 실패 시 retry store에 저장해 워커가 재시도
+        try:
+            self.notification_publisher.publish_entry_notification(
+                session_id=session_id,
+                car_id=car_id,
+                lot_id=command.lot_id,
+                entry_time=command.entry_time,
+            )
+            if self.entry_notify_retry_store is not None:
+                self.entry_notify_retry_store.clear_retry_event(session_id)
+        except Exception:
+            if self.entry_notify_retry_store is not None:
+                self.entry_notify_retry_store.record_retry_event(
+                    car_id=car_id,
+                    session_id=session_id,
+                    lot_id=command.lot_id,
+                    entry_time=command.entry_time,
+                )
 
         return HandleEntryWebhookResult(
             status="confirmed",

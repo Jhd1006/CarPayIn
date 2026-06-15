@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@drawable/bg_app_gradient">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
 
     <!-- ── 상단 헤더 ── -->
     <RelativeLayout
@@ -15,25 +19,29 @@
         android:background="@drawable/bg_header_soft">
 
         <LinearLayout
+            android:id="@+id/mainHeaderLogoTapArea"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
+            android:layout_height="match_parent"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:paddingEnd="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground">
 
             <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@drawable/ic_logo"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_car_icon"
                 android:scaleType="fitCenter"
-                android:layout_marginEnd="10dp"/>
+                android:layout_marginEnd="8dp"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="CarPayIn"
+                android:text="Car Pay In"
                 android:textColor="#191F28"
-                android:textSize="18sp"
+                android:textSize="17sp"
                 android:textStyle="bold"/>
         </LinearLayout>
 
@@ -62,94 +70,97 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:gravity="center"
-        android:paddingStart="22dp"
-        android:paddingEnd="22dp"
-        android:paddingTop="34dp"
-        android:paddingBottom="34dp"
         android:visibility="visible">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp">
-
+        <!-- 로고 — 화면 절반 -->
         <FrameLayout
-            android:layout_width="148dp"
-            android:layout_height="108dp"
-            android:layout_marginBottom="22dp"
-            android:background="@drawable/bg_logo_badge"
-            android:elevation="3dp"
-            android:padding="14dp">
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1.12"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="12dp">
 
-            <ImageView
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:src="@drawable/ic_logo"
-                android:scaleType="fitCenter"/>
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal|bottom"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <ImageView
+                    android:layout_width="392dp"
+                    android:layout_height="302dp"
+                    android:src="@drawable/ic_logo_cropped"
+                    android:scaleType="fitCenter"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="주차 정산, 지루함을 깨우다"
+                    android:textColor="#1B64DA"
+                    android:textSize="30sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp"/>
+            </LinearLayout>
         </FrameLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="CarPayIn"
-            android:textColor="#191F28"
-            android:textSize="36sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_marginBottom="8dp"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="주차 정산, 지루함을 깨우다"
-            android:textColor="#1B64DA"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="10dp"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="차량 연동부터 결제 준비까지 한 번에 연결하세요"
-            android:textColor="#6B7684"
-            android:textSize="13sp"
-            android:gravity="center"
-            android:lineSpacingExtra="2dp"
-            android:layout_marginBottom="34dp"/>
-
-        <Button
-            android:id="@+id/btnRegister"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="@drawable/bg_button_primary"
-            android:text="현대 계정 연동"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:elevation="4dp"
-            android:layout_marginBottom="18dp"/>
-
+        <!-- 하단 컨텐츠 -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-            <View android:layout_width="24dp" android:layout_height="1dp" android:background="#D8E0EA"/>
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="0.88"
+            android:orientation="vertical"
+            android:gravity="top|center_horizontal"
+            android:paddingStart="28dp"
+            android:paddingEnd="28dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="20dp">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="  QR 코드로 스마트폰 인증  "
-                android:textColor="#8B95A1"
-                android:textSize="11sp"/>
-            <View android:layout_width="24dp" android:layout_height="1dp" android:background="#D8E0EA"/>
-        </LinearLayout>
+                android:text="차량 연동부터 결제 준비까지 한 번에 연결하세요"
+                android:textColor="#6B7684"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginBottom="16dp"/>
+
+            <Button
+                android:id="@+id/btnRegister"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:background="@drawable/bg_button_onboarding_cta"
+                android:text="마이 현대 로그인"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:letterSpacing="0"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:elevation="8dp"
+                android:translationZ="2dp"
+                android:layout_marginBottom="14dp"/>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <View android:layout_width="24dp" android:layout_height="1dp" android:background="#D8E0EA"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="  QR 코드로 스마트폰 인증  "
+                    android:textColor="#8B95A1"
+                    android:textSize="11sp"/>
+                <View android:layout_width="24dp" android:layout_height="1dp" android:background="#D8E0EA"/>
+            </LinearLayout>
 
         </LinearLayout>
 
@@ -158,99 +169,89 @@
     <!-- ══════════════════════════════════════════════ -->
     <!-- OAuth 완료 · 카드 미등록 화면                    -->
     <!-- ══════════════════════════════════════════════ -->
-        <LinearLayout
-            android:id="@+id/layoutOAuthPending"
+    <LinearLayout
+        android:id="@+id/layoutOAuthPending"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:gravity="center"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="34dp"
-        android:paddingBottom="34dp"
         android:visibility="gone">
 
+        <!-- 로고 — 화면 절반 -->
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:src="@drawable/ic_logo_cropped"
+            android:scaleType="fitCenter"
+            android:padding="16dp"/>
+
+        <!-- 하단 컨텐츠 -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp">
+            android:gravity="center"
+            android:paddingStart="28dp"
+            android:paddingEnd="28dp"
+            android:paddingBottom="20dp">
 
-        <FrameLayout
-            android:layout_width="132dp"
-            android:layout_height="96dp"
-            android:layout_marginBottom="22dp"
-            android:background="@drawable/bg_logo_badge"
-            android:elevation="3dp"
-            android:padding="14dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="마이현대 계정 연동 완료"
+                android:textColor="#191F28"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="10dp"/>
 
-            <ImageView
+            <TextView
+                android:id="@+id/tvOAuthPendingUser"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:src="@drawable/ic_logo"
-                android:scaleType="fitCenter"/>
-        </FrameLayout>
+                android:layout_height="42dp"
+                android:background="@drawable/bg_badge_blue"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:text=""
+                android:textColor="#1B64DA"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp"/>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="마이현대 계정 연동 완료"
-            android:textColor="#191F28"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_marginBottom="10dp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="결제를 위해 카드를 등록해 주세요"
+                android:textColor="#6B7684"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:layout_marginBottom="20dp"/>
 
-        <TextView
-            android:id="@+id/tvOAuthPendingUser"
-            android:layout_width="match_parent"
-            android:layout_height="42dp"
-            android:background="@drawable/bg_badge_blue"
-            android:gravity="center"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text=""
-            android:textColor="#1B64DA"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp"/>
+            <Button
+                android:id="@+id/btnOAuthPendingRegisterCard"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_button_primary"
+                android:text="카드 등록하기"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:elevation="4dp"
+                android:layout_marginBottom="12dp"/>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="결제를 위해 카드를 등록해 주세요"
-            android:textColor="#6B7684"
-            android:textSize="13sp"
-            android:gravity="center"
-            android:layout_marginBottom="32dp"/>
-
-        <Button
-            android:id="@+id/btnOAuthPendingRegisterCard"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="@drawable/bg_button_primary"
-            android:text="카드 등록하기"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:elevation="4dp"
-            android:layout_marginBottom="16dp"/>
-
-        <Button
-            android:id="@+id/btnOAuthPendingCancel"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:background="@drawable/bg_button_secondary"
-            android:text="나중에 등록"
-            android:textAllCaps="false"
-            android:textColor="@color/button_on_secondary"
-            android:textSize="14sp"/>
+            <Button
+                android:id="@+id/btnOAuthPendingCancel"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="나중에 등록"
+                android:textAllCaps="false"
+                android:textColor="@color/button_on_secondary"
+                android:textSize="14sp"/>
 
         </LinearLayout>
 
@@ -559,7 +560,7 @@
                     <View
                         android:layout_width="8dp"
                         android:layout_height="8dp"
-                        android:background="#12B981"/>
+                        android:background="@drawable/bg_dot_green"/>
                 </LinearLayout>
             </LinearLayout>
 
@@ -694,3 +695,19 @@
     </ScrollView>
 
 </LinearLayout>
+
+<!-- 플로팅 음성 버튼 (Notion AI 스타일) -->
+<Button
+    android:id="@+id/btnVoiceMic"
+    android:layout_width="64dp"
+    android:layout_height="64dp"
+    android:layout_gravity="bottom|end"
+    android:layout_margin="24dp"
+    android:background="@drawable/bg_fab_mic"
+    android:text="🎤"
+    android:textSize="26sp"
+    android:padding="0dp"
+    android:elevation="12dp"
+    android:stateListAnimator="@null"/>
+
+</FrameLayout>

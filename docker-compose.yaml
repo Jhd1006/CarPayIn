@@ -12,9 +12,9 @@ services:
       - carpayin_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${CARPAYIN_POSTGRES_USER:-dev_user} -d ${CARPAYIN_POSTGRES_DB:-carpayin_dev}"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   mock-card-postgres:
     image: postgres:15
@@ -29,9 +29,9 @@ services:
       - mock_card_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${MOCK_CARD_POSTGRES_USER:-dev_user} -d ${MOCK_CARD_POSTGRES_DB:-mock_card_dev}"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   mock-pg-postgres:
     image: postgres:15
@@ -46,9 +46,9 @@ services:
       - mock_pg_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${MOCK_PG_POSTGRES_USER:-dev_user} -d ${MOCK_PG_POSTGRES_DB:-mock_pg_dev}"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   pms-postgres:
     image: postgres:15
@@ -63,9 +63,9 @@ services:
       - pms_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PMS_POSTGRES_USER:-dev_user} -d ${PMS_POSTGRES_DB:-pms_dev}"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -76,9 +76,31 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
+
+  pms-redis:
+    image: redis:7-alpine
+    container_name: pms-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - pms_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 60s
+      timeout: 3s
+      retries: 5
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: carpayin-mqtt
+    command: ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
   carpayin-backend:
     build:
@@ -97,7 +119,9 @@ services:
       HYUNDAI_CLIENT_ID: ${HYUNDAI_CLIENT_ID:?Set HYUNDAI_CLIENT_ID in .env}
       HYUNDAI_CLIENT_SECRET: ${HYUNDAI_CLIENT_SECRET:?Set HYUNDAI_CLIENT_SECRET in .env}
       PG_BASE_URL: ${PG_BASE_URL:-http://mock-pg:8000}
+      PG_INTERNAL_BASE_URL: ${PG_INTERNAL_BASE_URL:-http://mock-pg:8000}
       PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
+      CARD_WEBHOOK_URL: ${CARD_WEBHOOK_URL:-http://carpayin-backend:8000/card/webhook}
       MOLIT_VERIFY_ENABLED: ${MOLIT_VERIFY_ENABLED:-false}
       MOLIT_BASE_URL: ${MOLIT_BASE_URL:-}
       MOLIT_API_KEY: ${MOLIT_API_KEY:-}
@@ -106,7 +130,10 @@ services:
       APP_REFRESH_TOKEN_HASH_SECRET: ${APP_REFRESH_TOKEN_HASH_SECRET:-}
       HYUNDAI_TOKEN_ENCRYPTION_SECRET: ${HYUNDAI_TOKEN_ENCRYPTION_SECRET:-hyundai-dev-token-secret}
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
-      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
+      PMS_WEBHOOK_SECRET: ${PMS_WEBHOOK_SECRET:-pms-webhook-secret}
+      MQTT_ENABLED: ${MQTT_ENABLED:-true}
+      MQTT_HOST: ${MQTT_HOST:-mqtt}
+      MQTT_PORT: ${MQTT_PORT:-1883}
     ports:
       - "8000:8000"
     depends_on:
@@ -114,11 +141,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mqtt:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   mock-card:
     build:
@@ -136,9 +165,9 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   mock-pg:
     build:
@@ -150,6 +179,7 @@ services:
       MOCK_PG_DATABASE_URL: ${MOCK_PG_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev}
       MOCK_CARD_BASE_URL: ${MOCK_CARD_BASE_URL:-http://mock-card:8000}
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
+      PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
       MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE: ${MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE:-true}
     ports:
@@ -163,9 +193,9 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
   pms:
     build:
@@ -176,20 +206,26 @@ services:
       APP_ENV: ${APP_ENV:-local}
       PMS_DATABASE_URL: ${PMS_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@pms-postgres:5432/pms_dev}
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
-      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN:-pms-webhook-token}
+      PMS_WEBHOOK_SECRET: ${PMS_WEBHOOK_SECRET:-pms-webhook-secret}
       PMS_FEE_PER_30_MINUTES: ${PMS_FEE_PER_30_MINUTES:-500}
+      PMS_REDIS_URL: ${PMS_REDIS_URL:-redis://pms-redis:6379/0}
+      BARRIER_ENTRY_URL: ${BARRIER_ENTRY_URL:-http://host.docker.internal:8100/open}
+      BARRIER_EXIT_URL: ${BARRIER_EXIT_URL:-http://host.docker.internal:8101/open}
+      BARRIER_ENABLED: ${BARRIER_ENABLED:-true}
     ports:
       - "8001:8000"
     depends_on:
       pms-postgres:
         condition: service_healthy
+      pms-redis:
+        condition: service_healthy
       carpayin-backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2).read()"]
-      interval: 5s
+      interval: 60s
       timeout: 3s
-      retries: 10
+      retries: 5
 
 volumes:
   carpayin_postgres_data:
@@ -197,3 +233,4 @@ volumes:
   mock_pg_postgres_data:
   pms_postgres_data:
   redis_data:
+  pms_redis_data:

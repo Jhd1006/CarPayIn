@@ -27,3 +27,26 @@ The container starts with:
 ```text
 alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+## Local Development
+
+Install dependencies and run tests from this service directory:
+
+```powershell
+pip install -r requirements.txt
+python -m pytest tests/unit tests/api -q --import-mode=importlib
+```
+
+Run the service outside Docker when its database is available:
+
+```powershell
+alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+```
+
+## Main Endpoints
+
+- `POST /cards/verify`
+- `POST /cards/charge`
+
+The API contract is included in `../../docs/api/car-pay-in-openapi.yaml`.

@@ -7,7 +7,6 @@ import pytest
 
 from app.application.auth.handle_hyundai_oauth_callback import (
     APP_LOGIN_RESULT_TTL_SECONDS,
-    HYUNDAI_ACCESS_TOKEN_TTL_SECONDS,
     HandleHyundaiOAuthCallbackCommand,
     HandleHyundaiOAuthCallbackService,
 )
@@ -20,7 +19,6 @@ VALID_USER_ID = "hyundai-user-001"
 VALID_USER_NAME = "홍길동"
 VALID_HYUNDAI_ACCESS_TOKEN = "hyundai-access-001"
 VALID_HYUNDAI_REFRESH_TOKEN = "hyundai-refresh-001"
-VALID_ENCRYPTED_REFRESH_TOKEN = "encrypted-hyundai-refresh-001"
 VALID_TEMP_ACCESS_TOKEN = "temp-access-001"
 VALID_REDIRECT_URI = "https://api.carpayin.test/auth/redirect"
 PUBLIC_BASE_URL = "https://api.carpayin.test"
@@ -123,35 +121,6 @@ class FakeUserRepository:
         }
 
 
-class FakeHyundaiTokenRepository:
-    def __init__(self):
-        self.tokens = {}
-
-    def upsert_token(self, *, user_id: str, encrypted_refresh_token: str):
-        self.tokens[user_id] = {
-            "user_id": user_id,
-            "encrypted_refresh_token": encrypted_refresh_token,
-        }
-
-
-class FakeHyundaiAccessTokenStore:
-    def __init__(self):
-        self.access_tokens = {}
-
-    def save_access_token(
-        self,
-        *,
-        user_id: str,
-        access_token: str,
-        ttl_seconds: int,
-    ):
-        self.access_tokens[user_id] = {
-            "user_id": user_id,
-            "access_token": access_token,
-            "ttl_seconds": ttl_seconds,
-        }
-
-
 class FakeHyundaiOAuthResultStore:
     def __init__(self):
         self.results = {}
@@ -216,15 +185,6 @@ class FakeTempAccessTokenIssuer:
         return VALID_TEMP_ACCESS_TOKEN
 
 
-class FakeRefreshTokenEncryptor:
-    def __init__(self):
-        self.encrypt_calls = []
-
-    def encrypt(self, refresh_token: str) -> str:
-        self.encrypt_calls.append(refresh_token)
-        return VALID_ENCRYPTED_REFRESH_TOKEN
-
-
 @pytest.fixture
 def fake_oauth_state_store():
     return FakeOAuthStateStore()
@@ -246,16 +206,6 @@ def fake_user_repository():
 
 
 @pytest.fixture
-def fake_hyundai_token_repository():
-    return FakeHyundaiTokenRepository()
-
-
-@pytest.fixture
-def fake_hyundai_access_token_store():
-    return FakeHyundaiAccessTokenStore()
-
-
-@pytest.fixture
 def fake_hyundai_oauth_result_store():
     return FakeHyundaiOAuthResultStore()
 
@@ -271,34 +221,23 @@ def fake_temp_access_token_issuer():
 
 
 @pytest.fixture
-def fake_refresh_token_encryptor():
-    return FakeRefreshTokenEncryptor()
-
-
-@pytest.fixture
 def handle_hyundai_oauth_callback_service(
     fake_oauth_state_store,
     fake_qr_session_store,
     fake_hyundai_oauth_client,
     fake_user_repository,
-    fake_hyundai_token_repository,
-    fake_hyundai_access_token_store,
     fake_hyundai_oauth_result_store,
     fake_app_login_result_store,
     fake_temp_access_token_issuer,
-    fake_refresh_token_encryptor,
 ):
     return HandleHyundaiOAuthCallbackService(
         oauth_state_store=fake_oauth_state_store,
         qr_session_store=fake_qr_session_store,
         hyundai_oauth_client=fake_hyundai_oauth_client,
         user_repository=fake_user_repository,
-        hyundai_token_repository=fake_hyundai_token_repository,
-        hyundai_access_token_store=fake_hyundai_access_token_store,
         hyundai_oauth_result_store=fake_hyundai_oauth_result_store,
         app_login_result_store=fake_app_login_result_store,
         temp_access_token_issuer=fake_temp_access_token_issuer,
-        refresh_token_encryptor=fake_refresh_token_encryptor,
         public_base_url=PUBLIC_BASE_URL,
     )
 
@@ -318,15 +257,13 @@ def valid_oauth_state(
 class TestHandleHyundaiOAuthCallback:
     """UC-AUTH-003 - GET /auth/redirect"""
 
-    def test_valid_callback_stores_user_and_hyundai_token(
+    def test_valid_callback_stores_user_and_returns_complete(
         self,
         handle_hyundai_oauth_callback_service,
         fake_user_repository,
-        fake_hyundai_token_repository,
-        fake_refresh_token_encryptor,
         valid_oauth_state,
     ):
-        """정상 callback이면 user와 암호화된 현대 refresh token을 저장한다."""
+        """정상 callback이면 user를 저장하고 complete 결과를 반환한다."""
         command = HandleHyundaiOAuthCallbackCommand(
             code=VALID_CODE,
             state=VALID_OAUTH_STATE,
@@ -336,33 +273,6 @@ class TestHandleHyundaiOAuthCallback:
 
         assert result.status == "complete"
         assert fake_user_repository.users[VALID_USER_ID]["name"] == VALID_USER_NAME
-        saved_token = fake_hyundai_token_repository.tokens[VALID_USER_ID]
-        assert saved_token["encrypted_refresh_token"] == VALID_ENCRYPTED_REFRESH_TOKEN
-        assert fake_refresh_token_encryptor.encrypt_calls == [
-            VALID_HYUNDAI_REFRESH_TOKEN
-        ]
-
-    def test_valid_callback_caches_hyundai_access_token_only_in_redis(
-        self,
-        handle_hyundai_oauth_callback_service,
-        fake_hyundai_access_token_store,
-        fake_hyundai_token_repository,
-        valid_oauth_state,
-    ):
-        """현대 access token은 DB가 아니라 Redis 역할의 store에만 저장한다."""
-        command = HandleHyundaiOAuthCallbackCommand(
-            code=VALID_CODE,
-            state=VALID_OAUTH_STATE,
-        )
-
-        handle_hyundai_oauth_callback_service.execute(command)
-
-        cached = fake_hyundai_access_token_store.access_tokens[VALID_USER_ID]
-        assert cached["access_token"] == VALID_HYUNDAI_ACCESS_TOKEN
-        assert cached["ttl_seconds"] == HYUNDAI_ACCESS_TOKEN_TTL_SECONDS
-        saved_token = fake_hyundai_token_repository.tokens[VALID_USER_ID]
-        assert "access_token" not in saved_token
-        assert VALID_HYUNDAI_ACCESS_TOKEN not in saved_token.values()
 
     def test_valid_callback_stores_vehicle_list_in_app_login_result(
         self,

@@ -6,18 +6,22 @@
     <uses-permission android:name="pleos.car.permission.CAR_INFO"/>
     <uses-permission android:name="android.car.permission.CAR_POWERTRAIN"/>
 
+    <!-- Pleos 내비게이션 경로 탐색 -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH"/>
+
+    <!-- Pleos LLM (자연어 이해) -->
+    <uses-permission android:name="pleos.car.permission.LLM_SERVICE"/>
+
+    <!-- Android 내장 음성 인식 마이크 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
     <!-- 네트워크 (MQTT 브로커 / 백엔드 REST API) -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- 위치 (동적 지오펜스 — GeofenceManager) -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
-
     <!-- Foreground Service (백그라운드 주차 감시) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 
     <!-- 알림 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -32,7 +36,10 @@
 
     <application
         android:label="Car PayIn"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.CarPayIn"
+        android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true">
         <!-- usesCleartextTraffic: Mock 백엔드 http:// 허용 (실서버 https 전환 시 제거) -->
 
@@ -60,7 +67,7 @@
         <service
             android:name=".service.CarPayInService"
             android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="dataSync" />
 
     </application>
 

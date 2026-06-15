@@ -20,6 +20,14 @@ VALID_APPROVAL_NO = "APPR123456"
 VALID_IDEMPOTENCY_KEY = "idem-key-001"
 
 
+class FakePmsSessionRepository:
+    def __init__(self):
+        self.paid = []
+
+    def mark_paid(self, pms_session_id: str) -> None:
+        self.paid.append(pms_session_id)
+
+
 class FakePaymentRequestRepository:
     def __init__(self):
         self.payment_requests = {}
@@ -60,14 +68,20 @@ def fake_payment_request_repository():
 
 
 @pytest.fixture
-def record_payment_complete_service(fake_payment_request_repository):
+def fake_pms_session_repository():
+    return FakePmsSessionRepository()
+
+
+@pytest.fixture
+def record_payment_complete_service(fake_payment_request_repository, fake_pms_session_repository):
     return RecordPaymentCompleteService(
         payment_request_repository=fake_payment_request_repository,
+        pms_session_repository=fake_pms_session_repository,
     )
 
 
 class TestRecordPaymentComplete:
-    """UC-PMS-004 - POST /pms/payment/complete"""
+    """UC-PMS-004 - POST /payment/complete"""
 
     def test_payment_complete_request_is_saved_as_success(
         self,
@@ -102,6 +116,50 @@ class TestRecordPaymentComplete:
 
         # 응답 확인
         assert result.status == "success"
+
+    def test_session_marked_paid_on_new_payment(
+        self,
+        record_payment_complete_service,
+        fake_pms_session_repository,
+    ):
+        """신규 결제 완료 시 PMS 세션이 paid로 마킹된다."""
+        command = RecordPaymentCompleteCommand(
+            pms_session_id=VALID_PMS_SESSION_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
+            amount=VALID_AMOUNT,
+            currency=VALID_CURRENCY,
+            approval_no=VALID_APPROVAL_NO,
+            idempotency_key=VALID_IDEMPOTENCY_KEY,
+        )
+
+        record_payment_complete_service.execute(command)
+
+        assert len(fake_pms_session_repository.paid) == 1
+        assert fake_pms_session_repository.paid[0] == VALID_PMS_SESSION_ID
+
+    def test_session_not_marked_paid_on_duplicate_payment(
+        self,
+        record_payment_complete_service,
+        fake_payment_request_repository,
+        fake_pms_session_repository,
+    ):
+        """중복 idempotency_key 재요청에는 세션 상태를 변경하지 않는다."""
+        command = RecordPaymentCompleteCommand(
+            pms_session_id=VALID_PMS_SESSION_ID,
+            carpay_session_id=VALID_CARPAY_PARKING_SESSION_ID,
+            tx_id=VALID_CARPAY_TX_ID,
+            amount=VALID_AMOUNT,
+            currency=VALID_CURRENCY,
+            approval_no=VALID_APPROVAL_NO,
+            idempotency_key=VALID_IDEMPOTENCY_KEY,
+        )
+
+        record_payment_complete_service.execute(command)
+        fake_pms_session_repository.paid.clear()
+        record_payment_complete_service.execute(command)  # 중복 요청
+
+        assert len(fake_pms_session_repository.paid) == 0
 
     def test_duplicate_idempotency_key_returns_existing_result(
         self,
