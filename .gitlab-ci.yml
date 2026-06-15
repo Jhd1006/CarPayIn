@@ -58,7 +58,14 @@ test:pms:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
     - IMAGE="$CI_REGISTRY_IMAGE/$IMAGE_NAME"
-    - TAG="${CI_COMMIT_TAG:-$CI_COMMIT_REF_SLUG}"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        TAG="$CI_COMMIT_TAG"
+      elif [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        TAG="0.0.$CI_PIPELINE_IID"
+      else
+        TAG="$CI_COMMIT_REF_SLUG"
+      fi
     - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:$TAG" -t "$IMAGE:latest" "services/$SERVICE_NAME"
     - docker push "$IMAGE:$TAG"
     - docker push "$IMAGE:latest"
