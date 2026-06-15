@@ -152,12 +152,8 @@ class TestHandleLprEntry:
         # 응답 확인
         assert result.status == "created"
         assert result.pms_session_id is not None
-        assert (
-            fake_pre_registration_repository.registrations[
-                (VALID_LOT_ID, VALID_PLATE)
-            ]["status"]
-            == "consumed"
-        )
+        # consume_pre_registration은 Redis에서 키를 삭제 → 더 이상 조회 불가
+        assert (VALID_LOT_ID, VALID_PLATE) not in fake_pre_registration_repository.registrations
 
     def test_duplicate_plate_does_not_create_duplicate_session(
         self,
