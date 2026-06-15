@@ -31,12 +31,6 @@ router = APIRouter(tags=["Parking"])
 
 PARTNER_PARKING_LOTS = [
     ParkingLotResponse(
-        id="LOT_TEST_01",
-        name="42dot 테스트 주차장",
-        lat=37.48544722,
-        lng=127.03636666,
-    ),
-    ParkingLotResponse(
         id="LOT_GANGNAM_01",
         name="강남 아이파킹",
         lat=37.4979,

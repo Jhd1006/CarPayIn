@@ -3,16 +3,15 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def test_parking_lots_include_webots_test_lot():
+def test_parking_lots_returns_partner_lots():
     with TestClient(app) as client:
         response = client.get("/parking/lots")
 
     assert response.status_code == 200
     lots = response.json()["lots"]
-    test_lot = next(lot for lot in lots if lot["id"] == "LOT_TEST_01")
-    assert test_lot["name"] == "42dot 테스트 주차장"
-    assert test_lot["lat"] == 37.48544722
-    assert test_lot["lng"] == 127.03636666
+    lot_ids = [lot["id"] for lot in lots]
+    assert "LOT_GANGNAM_01" in lot_ids
+    assert "LOT_TEST_01" not in lot_ids
 
 
 def test_sim_location_can_be_updated_and_read_back():
