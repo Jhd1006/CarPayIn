@@ -1,0 +1,14 @@
+services:
+  mock-pg-api:
+    image: 353488928095.dkr.ecr.ap-northeast-2.amazonaws.com/mock-pg:latest
+    container_name: mock-pg-api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      MOCK_PG_DATABASE_URL: postgresql+psycopg://mockpg:mockpgdb1234@10.1.130.39:5432/mockpgdb
+      PG_WEBHOOK_SECRET: mock-pg-webhook-secret
+      CARPAYIN_BACKEND_BASE_URL: http://internal-hd-internal-alb-998881429.ap-northeast-2.elb.amazonaws.com:8000
+      MOCK_CARD_BASE_URL: http://192.168.100.1:8000
+      MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE: "true"
+    restart: unless-stopped
