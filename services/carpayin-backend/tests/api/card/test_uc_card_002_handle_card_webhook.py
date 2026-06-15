@@ -20,6 +20,11 @@ VALID_BILLING_KEY = "bk-xyz-9999"
 VALID_CARD_LAST_FOUR = "1234"
 VALID_SIGNATURE = "valid-hmac-signature"
 INVALID_SIGNATURE = "tampered-signature"
+VALID_TIMESTAMP = "1781070000"
+VALID_HEADERS = {
+    "X-Webhook-Timestamp": VALID_TIMESTAMP,
+    "X-Webhook-Signature": VALID_SIGNATURE,
+}
 
 
 # ──────────────────────────────────────────────
@@ -109,12 +114,12 @@ class TestHandleCardWebhookApi:
         """유효한 webhook이면 200과 status=ok를 반환한다."""
         response = api_client_with_service_stub.post(
             "/card/webhook",
+            headers=VALID_HEADERS,
             json={
                 "order_id": VALID_ORDER_ID,
                 "billing_key": VALID_BILLING_KEY,
                 "card_last_four": VALID_CARD_LAST_FOUR,
                 "status": "active",
-                "signature": VALID_SIGNATURE,
             },
         )
 
@@ -129,11 +134,11 @@ class TestHandleCardWebhookApi:
         """order_id가 누락되면 422를 반환한다."""
         response = api_client_with_service_stub.post(
             "/card/webhook",
+            headers=VALID_HEADERS,
             json={
                 "billing_key": VALID_BILLING_KEY,
                 "card_last_four": VALID_CARD_LAST_FOUR,
                 "status": "active",
-                "signature": VALID_SIGNATURE,
             },
         )
 
@@ -143,18 +148,18 @@ class TestHandleCardWebhookApi:
         """billing_key가 누락되면 422를 반환한다."""
         response = api_client_with_service_stub.post(
             "/card/webhook",
+            headers=VALID_HEADERS,
             json={
                 "order_id": VALID_ORDER_ID,
                 "card_last_four": VALID_CARD_LAST_FOUR,
                 "status": "active",
-                "signature": VALID_SIGNATURE,
             },
         )
 
         assert response.status_code == 422
 
-    def test_missing_signature_returns_422(self, api_client_with_service_stub):
-        """signature가 누락되면 422를 반환한다."""
+    def test_missing_signature_headers_returns_422(self, api_client_with_service_stub):
+        """signature header가 누락되면 422를 반환한다."""
         response = api_client_with_service_stub.post(
             "/card/webhook",
             json={
@@ -171,12 +176,12 @@ class TestHandleCardWebhookApi:
         """status가 enum 값이 아니면 422를 반환한다."""
         response = api_client_with_service_stub.post(
             "/card/webhook",
+            headers=VALID_HEADERS,
             json={
                 "order_id": VALID_ORDER_ID,
                 "billing_key": VALID_BILLING_KEY,
                 "card_last_four": VALID_CARD_LAST_FOUR,
                 "status": "invalid_status",
-                "signature": VALID_SIGNATURE,
             },
         )
 
@@ -191,12 +196,15 @@ class TestHandleCardWebhookApi:
         """signature가 틀리면 401을 반환한다."""
         response = api_client_with_signature_failing_stub.post(
             "/card/webhook",
+            headers={
+                "X-Webhook-Timestamp": VALID_TIMESTAMP,
+                "X-Webhook-Signature": INVALID_SIGNATURE,
+            },
             json={
                 "order_id": VALID_ORDER_ID,
                 "billing_key": VALID_BILLING_KEY,
                 "card_last_four": VALID_CARD_LAST_FOUR,
                 "status": "active",
-                "signature": INVALID_SIGNATURE,
             },
         )
 
@@ -213,12 +221,12 @@ class TestHandleCardWebhookApi:
         """order가 없으면 400을 반환한다."""
         response = api_client_with_order_failing_stub.post(
             "/card/webhook",
+            headers=VALID_HEADERS,
             json={
                 "order_id": VALID_ORDER_ID,
                 "billing_key": VALID_BILLING_KEY,
                 "card_last_four": VALID_CARD_LAST_FOUR,
                 "status": "active",
-                "signature": VALID_SIGNATURE,
             },
         )
 

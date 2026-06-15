@@ -32,7 +32,7 @@ APP_TOKEN_SECRET=<long-random-secret>
 APP_REFRESH_TOKEN_HASH_SECRET=<long-random-secret-optional>
 HYUNDAI_TOKEN_ENCRYPTION_SECRET=<long-random-secret>
 PG_WEBHOOK_SECRET=<shared-secret-with-mock-pg>
-PMS_WEBHOOK_TOKEN=<shared-token-with-pms>
+PMS_WEBHOOK_SECRET=<shared-secret-with-pms>
 
 HYUNDAI_CLIENT_ID=<hyundai-client-id>
 HYUNDAI_CLIENT_SECRET=<hyundai-client-secret>
@@ -82,7 +82,7 @@ APP_ENV=aws
 
 PMS_DATABASE_URL=postgresql+psycopg://<user>:<password>@<pms-db-host>:5432/<db>
 CARPAYIN_BACKEND_BASE_URL=https://<carpayin-backend-alb-or-domain>
-PMS_WEBHOOK_TOKEN=<shared-token-with-carpayin-backend>
+PMS_WEBHOOK_SECRET=<shared-secret-with-carpayin-backend>
 PMS_FEE_PER_30_MINUTES=500
 ```
 

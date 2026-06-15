@@ -2,15 +2,15 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.infra.db.models import PreRegistration
-from app.infra.db.session import SessionLocal
+from app.infra.redis import redis_client
 from app.main import app
 
 
-def test_pre_register_api_saves_plate_to_pms_database():
+def test_pre_register_api_saves_plate_to_redis():
     unique_id = uuid4().hex
     lot_id = f"lot-api-{unique_id}"
     plate = f"A{unique_id[:7]}"
+    key = f"pre_reg:{lot_id}:{plate}"
 
     try:
         with TestClient(app) as client:
@@ -27,19 +27,8 @@ def test_pre_register_api_saves_plate_to_pms_database():
         assert second_response.status_code == 200
         assert first_response.json()["status"] == "registered"
 
-        session = SessionLocal()
-        try:
-            registration = session.get(PreRegistration, (lot_id, plate))
-            assert registration is not None
-            assert registration.status == "pre_registered"
-        finally:
-            session.close()
+        assert redis_client.get(key) == "1"
+        ttl = redis_client.ttl(key)
+        assert ttl > 0
     finally:
-        session = SessionLocal()
-        try:
-            registration = session.get(PreRegistration, (lot_id, plate))
-            if registration is not None:
-                session.delete(registration)
-                session.commit()
-        finally:
-            session.close()
+        redis_client.delete(key)

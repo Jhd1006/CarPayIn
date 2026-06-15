@@ -8,8 +8,6 @@ import secrets
 import time
 from typing import Any
 
-from cryptography.fernet import Fernet
-
 
 TEMP_ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 APP_ACCESS_TOKEN_TTL_SECONDS = 60 * 60
@@ -145,38 +143,47 @@ class RefreshTokenHasher:
         ).hexdigest()
 
 
-class RefreshTokenEncryptor:
-    def __init__(self, secret: str):
-        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
-        self._cipher = Fernet(key)
-
-    def encrypt(self, token: str) -> str:
-        return self._cipher.encrypt(token.encode("utf-8")).decode("ascii")
-
-    def decrypt(self, token: str) -> str:
-        return self._cipher.decrypt(token.encode("ascii")).decode("utf-8")
-
-
 class WebhookSignatureVerifier:
-    def __init__(self, secret: str):
+    def __init__(self, secret: str, tolerance_seconds: int = 5 * 60):
         self._secret = secret.encode("utf-8")
+        self._tolerance_seconds = tolerance_seconds
 
-    def verify(self, *, order_id: str, signature: str) -> bool:
+    def sign(self, *, timestamp: str, body: bytes) -> str:
+        body_hash = hashlib.sha256(body).hexdigest()
+        message = f"{timestamp}.{body_hash}".encode("utf-8")
+        return hmac.new(self._secret, message, hashlib.sha256).hexdigest()
+
+    def verify(self, *, timestamp: str, signature: str, body: bytes) -> bool:
+        try:
+            timestamp_int = int(timestamp)
+        except (TypeError, ValueError):
+            return False
+
+        now = int(time.time())
+        if abs(now - timestamp_int) > self._tolerance_seconds:
+            return False
+
         expected = hmac.new(
             self._secret,
-            order_id.encode("utf-8"),
+            f"{timestamp}.{hashlib.sha256(body).hexdigest()}".encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
         return hmac.compare_digest(expected, signature)
 
 
-class PmsAuthValidator:
-    def __init__(self, token: str):
-        self._token = token
+class PmsAuthValidator(WebhookSignatureVerifier):
+    def validate(self, *, timestamp: str, signature: str, body: bytes) -> None:
+        if not self.verify(timestamp=timestamp, signature=signature, body=body):
+            raise ValueError("invalid_signature")
 
-    def validate(self, token: str) -> None:
-        if not hmac.compare_digest(self._token, token):
-            raise ValueError("pms_auth_failed")
+
+def sign_webhook_headers(*, secret: str, body: bytes, timestamp: str | None = None) -> dict:
+    timestamp = timestamp or str(int(time.time()))
+    signature = WebhookSignatureVerifier(secret).sign(timestamp=timestamp, body=body)
+    return {
+        "X-Webhook-Timestamp": timestamp,
+        "X-Webhook-Signature": signature,
+    }
 
 
 def _requires_explicit_env() -> bool:
@@ -197,6 +204,22 @@ def _secret_env(name: str, dev_default: str) -> str:
     return dev_default
 
 
+def _secret_env_with_legacy(
+    name: str,
+    legacy_name: str,
+    dev_default: str,
+) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    legacy_value = os.getenv(legacy_name, "").strip()
+    if legacy_value:
+        return legacy_value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return dev_default
+
+
 def create_default_security_components() -> dict:
     token_secret = _secret_env("APP_TOKEN_SECRET", "carpayin-dev-token-secret")
     token_codec = SignedTokenCodec(token_secret)
@@ -209,13 +232,21 @@ def create_default_security_components() -> dict:
         "refresh_token_hasher": RefreshTokenHasher(
             os.getenv("APP_REFRESH_TOKEN_HASH_SECRET", "").strip() or token_secret
         ),
-        "refresh_token_encryptor": RefreshTokenEncryptor(
-            _secret_env("HYUNDAI_TOKEN_ENCRYPTION_SECRET", "hyundai-dev-token-secret")
-        ),
         "card_webhook_signature_verifier": WebhookSignatureVerifier(
             _secret_env("PG_WEBHOOK_SECRET", "mock-pg-webhook-secret")
         ),
+        "pms_webhook_signature_verifier": WebhookSignatureVerifier(
+            _secret_env_with_legacy(
+                "PMS_WEBHOOK_SECRET",
+                "PMS_WEBHOOK_TOKEN",
+                "pms-webhook-secret",
+            )
+        ),
         "pms_auth_validator": PmsAuthValidator(
-            _secret_env("PMS_WEBHOOK_TOKEN", "pms-webhook-token")
+            _secret_env_with_legacy(
+                "PMS_WEBHOOK_SECRET",
+                "PMS_WEBHOOK_TOKEN",
+                "pms-webhook-secret",
+            )
         ),
     }

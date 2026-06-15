@@ -1,6 +1,21 @@
 from pydantic import BaseModel
 
 
+class CardRegistrationSessionRequest(BaseModel):
+    order_id: str
+    car_id: str = ""
+    plate: str = ""
+    card_brand: str = ""
+    callback_url: str = ""
+
+
+class CardRegistrationSessionResponse(BaseModel):
+    order_id: str
+    webview_url: str
+    pg_url: str
+    expires_at: str = ""
+
+
 class CardRegistrationRequest(BaseModel):
     order_id: str
     card_number: str

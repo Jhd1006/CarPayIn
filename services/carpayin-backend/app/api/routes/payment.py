@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, Response
 
 from app.api.deps import get_parking_fee_service, get_process_payment_service
 from app.api.schemas.payment import (
@@ -6,6 +6,7 @@ from app.api.schemas.payment import (
     ProcessPaymentRequest,
     ProcessPaymentResponse,
 )
+from app.api.utils import extract_bearer_token
 from app.application.payment.get_parking_fee import (
     GetParkingFeeCommand,
     GetParkingFeeService,
@@ -17,28 +18,6 @@ from app.application.payment.process_payment import (
 
 
 router = APIRouter(tags=["Payment"])
-
-
-def extract_bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-
-    token = authorization.removeprefix("Bearer ").strip()
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-    return token
 
 
 @router.get("/fee/{session_id}", response_model=ParkingFeeResponse)

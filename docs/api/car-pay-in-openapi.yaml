@@ -46,11 +46,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: App Access Token (JWT)
-    PmsWebhookSignature:
+    WebhookTimestamp:
       type: apiKey
       in: header
-      name: X-PMS-Signature
-      description: PMS webhook 요청 검증용 HMAC signature
+      name: X-Webhook-Timestamp
+      description: Unix timestamp seconds. 요청 생성 시각이며 5분 허용 오차 안에 있어야 합니다.
+    WebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: HMAC-SHA256(secret, "{timestamp}.{sha256(raw_body)}") 형식의 webhook signature
 
   # ─────────────────────────────────────────────
   # Reusable Schemas
@@ -203,10 +208,14 @@ components:
           type: string
           description: PG 카드 등록 웹뷰 URL
           example: "https://pg.example.com/card-register?order_id=order_xyz789"
+        webview_url:
+          type: string
+          description: 앱이 WebView로 열 PG 카드 등록 URL
+          example: "https://pg.example.com/card-register?order_id=order_xyz789"
 
     CardWebhookRequest:
       type: object
-      required: [order_id, billing_key, card_last_four, status, signature]
+      required: [order_id, billing_key, card_last_four, status]
       properties:
         order_id:
           type: string
@@ -221,30 +230,111 @@ components:
           type: string
           enum: [active]
           example: active
-        signature:
-          type: string
-          description: PG webhook HMAC signature
-          example: "9b1f..."
 
     # ── Parking ───────────────────────────────
-    PreNotifyRequest:
+    ParkingLotResponse:
       type: object
-      required: [car_id, lot_id, plate]
+      required: [id, name, lat, lng]
       properties:
-        car_id:
+        id:
           type: string
-          description: 앱 토큰에 연결된 차량 ID
-          example: "car_001"
+          description: 제휴 주차장 ID
+          example: "LOT_TEST_01"
+        name:
+          type: string
+          description: 제휴 주차장 표시 이름
+          example: "42dot 테스트 주차장"
+        lat:
+          type: number
+          format: double
+          description: 주차장 위도
+          example: 37.48544722
+        lng:
+          type: number
+          format: double
+          description: 주차장 경도
+          example: 127.03636666
+
+    ParkingLotsResponse:
+      type: object
+      required: [lots]
+      properties:
+        lots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParkingLotResponse'
+
+    SimLocationRequest:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+          description: 시뮬레이션 차량 위도
+          example: 37.48544722
+        lng:
+          type: number
+          format: double
+          description: 시뮬레이션 차량 경도
+          example: 127.03636666
+        speed_kph:
+          type: number
+          format: double
+          default: 0.0
+          description: 차량 속도(km/h)
+          example: 12.5
+        heading:
+          type: number
+          format: double
+          default: 0.0
+          description: 진행 방향(degree)
+          example: 90.0
+        source:
+          type: string
+          default: webots
+          description: 위치 업데이트 출처
+          example: webots
+
+    SimLocationResponse:
+      type: object
+      required: [lat, lng, speed_kph, heading, source, updated_at]
+      properties:
+        lat:
+          type: number
+          format: double
+          example: 37.48544722
+        lng:
+          type: number
+          format: double
+          example: 127.03636666
+        speed_kph:
+          type: number
+          format: double
+          example: 12.5
+        heading:
+          type: number
+          format: double
+          example: 90.0
+        source:
+          type: string
+          example: webots
+        updated_at:
+          type: string
+          format: date-time
+          description: 서버가 위치 상태를 갱신한 시각
+          example: "2024-01-15T10:30:00Z"
+
+    NavigateRequest:
+      type: object
+      required: [lot_id]
+      properties:
         lot_id:
           type: string
-          description: 주차장 ID
-          example: "lot_001"
-        plate:
-          type: string
-          description: 등록된 차량번호
-          example: "12가 3456"
+          description: 길안내를 누른 제휴 주차장 ID
+          example: "LOT_TEST_01"
 
-    PreNotifyResponse:
+    NavigateResponse:
       type: object
       properties:
         status:
@@ -253,10 +343,12 @@ components:
           example: registered
         car_id:
           type: string
+          description: 토큰에서 추출된 차량 ID
         lot_id:
           type: string
         plate:
           type: string
+          description: DB에서 조회된 차량번호
 
     EntryWebhookRequest:
       type: object
@@ -473,6 +565,43 @@ components:
           type: string
 
     # ── Mock PG ───────────────────────────────
+    PgCardRegistrationSessionRequest:
+      type: object
+      required: [order_id]
+      properties:
+        order_id:
+          type: string
+          example: "order_xyz789"
+        car_id:
+          type: string
+          example: "car_001"
+        plate:
+          type: string
+          example: "12가3456"
+        card_brand:
+          type: string
+          example: "현대카드"
+        callback_url:
+          type: string
+          example: "http://carpayin-backend:8000/card/webhook"
+
+    PgCardRegistrationSessionResponse:
+      type: object
+      required: [order_id, webview_url, pg_url]
+      properties:
+        order_id:
+          type: string
+          example: "order_xyz789"
+        webview_url:
+          type: string
+          example: "https://pg.example.com/pg/card-register?order_id=order_xyz789"
+        pg_url:
+          type: string
+          example: "https://pg.example.com/pg/card-register?order_id=order_xyz789"
+        expires_at:
+          type: string
+          example: "2026-06-04T12:30:00"
+
     PgCardRegistrationRequest:
       type: object
       required: [order_id, card_number, expiry, cvc]
@@ -685,9 +814,9 @@ paths:
         2. 현대 token API로 access/refresh token 발급
         3. 현대 사용자 정보 API 호출 (user_id, name)
         4. 현대 내 차량 리스트 조회 API 호출
-        5. RDS users upsert, hyundai_tokens에 암호화된 refresh token 저장
-        6. Redis hyundai_access:{user_id}에 access token 캐시
-        7. Redis hyundai_oauth:{session_id}, app_login_result:{session_id}에 차량 목록과 임시 토큰 저장
+        5. RDS users upsert
+        6. 현대 access/refresh token은 사용자·차량 조회 직후 폐기하며 Redis/DB에 저장하지 않음
+        7. Redis hyundai_oauth:{session_id}, app_login_result:{session_id}에 차량 목록과 임시 app access token 저장
         8. oauth_state:{state}는 used 처리 또는 삭제
       parameters:
         - name: code
@@ -861,8 +990,8 @@ paths:
            key: mock_pg_card_register:{order_id}
            value: { order_id, user_id, car_id, status: "pending", created_at, expires_at }
            ```
-        7. Mock PG에 카드 등록 웹뷰 생성 요청
-        8. PG 카드 등록 URL 반환
+        7. PG internal API에 카드 등록 WebView URL 생성 요청
+        8. order_id와 PG 카드 등록 webview_url 반환
       security:
         - BearerAuth: []
       requestBody:
@@ -903,7 +1032,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
-          description: Mock PG 카드 등록 URL 생성 실패
+          description: PG WebView URL 생성 실패
           content:
             application/json:
               schema:
@@ -918,7 +1047,9 @@ paths:
         카드 원문 정보는 Car Pay-in Backend에 전달되지 않으며, billing_key만 수신합니다.
         
         Backend 처리:
-        1. webhook signature 또는 HMAC 검증
+        1. `X-Webhook-Timestamp`, `X-Webhook-Signature` 헤더로 raw body HMAC 검증
+           - signature = HMAC-SHA256(PG_WEBHOOK_SECRET, "{timestamp}.{sha256(raw_body)}")
+           - timestamp 허용 오차는 5분
         2. Redis에서 order_id로 카드 등록 세션 조회 및 status=pending 확인
         3. RDS vehicles에서 car_id 유효성 재확인
         4. RDS vehicle_billing_keys upsert
@@ -926,7 +1057,10 @@ paths:
            - 카드 변경: UPDATE (billing_key, card_last_four, status=active, updated_at)
         5. Redis 카드 등록 세션 완료 처리 또는 삭제
         
-        **멱등성**: order_id UNIQUE(Mock PG) + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
+        **멱등성**: Redis의 order_id 상태 + car_id PRIMARY KEY(vehicle_billing_keys)로 중복 처리 방지
+      security:
+        - WebhookTimestamp: []
+          WebhookSignature: []
       requestBody:
         required: true
         content:
@@ -960,27 +1094,80 @@ paths:
   # ══════════════════════════════════════════
   # Parking
   # ══════════════════════════════════════════
-  /pre-notify:
+  /parking/lots:
+    get:
+      tags: [Parking]
+      summary: 제휴 주차장 목록 조회
+      description: |
+        Android 앱과 시뮬레이션 서비스가 사용할 제휴 주차장 목록을 반환합니다.
+        현재 구현은 로컬/시연용 정적 목록을 반환합니다.
+      responses:
+        '200':
+          description: 제휴 주차장 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingLotsResponse'
+
+  /sim/location:
+    get:
+      tags: [Parking]
+      summary: 현재 시뮬레이션 차량 위치 조회
+      description: |
+        Webots 또는 로컬 테스트 UI가 마지막으로 저장한 시뮬레이션 차량 위치를 조회합니다.
+      responses:
+        '200':
+          description: 현재 시뮬레이션 위치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimLocationResponse'
     post:
       tags: [Parking]
-      summary: 사전 입차 알림
+      summary: 시뮬레이션 차량 위치 갱신
       description: |
-        차량이 제휴 주차장에 가까워지거나 목적지로 설정 시 앱이 car_id, lot_id, plate를 전달합니다.
-        
-        Backend 검증:
-        1. app access token 검증
-        2. 요청 car_id가 토큰의 car_id와 일치하는지 확인
-        3. RDS users, vehicles 유효성 확인
-        4. 요청 plate가 등록된 vehicles.plate와 일치하는지 확인
-        5. vehicle_billing_keys에 active 빌링키 존재 여부 확인 (없으면 거부)
-        
+        Webots 또는 로컬 테스트 도구가 시뮬레이션 차량 위치를 서버 메모리에 갱신합니다.
+        이 endpoint는 로컬 시연/테스트 편의를 위한 상태 저장 API입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimLocationRequest'
+      responses:
+        '200':
+          description: 갱신된 시뮬레이션 위치
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimLocationResponse'
+        '422':
+          description: 요청 body validation 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /parking/navigate:
+    post:
+      tags: [Parking]
+      summary: 제휴 주차장 길안내 → 사전 입차 알림 등록
+      description: |
+        사용자가 앱에서 제휴 주차장 목록의 길안내 버튼을 누를 때 호출합니다.
+        lot_id만 전달하면 되며, car_id와 plate는 토큰과 DB에서 자동으로 조회합니다.
+
+        Backend 처리:
+        1. app access token 검증 및 car_id, user_id 추출
+        2. DB vehicles에서 car_id로 차량과 번호판 조회
+        3. vehicle_billing_keys에 active 빌링키 존재 여부 확인
+
         검증 완료 시:
-        - Redis에 사전 입차 등록 저장 (TTL: 1시간)
+        - carpayin-redis에 사전 입차 상태 저장 (TTL: 1시간)
           ```
           key: parking_pre_notify:{lot_id}:{plate}
           value: { user_id, car_id, lot_id, plate, status: "incoming", created_at, expires_at }
           ```
-        - PMS에 차량번호 사전 등록 요청
+        - PMS에 차량번호 사전 등록 요청 (pms-redis에 TTL 1시간 저장)
       security:
         - BearerAuth: []
       requestBody:
@@ -988,28 +1175,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PreNotifyRequest'
+              $ref: '#/components/schemas/NavigateRequest'
       responses:
         '200':
           description: 사전 입차 알림 등록 성공
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PreNotifyResponse'
+                $ref: '#/components/schemas/NavigateResponse'
         '400':
-          description: active 빌링키 없음, 차량번호 미등록 또는 불일치
+          description: active 빌링키 없음 또는 차량번호 미등록
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: 인증 실패
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: 요청 car_id와 토큰 car_id 불일치
           content:
             application/json:
               schema:
@@ -1023,7 +1204,9 @@ paths:
         PMS LPR 카메라가 차량번호 인식 후 입차 이벤트를 이 endpoint로 전송합니다.
         
         Backend 처리:
-        1. X-PMS-Signature 등으로 PMS 신뢰 요청 여부 확인
+        1. `X-Webhook-Timestamp`, `X-Webhook-Signature` 헤더로 raw body HMAC 검증
+           - signature = HMAC-SHA256(PMS_WEBHOOK_SECRET, "{timestamp}.{sha256(raw_body)}")
+           - timestamp 허용 오차는 5분
         2. Redis에서 parking_pre_notify:{lot_id}:{plate} 조회
            - 없으면: Car Pay-in 비등록 차량으로 판단, 세션 미생성
         3. Redis의 user_id, car_id를 기준으로 처리
@@ -1043,13 +1226,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/EntryWebhookRequest'
-      parameters:
-        - name: X-PMS-Signature
-          in: header
-          required: true
-          schema:
-            type: string
-          description: PMS webhook HMAC signature
+      security:
+        - WebhookTimestamp: []
+          WebhookSignature: []
       responses:
         '200':
           description: 입차 처리 완료. pre-notify가 없으면 status=not_registered로 반환하고 세션은 생성하지 않음.
@@ -1085,7 +1264,7 @@ paths:
         5. 세션의 car_id와 토큰의 car_id 일치 확인
         6. 세션 status=active 확인
         7. PMS에 요금 조회 요청 (lot_id, plate 기준)
-        8. PMS 결과를 Redis parking_fee_quote:{session_id}에 TTL 5분으로 저장
+        8. PMS 결과를 Redis parking_fee_quote:{session_id}에 TTL 15분으로 저장
       security:
         - BearerAuth: []
       parameters:
@@ -1213,15 +1392,15 @@ paths:
   # ══════════════════════════════════════════
   # PMS 연동 API (Car Pay-in Backend → PMS)
   # ══════════════════════════════════════════
-  /pms/parking/pre-register:
+  /parking/pre-register:
     post:
       tags: [PMS]
       summary: 차량번호 사전 등록 (→ PMS)
       description: |
         Car Pay-in Backend가 PMS에 입차 예정 차량을 사전 등록합니다.
         PMS는 해당 차량번호와 주차장 ID를 입차 감지 대상으로 등록합니다.
-        
-        실제 요청 URL: `POST {PMS_URL}/parking/pre-register`
+
+        요청 URL: `POST {PMS_URL}/parking/pre-register`
       requestBody:
         required: true
         content:
@@ -1236,7 +1415,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PmsPreRegisterResponse'
 
-  /pms/lpr/entry:
+  /lpr/entry:
     post:
       tags: [PMS]
       summary: LPR 입차 이벤트 시뮬레이션
@@ -1244,7 +1423,7 @@ paths:
         Mock PMS 내부에서 LPR 입차 이벤트를 발생시켜 PMS 세션을 생성하고,
         Car Pay-in Backend의 `/webhook/entry`로 전달할 payload를 만든다.
 
-        실제 요청 URL: `POST {PMS_URL}/lpr/entry`
+        요청 URL: `POST {PMS_URL}/lpr/entry`
       requestBody:
         required: true
         content:
@@ -1259,15 +1438,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/PmsLprEntryResponse'
 
-  /pms/parking/fee:
+  /parking/fee:
     get:
       tags: [PMS]
       summary: 주차 요금 조회 (→ PMS)
       description: |
         Car Pay-in Backend가 PMS에 현재 주차 요금을 조회합니다.
         PMS는 plate, lot_id로 active 세션을 찾아 입차 시각부터 현재까지의 요금을 계산합니다.
-        
-        실제 요청 URL: `GET {PMS_URL}/parking/fee`
+
+        요청 URL: `GET {PMS_URL}/parking/fee`
       parameters:
         - name: lot_id
           in: query
@@ -1293,15 +1472,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /pms/payment/complete:
+  /payment/complete:
     post:
       tags: [PMS]
       summary: 결제 완료 통보 (→ PMS)
       description: |
         Car Pay-in Backend가 PMS에 결제 완료를 통보합니다.
         PMS는 해당 결과를 payment_requests에 저장하고, 출구 차단기 개방 기준으로 사용합니다.
-        
-        실제 요청 URL: `POST {PMS_URL}/payment/complete`
+
+        요청 URL: `POST {PMS_URL}/payment/complete`
         
         **멱등성**: payment_requests.idempotency_key UNIQUE 제약으로 중복 저장 방지
       requestBody:
@@ -1327,6 +1506,32 @@ paths:
   # ══════════════════════════════════════════
   # Mock PG 연동 API (Car Pay-in Backend → Mock PG)
   # ══════════════════════════════════════════
+  /pg/internal/card-registration/sessions:
+    post:
+      tags: [MockPG]
+      summary: 카드 등록 WebView URL 생성 요청 (Car Pay-in → PG)
+      description: |
+        Car Pay-in Backend가 order_id를 만든 뒤 PG internal ALB로 호출한다.
+        PG는 카드 정보를 받지 않고, order_id가 포함된 public WebView URL만 생성해 반환한다.
+
+        실제 요청 URL: `POST {PG_INTERNAL_BASE_URL}/pg/internal/card-registration/sessions`
+
+        반환된 `webview_url`은 AAOS 앱이 WebView로 연다.
+        사용자가 입력한 카드번호, 유효기간, CVC는 WebView 안에서 PG public ALB로 직접 전송된다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PgCardRegistrationSessionRequest'
+      responses:
+        '200':
+          description: PG WebView URL 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PgCardRegistrationSessionResponse'
+
   /pg/card-register:
     post:
       tags: [MockPG]
