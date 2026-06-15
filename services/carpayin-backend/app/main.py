@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer
 
 from app.api.routes.auth import router as auth_router
 from app.api.routes.card import router as card_router
+from app.api.routes.dev import router as dev_router
 from app.api.routes.parking import router as parking_router
 from app.api.routes.payment import router as payment_router
 from app.api.routes.load_test import router as load_test_router
@@ -124,6 +125,7 @@ async def runtime_error_handler(request: Request, exc: RuntimeError):
 
 app.include_router(auth_router)
 app.include_router(card_router)
+app.include_router(dev_router)
 app.include_router(parking_router)
 app.include_router(payment_router)
 app.include_router(load_test_router)

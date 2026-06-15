@@ -1022,19 +1022,33 @@ class MainActivity : AppCompatActivity() {
         }
 
         addBtn("Mock 입차 확정") {
-            ParkingStateManager.saveParkingState(this, true, "LOT_GANGNAM_01", "sess_dev_001")
-            Log.d(TAG, "Mock: 강남 주차장 입차 확인")
-            showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show()
+            val plate = ParkingStateManager.getPlateNumber(this) ?: "000가0000"
+            Toast.makeText(this, "입차 웹훅 전송 중...", Toast.LENGTH_SHORT).show()
+            Thread {
+                runCatching {
+                    ApiManager.triggerDevEntryWebhook("LOT_GANGNAM_01", plate)
+                }.onSuccess {
+                    handler.post { Toast.makeText(this, "입차 웹훅 전송 완료 — 알림 대기 중", Toast.LENGTH_SHORT).show() }
+                }.onFailure {
+                    Log.e(TAG, "Dev 입차 웹훅 실패: ${it.message}")
+                    handler.post { Toast.makeText(this, "웹훅 실패: ${it.message}", Toast.LENGTH_LONG).show() }
+                }
+            }.start()
         }
         addBtn("Mock 결제 완료") {
-            val mockAmount = 3000
-            val mockTxId = "dev_tx_${System.currentTimeMillis()}"
-            TransactionStore.save(this, mockTxId, "LOT_GANGNAM_01", mockAmount)
-            ParkingStateManager.saveParkingState(this, false)
-            Log.d(TAG, "Mock: ${"%,d".format(mockAmount)}원 결제 완료")
-            showRegisteredState()
-            showPaymentComplete(mockTxId, "DEV-APPROVED", "LOT_GANGNAM_01", mockAmount)
-            Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "결제 알림 전송 중...", Toast.LENGTH_SHORT).show()
+            Thread {
+                runCatching {
+                    ApiManager.withAutoRefresh(this) { token ->
+                        ApiManager.triggerDevPaymentNotification(token)
+                    }
+                }.onSuccess {
+                    handler.post { Toast.makeText(this, "결제 알림 전송 완료 — 알림 대기 중", Toast.LENGTH_SHORT).show() }
+                }.onFailure {
+                    Log.e(TAG, "Dev 결제 알림 실패: ${it.message}")
+                    handler.post { Toast.makeText(this, "결제 알림 실패: ${it.message}", Toast.LENGTH_LONG).show() }
+                }
+            }.start()
         }
         addBtn("MQTT 재연결") {
             val carId = ParkingStateManager.getHyundaiCarId(this)
@@ -1064,9 +1078,30 @@ class MainActivity : AppCompatActivity() {
         }
         addBtn("VIN 표시") { Toast.makeText(this, "VIN: $vin", Toast.LENGTH_LONG).show() }
         addBtn("액세스 토큰 표시") {
-            val token = ParkingStateManager.getAccessToken(this) ?: "(토큰 없음)"
-            Log.d(TAG, "DEV_TOKEN: $token")
-            showAaosDialog("액세스 토큰", token, "확인" to {})
+            Thread {
+                val token = runCatching {
+                    val refresh = ParkingStateManager.getRefreshToken(this)
+                    if (refresh != null) {
+                        val result = ApiManager.refreshToken(refresh)
+                        ParkingStateManager.saveTokens(this, result.accessToken, result.refreshToken)
+                        result.accessToken
+                    } else {
+                        ParkingStateManager.getAccessToken(this) ?: "(토큰 없음)"
+                    }
+                }.getOrElse { ParkingStateManager.getAccessToken(this) ?: "(갱신 실패)" }
+                Log.d(TAG, "DEV_TOKEN: $token")
+                handler.post {
+                    val et = android.widget.EditText(this).apply {
+                        setText(token)
+                        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
+                        isFocusable = true
+                        isFocusableInTouchMode = true
+                        setTextIsSelectable(true)
+                        selectAll()
+                    }
+                    showAaosDialog("액세스 토큰 (전체 선택 후 복사)", "", "확인" to {}, customView = et)
+                }
+            }.start()
         }
         addBtn("앱 완전 초기화") {
             clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java))
