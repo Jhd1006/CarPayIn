@@ -1,14 +1,18 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer
 
 from app.api.routes.auth import router as auth_router
 from app.api.routes.card import router as card_router
 from app.api.routes.parking import router as parking_router
 from app.api.routes.payment import router as payment_router
+from app.api.routes.load_test import router as load_test_router
 from app.infra.redis import redis_client
 from app.infra.workers.notify_retry_worker import NotifyRetryWorker
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def _build_retry_worker() -> NotifyRetryWorker:
@@ -30,7 +34,12 @@ async def lifespan(app: FastAPI):
         worker.stop()
 
 
-app = FastAPI(title="Car Pay-in Backend", lifespan=lifespan)
+app = FastAPI(
+    title="Car Pay-in Backend",
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True},
+    dependencies=[Depends(bearer_scheme)],
+)
 
 
 @app.get("/health")
@@ -117,3 +126,4 @@ app.include_router(auth_router)
 app.include_router(card_router)
 app.include_router(parking_router)
 app.include_router(payment_router)
+app.include_router(load_test_router)
