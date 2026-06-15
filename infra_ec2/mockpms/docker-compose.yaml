@@ -1,0 +1,13 @@
+services:
+  pms-api:
+    image: 353488928095.dkr.ecr.ap-northeast-2.amazonaws.com/pms:latest
+    container_name: pms-api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      PMS_DATABASE_URL: postgresql+psycopg://mockpms:mockpmsdb1234@10.2.131.54:5432/mockpmsdb
+      PMS_WEBHOOK_TOKEN: pms-webhook-token
+      CARPAYIN_BACKEND_BASE_URL: http://internal-hd-internal-alb-998881429.ap-northeast-2.elb.amazonaws.com:8000
+      PMS_FEE_PER_30_MINUTES: "500"
+    restart: unless-stopped
