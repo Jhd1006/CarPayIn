@@ -37,7 +37,8 @@ object TtsHelper {
                 mp.setOnErrorListener { it, _, _ -> it.release(); mediaPlayer = null; onDone?.invoke(); true }
                 mp.start()
                 Log.d(TAG, "MP3 재생: resId=$resId")
-            } ?: run { onDone?.invoke() }
+            }
+            if (mediaPlayer == null) onDone?.invoke()
         } catch (e: Exception) {
             Log.w(TAG, "MP3 재생 실패: ${e.message}")
             onDone?.invoke()
