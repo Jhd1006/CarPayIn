@@ -463,6 +463,11 @@ def card_registration_webview(
     )
 
 
+@router.post(
+    "/card-register",
+    response_model=CardRegistrationResponse,
+    include_in_schema=False,
+)
 @router.post("/pg/card-register", response_model=CardRegistrationResponse)
 def complete_card_registration(
     request: CardRegistrationRequest,
