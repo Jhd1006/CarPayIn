@@ -84,7 +84,6 @@ class RegistrationActivity : Activity() {
             btnRefreshQr.visibility = View.VISIBLE
             btnCancel.visibility = View.VISIBLE
             ivQrCode.setImageBitmap(null)
-            tvPollingStatus.text = ""
             tvSubMessage.text = ""
             renderQrCode()
             startPolling()
@@ -157,6 +156,21 @@ class RegistrationActivity : Activity() {
         pollCount = 0
         pollStartTime = System.currentTimeMillis()
         scheduleNextPoll()
+        scheduleCountdown()
+    }
+
+    private fun scheduleCountdown() {
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                if (!isPolling || didCompleteLogin) return
+                val elapsed = System.currentTimeMillis() - pollStartTime
+                val remaining = ((POLL_TIMEOUT_MS - elapsed) / 1000).coerceAtLeast(0)
+                val min = remaining / 60
+                val sec = remaining % 60
+                tvPollingStatus.text = "%d:%02d".format(min, sec)
+                if (remaining > 0) handler.postDelayed(this, 1_000)
+            }
+        }, 1_000)
     }
 
     private fun scheduleNextPoll() {
