@@ -9,11 +9,11 @@
     <!-- Pleos 내비게이션 경로 탐색 -->
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH"/>
 
-    <!-- Pleos STT (음성 인식) -->
-    <uses-permission android:name="pleos.car.permission.STT_SERVICE"/>
-
     <!-- Pleos LLM (자연어 이해) -->
     <uses-permission android:name="pleos.car.permission.LLM_SERVICE"/>
+
+    <!-- Android 내장 음성 인식 마이크 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <!-- 네트워크 (MQTT 브로커 / 백엔드 REST API) -->
     <uses-permission android:name="android.permission.INTERNET"/>

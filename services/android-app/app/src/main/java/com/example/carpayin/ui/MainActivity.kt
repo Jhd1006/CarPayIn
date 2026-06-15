@@ -166,14 +166,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // TTS/STT는 메인 스레드에서 초기화 (Android SpeechRecognizer 요구사항)
+        TtsHelper.init(applicationContext)
+        SttManager.init(applicationContext)
         setupVoiceCommand()
+        requestMicPermission()
 
         val appContext = applicationContext
         Thread {
             NaviHelper.takePanelControl(appContext)
             NaviHelper.init(appContext)
-            TtsHelper.init(appContext)
-            SttManager.init(appContext)
             LlmManager.init(appContext)
             VehicleDataManager.init(appContext)
             val realVin = VehicleDataManager.readVin(appContext)
@@ -1004,9 +1006,24 @@ class MainActivity : AppCompatActivity() {
             if (SttManager.isListening) {
                 SttManager.toggleListening()
             } else {
-                TtsHelper.speak("말씀하세요")
-                SttManager.toggleListening()
+                TtsHelper.playRaw(com.example.carpayin.R.raw.tts_greeting) {
+                    handler.post { SttManager.toggleListening() }
+                }
             }
+        }
+    }
+
+    private fun requestMicPermission() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            SttManager.init(applicationContext)
         }
     }
 
