@@ -32,9 +32,7 @@ android {
         versionName   = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "CARPAYIN_BACKEND_BASE_URL", "\"${localConfig("CARPAYIN_BACKEND_BASE_URL", "http://10.0.2.2:8000")}\"")
-        buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"${localConfig("CARPAYIN_QR_BASE_URL", "https://your-ngrok-domain.ngrok-free.app")}\"")
-        buildConfigField("Boolean", "CARPAYIN_EMULATOR_LOCALHOST_REWRITE", localConfig("CARPAYIN_EMULATOR_LOCALHOST_REWRITE", "true"))
+        // URL 설정은 productFlavors에서 환경별로 주입
         buildConfigField("String", "PLEOS_CLIENT_ID", "\"${localConfig("PLEOS_CLIENT_ID", "")}\"")
         buildConfigField("String", "PLEOS_CLIENT_SECRET", "\"${localConfig("PLEOS_CLIENT_SECRET", "")}\"")
 
@@ -51,6 +49,22 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    flavorDimensions += "env"
+    productFlavors {
+        create("local") {
+            dimension = "env"
+            buildConfigField("String", "CARPAYIN_BACKEND_BASE_URL", "\"http://10.0.2.2:8000\"")
+            buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"https://pretext-armless-wieldable.ngrok-free.dev\"")
+            buildConfigField("Boolean", "CARPAYIN_EMULATOR_LOCALHOST_REWRITE", "true")
+        }
+        create("aws") {
+            dimension = "env"
+            buildConfigField("String", "CARPAYIN_BACKEND_BASE_URL", "\"http://hd-public-alb-204074971.ap-northeast-2.elb.amazonaws.com\"")
+            buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"http://hd-public-alb-204074971.ap-northeast-2.elb.amazonaws.com\"")
+            buildConfigField("Boolean", "CARPAYIN_EMULATOR_LOCALHOST_REWRITE", "false")
         }
     }
 
