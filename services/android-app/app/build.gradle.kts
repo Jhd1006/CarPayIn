@@ -36,6 +36,9 @@ android {
         buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"${localConfig("CARPAYIN_QR_BASE_URL", "https://your-ngrok-domain.ngrok-free.app")}\"")
         buildConfigField("String", "CARPAYIN_MQTT_BROKER_URL", "\"${localConfig("CARPAYIN_MQTT_BROKER_URL", "tcp://10.0.2.2:1883")}\"")
         buildConfigField("Boolean", "CARPAYIN_EMULATOR_LOCALHOST_REWRITE", localConfig("CARPAYIN_EMULATOR_LOCALHOST_REWRITE", "true"))
+        buildConfigField("String", "PLEOS_CLIENT_ID", "\"${localConfig("PLEOS_CLIENT_ID", "")}\"")
+        buildConfigField("String", "PLEOS_CLIENT_SECRET", "\"${localConfig("PLEOS_CLIENT_SECRET", "")}\"")
+
     }
 
     buildFeatures {
@@ -72,8 +75,7 @@ dependencies {
     // Pleos SDKs (에뮬레이터용 VHAL + 패널 소유권/내비 연동)
     implementation("ai.pleos.playground:Vehicle:2.0.3")
     implementation("ai.pleos.playground:NaviHelper:2.0.3")
-    // Android 기본 TTS 사용 (android.speech.tts) — 별도 의존성 불필요
-    implementation("ai.pleos.playground:SpeechToText:2.1.3.2")
+    // Android 내장 TTS/STT 사용 (android.speech.tts / android.speech)
     implementation("ai.pleos.playground:LLM:2.1.3.2")
 
     // MQTT (입차 확정 / 결제 완료 실시간 푸시)

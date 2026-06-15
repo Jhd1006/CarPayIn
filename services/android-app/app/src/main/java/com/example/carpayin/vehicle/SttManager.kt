@@ -1,44 +1,37 @@
 package com.example.carpayin.vehicle
 
-import ai.pleos.playground.stt.SpeechToText
-import ai.pleos.playground.stt.constant.Mode
-import ai.pleos.playground.stt.listener.OnServerConnectionListener
-import ai.pleos.playground.stt.listener.ResultListener
 import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Log
 
 object SttManager {
 
     private const val TAG = "SttManager"
-    private const val CLIENT_ID     = "2iRta3KrTgKs4-S5kCW-gw"
-    private const val CLIENT_SECRET = "8fe2c127-d231-4342-b681-5ef70f346265"
 
-    private var stt: SpeechToText? = null
-    private var isReady = false
+    private var recognizer: SpeechRecognizer? = null
+    var isReady = false
+        private set
     var isListening = false
         private set
 
     var onResult: ((text: String) -> Unit)? = null
     var onListeningChanged: ((listening: Boolean) -> Unit)? = null
 
+    // 메인 스레드에서 호출해야 함
     fun init(context: Context) {
-        if (stt != null) return
-        try {
-            stt = SpeechToText(context.applicationContext, Mode.HYBRID)
-            stt?.initialize()
-            stt?.addListener(resultListener)
-            stt?.registerApp(CLIENT_ID, CLIENT_SECRET, object : OnServerConnectionListener {
-                override fun onConnected() {
-                    isReady = true
-                    Log.d(TAG, "STT 준비 완료")
-                }
-                override fun onFailed(msg: String) {
-                    Log.w(TAG, "STT 초기화 실패: $msg")
-                }
-            })
-        } catch (e: Exception) {
-            Log.w(TAG, "STT 초기화 실패: ${e.message}")
+        if (recognizer != null) return
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            Log.w(TAG, "SpeechRecognizer 미지원")
+            return
         }
+        recognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
+        recognizer?.setRecognitionListener(listener)
+        isReady = true
+        Log.d(TAG, "STT 준비 완료")
     }
 
     fun toggleListening() {
@@ -47,55 +40,60 @@ object SttManager {
     }
 
     private fun startListening() {
-        try {
-            stt?.request()
-            isListening = true
-            onListeningChanged?.invoke(true)
-            Log.d(TAG, "STT 시작")
-        } catch (e: Exception) {
-            Log.w(TAG, "STT request 실패: ${e.message}")
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
         }
+        recognizer?.startListening(intent)
+        isListening = true
+        onListeningChanged?.invoke(true)
+        Log.d(TAG, "STT 시작")
     }
 
     private fun stopListening() {
-        try { stt?.stop() } catch (e: Exception) { Log.w(TAG, "STT stop 실패: ${e.message}") }
+        recognizer?.stopListening()
         isListening = false
         onListeningChanged?.invoke(false)
+        Log.d(TAG, "STT 중지")
     }
 
     fun release() {
-        try {
-            stt?.removeListener(resultListener)
-            stt?.release()
-        } catch (_: Exception) {}
-        stt = null
+        recognizer?.destroy()
+        recognizer = null
         isReady = false
         isListening = false
     }
 
-    private val resultListener = object : ResultListener {
-        override fun onReady() { Log.d(TAG, "onReady") }
+    private val listener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) { Log.d(TAG, "onReadyForSpeech") }
+        override fun onBeginningOfSpeech() { Log.d(TAG, "onBeginningOfSpeech") }
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
 
-        override fun onStartedRecognition() { Log.d(TAG, "onStartedRecognition") }
-
-        override fun onEndedRecognition() {
-            Log.d(TAG, "onEndedRecognition")
+        override fun onEndOfSpeech() {
+            Log.d(TAG, "onEndOfSpeech")
             isListening = false
             onListeningChanged?.invoke(false)
         }
 
-        override fun onUpdated(stt: String, completed: Boolean) {
-            if (!completed || stt.isBlank()) return
-            Log.d(TAG, "STT 결과: \"$stt\"")
-            onResult?.invoke(stt.trim())
-        }
-
-        override fun onUpdatedEpdData(on: Long, off: Long) {}
-
-        override fun onError() {
-            Log.w(TAG, "STT 오류")
+        override fun onError(error: Int) {
+            Log.w(TAG, "STT 오류: $error")
             isListening = false
             onListeningChanged?.invoke(false)
         }
+
+        override fun onResults(results: Bundle?) {
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val text = matches?.firstOrNull() ?: return
+            if (text.isNotBlank()) {
+                Log.d(TAG, "STT 결과: \"$text\"")
+                onResult?.invoke(text)
+            }
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 }

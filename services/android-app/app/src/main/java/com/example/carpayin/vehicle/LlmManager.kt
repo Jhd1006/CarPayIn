@@ -7,12 +7,11 @@ import ai.pleos.playground.llm.listener.OnServerConnectionListener
 import ai.pleos.playground.llm.listener.ResultListener
 import android.content.Context
 import android.util.Log
+import com.example.carpayin.BuildConfig
 
 object LlmManager {
 
     private const val TAG = "LlmManager"
-    private const val CLIENT_ID     = "2iRta3KrTgKs4-S5kCW-gw"
-    private const val CLIENT_SECRET = "8fe2c127-d231-4342-b681-5ef70f346265"
 
     private var llm: LLM? = null
     var isReady = false
@@ -23,7 +22,7 @@ object LlmManager {
         try {
             llm = LLM(context.applicationContext)
             llm?.initialize()
-            llm?.registerApp(CLIENT_ID, CLIENT_SECRET, object : OnServerConnectionListener {
+            llm?.registerApp(BuildConfig.PLEOS_CLIENT_ID, BuildConfig.PLEOS_CLIENT_SECRET, object : OnServerConnectionListener {
                 override fun onConnected() {
                     isReady = true
                     Log.d(TAG, "LLM 준비 완료")
