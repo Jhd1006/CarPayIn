@@ -11,7 +11,6 @@ import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
 import android.graphics.Rect
-import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -70,6 +69,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnOAuthPendingRegisterCard: Button
     private lateinit var btnOAuthPendingCancel: Button
 
+    private lateinit var btnDevMenuHidden: Button
     private lateinit var btnResetApp: Button
     private lateinit var mainCardBody: LinearLayout
     private lateinit var mainCardBrand: TextView
@@ -128,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         btnOAuthPendingRegisterCard = findViewById(R.id.btnOAuthPendingRegisterCard)
         btnOAuthPendingCancel = findViewById(R.id.btnOAuthPendingCancel)
 
+        btnDevMenuHidden   = findViewById(R.id.btnDevMenuHidden)
         btnResetApp        = findViewById(R.id.btnResetApp)
         mainCardBody       = findViewById(R.id.mainCardBody)
         mainCardBrand      = findViewById(R.id.mainCardBrand)
@@ -958,28 +959,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupDevTrigger() {
+        btnDevMenuHidden.setOnClickListener { showDevMenu() }
         btnResetApp.setOnClickListener { confirmReset() }
-        mainHeaderLogoTapArea.setOnClickListener { showDevMenu() }
-    }
-
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (isDevMenuVisible) return super.dispatchTouchEvent(ev)
-        if (ev.action == MotionEvent.ACTION_UP) {
-            val headerBounds = Rect()
-            tvHeaderTitle.getGlobalVisibleRect(headerBounds)
-            val x = ev.rawX.toInt()
-            val y = ev.rawY.toInt()
-            if (headerBounds.contains(x, y)) {
-                val resetBounds = Rect()
-                btnResetApp.getGlobalVisibleRect(resetBounds)
-                val tappedReset = btnResetApp.visibility == View.VISIBLE && resetBounds.contains(x, y)
-                if (!tappedReset) {
-                    showDevMenu()
-                    return true
-                }
-            }
-        }
-        return super.dispatchTouchEvent(ev)
     }
 
     private fun showDevMenu() {
@@ -1029,11 +1010,13 @@ class MainActivity : AppCompatActivity() {
             container.addView(Button(this).apply {
                 text = label; textSize = 14f
                 setTextColor(0xFF191F28.toInt())
+                gravity = android.view.Gravity.CENTER
                 background = roundedBackground(0xFFF4F7FB.toInt(), 0xFFDCE5F0.toInt())
-                setPadding(dp(16), dp(14), dp(16), dp(14))
+                setPadding(dp(16), 0, dp(16), 0)
+                minHeight = dp(56)
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).also { it.setMargins(0, 0, 0, dp(6)) }
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(56)
+                ).also { it.setMargins(0, 0, 0, dp(8)) }
                 setOnClickListener { dismissOverlay(); action() }
             })
         }
@@ -1052,9 +1035,6 @@ class MainActivity : AppCompatActivity() {
             showRegisteredState()
             showPaymentComplete(mockTxId, "DEV-APPROVED", "LOT_GANGNAM_01", mockAmount)
             Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
-        }
-        addBtn("등록 초기화 (즉시)") {
-            clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java)); renderStateFromStorage()
         }
         addBtn("MQTT 재연결") {
             val carId = ParkingStateManager.getHyundaiCarId(this)
@@ -1083,6 +1063,11 @@ class MainActivity : AppCompatActivity() {
             )
         }
         addBtn("VIN 표시") { Toast.makeText(this, "VIN: $vin", Toast.LENGTH_LONG).show() }
+        addBtn("액세스 토큰 표시") {
+            val token = ParkingStateManager.getAccessToken(this) ?: "(토큰 없음)"
+            Log.d(TAG, "DEV_TOKEN: $token")
+            showAaosDialog("액세스 토큰", token, "확인" to {})
+        }
         addBtn("앱 완전 초기화") {
             clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java))
             renderStateFromStorage(); Toast.makeText(this, "초기화 완료", Toast.LENGTH_SHORT).show()
