@@ -1058,7 +1058,7 @@ class MainActivity : AppCompatActivity() {
         }
         addBtn("MQTT 재연결") {
             val carId = ParkingStateManager.getHyundaiCarId(this)
-            if (carId.isNotBlank()) Thread { MqttManager.connect(carId) }.start()
+            if (carId.isNotBlank()) Thread { MqttManager.connect(applicationContext, carId) }.start()
             Toast.makeText(this, "MQTT 재연결 시도", Toast.LENGTH_SHORT).show()
         }
         addBtn("번호판 설정") {

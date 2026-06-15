@@ -76,7 +76,7 @@ class CarPayInService : Service() {
             if (!MqttManager.isConnected() && carId.isNotEmpty()) {
                 Log.d(TAG, "MQTT 재연결 시도...")
                 Thread {
-                    MqttManager.connect(carId)
+                    MqttManager.connect(applicationContext, carId)
                     handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
                 }.start()
             }
@@ -132,7 +132,7 @@ class CarPayInService : Service() {
         }.start()
 
         Thread {
-            if (carId.isNotEmpty()) MqttManager.connect(carId)
+            if (carId.isNotEmpty()) MqttManager.connect(applicationContext, carId)
             handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
         }.start()
 
@@ -181,7 +181,7 @@ class CarPayInService : Service() {
                 if (!MqttManager.isConnected() && carId.isNotEmpty()) {
                     Log.d(TAG, "MQTT 끊김 감지 → 즉시 재연결 보강")
                     Thread {
-                        MqttManager.connect(carId)
+                        MqttManager.connect(applicationContext, carId)
                         handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
                     }.start()
                 }
