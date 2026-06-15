@@ -23,10 +23,6 @@ dependencyResolutionManagement {
         maven {
             url = uri("https://nexus-playground.pleos.ai/repository/maven-releases/")
         }
-        // Eclipse Paho MQTT (org.eclipse.paho:org.eclipse.paho.client.mqttv3)
-        maven {
-            url = uri("https://repo.eclipse.org/content/repositories/paho-releases/")
-        }
     }
 }
 
