@@ -18,12 +18,12 @@ object VoiceCommandHandler {
     private var pendingNavLot: GeofenceManager.ParkingLot? = null
 
     // lot_id → show_parking MP3 / navigation MP3 매핑
-    private val showParkingAudio = mapOf(
+    val showParkingAudio = mapOf(
         "LOT_GANGNAM_01"       to R.raw.tts_show_gangnam,
         "LOT_HONGDAE_01"       to R.raw.tts_show_hongdae,
         "LOT_YEONGDEUNGPO_01"  to R.raw.tts_show_yeongdeungpo
     )
-    private val navAudio = mapOf(
+    val navAudio = mapOf(
         "LOT_GANGNAM_01"       to R.raw.tts_nav_gangnam,
         "LOT_HONGDAE_01"       to R.raw.tts_nav_hongdae,
         "LOT_YEONGDEUNGPO_01"  to R.raw.tts_nav_yeongdeungpo

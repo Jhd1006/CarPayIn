@@ -696,18 +696,5 @@
 
 </LinearLayout>
 
-<!-- 플로팅 음성 버튼 (Notion AI 스타일) -->
-<Button
-    android:id="@+id/btnVoiceMic"
-    android:layout_width="64dp"
-    android:layout_height="64dp"
-    android:layout_gravity="bottom|end"
-    android:layout_margin="24dp"
-    android:background="@drawable/bg_fab_mic"
-    android:text="🎤"
-    android:textSize="26sp"
-    android:padding="0dp"
-    android:elevation="12dp"
-    android:stateListAnimator="@null"/>
 
 </FrameLayout>

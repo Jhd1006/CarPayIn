@@ -30,7 +30,6 @@ import com.example.carpayin.service.CarPayInService
 import com.example.carpayin.vehicle.GeofenceManager
 import com.example.carpayin.vehicle.NaviHelper
 import com.example.carpayin.vehicle.LlmManager
-import com.example.carpayin.vehicle.SttManager
 import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
 import com.example.carpayin.vehicle.VoiceCommandHandler
@@ -58,7 +57,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layoutRegistered: ScrollView
     private lateinit var tvHeaderTitle: RelativeLayout
     private lateinit var mainHeaderLogoTapArea: View
-    private lateinit var btnVoiceMic: Button
     private lateinit var tvFeatureHint: TextView
     private lateinit var sectionCard: LinearLayout
     private lateinit var sectionVehicle: LinearLayout
@@ -134,7 +132,6 @@ class MainActivity : AppCompatActivity() {
         btnOAuthPendingCancel = findViewById(R.id.btnOAuthPendingCancel)
 
         btnResetApp        = findViewById(R.id.btnResetApp)
-        btnVoiceMic        = findViewById(R.id.btnVoiceMic)
         mainCardBody       = findViewById(R.id.mainCardBody)
         mainCardBrand      = findViewById(R.id.mainCardBrand)
         mainCardNetwork    = findViewById(R.id.mainCardNetwork)
@@ -166,11 +163,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // TTS/STT는 메인 스레드에서 초기화 (Android SpeechRecognizer 요구사항)
+        // TTS는 메인 스레드에서 초기화
         TtsHelper.init(applicationContext)
-        SttManager.init(applicationContext)
         setupVoiceCommand()
-        requestMicPermission()
 
         val appContext = applicationContext
         Thread {
@@ -631,19 +626,26 @@ class MainActivity : AppCompatActivity() {
             "${lot.name}\n\n목적지로 경로 안내를 시작합니다.\n도착 전 차량 정보가 주차장에 자동으로 등록됩니다.",
             "취소" to {},
             "시작" to {
-                val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
-                if (navStarted) {
-                    TtsHelper.speak("${lot.name}으로 경로 안내를 시작합니다")
-                    handler.postDelayed({
-                        Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
-                    }, 1_500)
-                    val token = ParkingStateManager.getAccessToken(this)
-                    if (token != null) {
-                        Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
+                val navResId = VoiceCommandHandler.navAudio[lot.id]
+                val launchNav = {
+                    val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
+                    if (navStarted) {
+                        handler.postDelayed({
+                            Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
+                        }, 1_500)
+                        val token = ParkingStateManager.getAccessToken(this)
+                        if (token != null) {
+                            Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
+                        }
+                    } else {
+                        Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
                     }
-                    Toast.makeText(this, "🧭 ${lot.name} 경로 안내 시작", Toast.LENGTH_SHORT).show()
+                }
+                if (navResId != null) {
+                    // MP3 완전히 끝난 후 내비 시작 → Pleos 음성과 겹침 방지
+                    TtsHelper.playRaw(navResId) { handler.post { launchNav() } }
                 } else {
-                    Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
+                    launchNav()
                 }
             }
         )
@@ -967,13 +969,11 @@ class MainActivity : AppCompatActivity() {
         CarPayInService.onParkingConfirmed = null
         CarPayInService.onPaymentComplete  = null
         CarPayInService.onConnectionChanged= null
-        SttManager.release()
         LlmManager.release()
         NaviHelper.release()
         VehicleDataManager.release()
         VoiceCommandHandler.onShowParkingSection = null
         VoiceCommandHandler.onNavigateTo = null
-        VoiceCommandHandler.onThinking = null
     }
 
     private fun setupVoiceCommand() {
@@ -984,46 +984,6 @@ class MainActivity : AppCompatActivity() {
         }
         VoiceCommandHandler.onNavigateTo = { lot ->
             handler.post { startNavigationTo(lot) }
-        }
-
-        SttManager.onResult = { text ->
-            handler.post { VoiceCommandHandler.handle(text) }
-        }
-        SttManager.onListeningChanged = { listening ->
-            handler.post {
-                if (listening) btnVoiceMic.text = "🔴"
-                else if (btnVoiceMic.text == "🔴") btnVoiceMic.text = "🎤"
-            }
-        }
-        VoiceCommandHandler.onThinking = { thinking ->
-            handler.post {
-                btnVoiceMic.text = if (thinking) "⏳" else "🎤"
-                btnVoiceMic.isEnabled = !thinking
-            }
-        }
-
-        btnVoiceMic.setOnClickListener {
-            if (SttManager.isListening) {
-                SttManager.toggleListening()
-            } else {
-                TtsHelper.playRaw(com.example.carpayin.R.raw.tts_greeting) {
-                    handler.post { SttManager.toggleListening() }
-                }
-            }
-        }
-    }
-
-    private fun requestMicPermission() {
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1001 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            SttManager.init(applicationContext)
         }
     }
 
