@@ -59,13 +59,11 @@ test:pms:
   script:
     - IMAGE="$CI_REGISTRY_IMAGE/$IMAGE_NAME"
     - TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-    - docker build --pull -f "services/$SERVICE_NAME/Dockerfile"
-        -t "$IMAGE:$TAG"
-        -t "$IMAGE:latest"
-        "services/$SERVICE_NAME"
+    - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:$TAG" -t "$IMAGE:latest" "services/$SERVICE_NAME"
     - docker push "$IMAGE:$TAG"
     - docker push "$IMAGE:latest"
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
 
