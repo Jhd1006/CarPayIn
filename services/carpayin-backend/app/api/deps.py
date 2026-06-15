@@ -1,6 +1,6 @@
 import os
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
 from app.application.auth.confirm_vehicle import ConfirmVehicleService
@@ -25,8 +25,8 @@ from app.infra.db.session import get_db_session
 from app.infra.redis import (
     RedisAppLoginResultStore,
     RedisCardOrderStore,
+    RedisEntryNotifyRetryStore,
     RedisFeeQuoteStore,
-    RedisHyundaiAccessTokenStore,
     RedisHyundaiOAuthResultStore,
     RedisOAuthStateStore,
     RedisPaymentNotifyRetryStore,
@@ -40,9 +40,6 @@ from app.infra.repositories.app_refresh_token_repository import (
 from app.infra.repositories.billing_key_repository import (
     SqlAlchemyBillingKeyRepository,
 )
-from app.infra.repositories.hyundai_token_repository import (
-    SqlAlchemyHyundaiTokenRepository,
-)
 from app.infra.repositories.parking_session_repository import (
     SqlAlchemyParkingSessionRepository,
 )
@@ -51,11 +48,12 @@ from app.infra.repositories.transaction_repository import (
 )
 from app.infra.repositories.user_repository import SqlAlchemyUserRepository
 from app.infra.repositories.vehicle_repository import SqlAlchemyVehicleRepository
+from app.api.utils import extract_bearer_token
 from app.infra.security import create_default_security_components
 from app.infra.support import (
-    LoggingNotificationPublisher,
     PlateNormalizer,
     UuidOrderIdGenerator,
+    build_notification_publisher,
 )
 
 
@@ -96,6 +94,18 @@ def _env_or_default(name: str, default: str) -> str:
     return default
 
 
+def _env_or_legacy_default(name: str, legacy_name: str, default: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    legacy_value = os.getenv(legacy_name, "").strip()
+    if legacy_value:
+        return legacy_value
+    if _requires_explicit_env():
+        raise RuntimeError(f"{name} environment variable is required")
+    return default
+
+
 PUBLIC_BASE_URL = _required_env("PUBLIC_BASE_URL").rstrip("/")
 HYUNDAI_AUTHORIZE_URL = os.getenv(
     "HYUNDAI_AUTHORIZE_URL",
@@ -104,19 +114,24 @@ HYUNDAI_AUTHORIZE_URL = os.getenv(
 HYUNDAI_CLIENT_ID = _required_env("HYUNDAI_CLIENT_ID")
 HYUNDAI_CLIENT_SECRET = _required_env("HYUNDAI_CLIENT_SECRET")
 PG_BASE_URL = _env_or_default("PG_BASE_URL", "http://localhost:8002").rstrip("/")
-PG_PUBLIC_BASE_URL = os.getenv("PG_PUBLIC_BASE_URL", PG_BASE_URL).rstrip("/")
+PG_INTERNAL_BASE_URL = _env_or_default("PG_INTERNAL_BASE_URL", PG_BASE_URL).rstrip("/")
+PG_PUBLIC_BASE_URL = _env_or_default("PG_PUBLIC_BASE_URL", PG_BASE_URL).rstrip("/")
+CARD_WEBHOOK_URL = _env_or_default(
+    "CARD_WEBHOOK_URL",
+    f"{PUBLIC_BASE_URL}/card/webhook",
+).rstrip("/")
 PMS_BASE_URL = _env_or_default("PMS_BASE_URL", "http://localhost:8001").rstrip("/")
 MOLIT_VERIFY_ENABLED = _env_bool("MOLIT_VERIFY_ENABLED", True)
 
 
 qr_session_store = RedisQrSessionStore(redis_client)
 oauth_state_store = RedisOAuthStateStore(redis_client)
-hyundai_access_token_store = RedisHyundaiAccessTokenStore(redis_client)
 hyundai_oauth_result_store = RedisHyundaiOAuthResultStore(redis_client)
 app_login_result_store = RedisAppLoginResultStore(redis_client)
 card_order_store = RedisCardOrderStore(redis_client)
 pre_notify_store = RedisPreNotifyStore(redis_client)
 fee_quote_store = RedisFeeQuoteStore(redis_client)
+entry_notify_retry_store = RedisEntryNotifyRetryStore(redis_client)
 payment_notify_retry_store = RedisPaymentNotifyRetryStore(redis_client)
 security_components = create_default_security_components()
 hyundai_oauth_client = HttpxHyundaiOAuthClient(
@@ -144,35 +159,28 @@ molit_client = (
     if MOLIT_VERIFY_ENABLED
     else LocalMolitBypassClient()
 )
-pg_client = HttpxPgClient(PG_BASE_URL, public_base_url=PG_PUBLIC_BASE_URL)
-pms_client = HttpxPmsClient(PMS_BASE_URL)
+pg_client = HttpxPgClient(
+    PG_INTERNAL_BASE_URL,
+    public_base_url=PG_PUBLIC_BASE_URL,
+    card_webhook_url=CARD_WEBHOOK_URL,
+)
+pms_client = HttpxPmsClient(
+    PMS_BASE_URL,
+    webhook_secret=_env_or_legacy_default(
+        "PMS_WEBHOOK_SECRET",
+        "PMS_WEBHOOK_TOKEN",
+        "pms-webhook-secret",
+    ),
+)
 order_id_generator = UuidOrderIdGenerator()
 plate_normalizer = PlateNormalizer()
-notification_publisher = LoggingNotificationPublisher()
+notification_publisher = build_notification_publisher()
 
 
 def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-
-    token = authorization.removeprefix("Bearer ").strip()
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "UNAUTHORIZED",
-                "message": "missing_bearer_token",
-            },
-        )
-
+    token = extract_bearer_token(authorization)
     return security_components["app_access_token_validator"].validate_and_extract(token)
 
 
@@ -201,12 +209,9 @@ def get_handle_hyundai_oauth_callback_service(
         qr_session_store=qr_session_store,
         hyundai_oauth_client=hyundai_oauth_client,
         user_repository=SqlAlchemyUserRepository(session),
-        hyundai_token_repository=SqlAlchemyHyundaiTokenRepository(session),
-        hyundai_access_token_store=hyundai_access_token_store,
         hyundai_oauth_result_store=hyundai_oauth_result_store,
         app_login_result_store=app_login_result_store,
         temp_access_token_issuer=security_components["temp_access_token_issuer"],
-        refresh_token_encryptor=security_components["refresh_token_encryptor"],
         public_base_url=PUBLIC_BASE_URL,
     )
 
@@ -287,6 +292,7 @@ def get_handle_entry_webhook_service(
         pre_notify_store=pre_notify_store,
         parking_session_repository=SqlAlchemyParkingSessionRepository(session),
         notification_publisher=notification_publisher,
+        entry_notify_retry_store=entry_notify_retry_store,
     )
 
 

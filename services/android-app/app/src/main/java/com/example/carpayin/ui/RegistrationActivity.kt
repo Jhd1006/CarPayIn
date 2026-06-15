@@ -1,7 +1,6 @@
 package com.example.carpayin.ui
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -9,9 +8,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import com.example.carpayin.R
 import com.example.carpayin.data.ParkingStateManager
@@ -34,6 +40,7 @@ class RegistrationActivity : Activity() {
     private lateinit var tvSubMessage: TextView
     private lateinit var btnCancel: Button
     private lateinit var btnRefreshQr: Button
+    private lateinit var progressBarReg: ProgressBar
 
     private lateinit var loginSessionId: String
     private lateinit var vin: String
@@ -50,10 +57,12 @@ class RegistrationActivity : Activity() {
 
         ivQrCode = findViewById(R.id.ivQrCode)
         ivRegistrationLogo = findViewById(R.id.ivRegistrationLogo)
+        ivRegistrationLogo.setOnClickListener { openMainDevMenu() }
         tvPollingStatus = findViewById(R.id.tvPollingStatus)
         tvSubMessage = findViewById(R.id.tvSubMessage)
         btnCancel = findViewById(R.id.btnCancel)
         btnRefreshQr = findViewById(R.id.btnRefreshQr)
+        progressBarReg = findViewById(R.id.progressBarReg)
 
         vin = VehicleDataManager.readVin(this)
         loginSessionId = UUID.randomUUID().toString()
@@ -75,19 +84,26 @@ class RegistrationActivity : Activity() {
             btnRefreshQr.visibility = View.VISIBLE
             btnCancel.visibility = View.VISIBLE
             ivQrCode.setImageBitmap(null)
-            tvPollingStatus.text = "Scan this QR with MyHyundai"
-            tvSubMessage.text = "Log in with your MyHyundai account to link a vehicle."
+            tvPollingStatus.text = ""
+            tvSubMessage.text = ""
             renderQrCode()
             startPolling()
         }
-
-        DevTapGate.install(this, ivRegistrationLogo) { openDevMenu() }
 
         renderQrCode()
         startPolling()
     }
 
-    private fun openDevMenu() {
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (DevLogoTapTarget.consumeTap(ev, ivRegistrationLogo, dp(32)) {
+            openMainDevMenu()
+        }) {
+            return true
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun openMainDevMenu() {
         startActivity(Intent(this, MainActivity::class.java).apply {
             action = MainActivity.ACTION_SHOW_DEV_MENU
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -102,6 +118,8 @@ class RegistrationActivity : Activity() {
 
     private fun renderQrCode() {
         val vinHash = sha256(vin + loginSessionId)
+        progressBarReg.visibility = View.VISIBLE
+        ivQrCode.setImageBitmap(null)
 
         Thread {
             try {
@@ -109,18 +127,22 @@ class RegistrationActivity : Activity() {
                     "${ApiManager.QR_BASE_URL}/auth/hyundai/start?session_id=$loginSessionId"
                 }
                 val bits = QRCodeWriter().encode(authStartUrl, BarcodeFormat.QR_CODE, 512, 512)
-                val bitmap = Bitmap.createBitmap(bits.width, bits.height, Bitmap.Config.RGB_565)
+                val bitmap = Bitmap.createBitmap(bits.width, bits.height, Bitmap.Config.ARGB_8888)
                 for (x in 0 until bits.width) {
                     for (y in 0 until bits.height) {
-                        bitmap.setPixel(x, y, if (bits[x, y]) Color.BLACK else Color.WHITE)
+                        bitmap.setPixel(x, y, if (bits[x, y]) 0xFF191F28.toInt() else Color.TRANSPARENT)
                     }
                 }
-                handler.post { ivQrCode.setImageBitmap(bitmap) }
+                handler.post {
+                    ivQrCode.setImageBitmap(bitmap)
+                    progressBarReg.visibility = View.GONE
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to render QR: ${e.message}")
                 handler.post {
-                    tvPollingStatus.text = "QR session creation failed"
-                    tvSubMessage.text = e.message ?: "Check backend connection and try again."
+                    progressBarReg.visibility = View.GONE
+                    tvPollingStatus.text = ""
+                    tvSubMessage.text = ""
                     btnRefreshQr.visibility = View.VISIBLE
                     btnCancel.visibility = View.VISIBLE
                 }
@@ -146,8 +168,8 @@ class RegistrationActivity : Activity() {
         if (!isPolling || didCompleteLogin) return
         if (System.currentTimeMillis() - pollStartTime > POLL_TIMEOUT_MS) {
             isPolling = false
-            tvPollingStatus.text = "Login timed out"
-            tvSubMessage.text = "Refresh the QR and try again."
+            tvPollingStatus.text = ""
+            tvSubMessage.text = ""
             return
         }
 
@@ -165,26 +187,24 @@ class RegistrationActivity : Activity() {
                     handler.post {
                         isPolling = false
                         showAuthorizedProgress(result.status)
-                        tvPollingStatus.text = "MyHyundai processing failed"
-                        tvSubMessage.text = result.debugMessage.ifBlank { "Refresh the QR and try again." }
+                        tvPollingStatus.text = ""
+                        tvSubMessage.text = ""
                         btnRefreshQr.visibility = View.VISIBLE
                         btnCancel.visibility = View.VISIBLE
                     }
                 } else {
                     handler.post {
                         pollCount += 1
-                        tvPollingStatus.text = "Waiting for login... ($pollCount)"
-                        if (pollCount >= 2 && result.debugMessage.isNotBlank()) {
-                            tvSubMessage.text = result.debugMessage
-                        }
+                        tvPollingStatus.text = ""
+                        tvSubMessage.text = ""
                         scheduleNextPoll()
                     }
                 }
             } catch (e: Exception) {
                 handler.post {
                     pollCount += 1
-                    tvPollingStatus.text = "Checking login status..."
-                    tvSubMessage.text = e.message ?: "Failed to check login status"
+                    tvPollingStatus.text = ""
+                    tvSubMessage.text = ""
                     scheduleNextPoll()
                 }
             }
@@ -200,8 +220,8 @@ class RegistrationActivity : Activity() {
         ivQrCode.visibility = View.GONE
         btnCancel.visibility = View.GONE
         btnRefreshQr.visibility = View.GONE
-        tvPollingStatus.text = "MyHyundai login complete"
-        tvSubMessage.text = "Linking the vehicle selected in MyHyundai."
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
 
         val linkedVehicles = result.vehicleList.filter { it.carId.isNotBlank() }
         when {
@@ -209,8 +229,8 @@ class RegistrationActivity : Activity() {
                 didCompleteLogin = false
                 btnRefreshQr.visibility = View.VISIBLE
                 btnCancel.visibility = View.VISIBLE
-                tvPollingStatus.text = "No Hyundai vehicle found"
-                tvSubMessage.text = "No linked vehicle was returned. Check the backend vehicle-list log."
+                tvPollingStatus.text = ""
+                tvSubMessage.text = ""
             }
             linkedVehicles.size == 1 -> {
                 completeRegistration(result, linkedVehicles.first())
@@ -228,33 +248,94 @@ class RegistrationActivity : Activity() {
             btnRefreshQr.visibility = View.GONE
             btnCancel.visibility = View.GONE
         }
-        tvPollingStatus.text = "MyHyundai login complete"
-        tvSubMessage.text = if (status == "agreement_required") {
-            "Waiting for Hyundai data agreement..."
-        } else {
-            "Fetching Hyundai vehicle list..."
-        }
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
     }
 
+    /**
+     * AAOS 환경에서 AlertDialog는 별도 Window를 생성해 패널 소유권이 적용되지 않으므로
+     * window.decorView에 직접 overlay를 추가해 터치 전달 문제를 우회한다.
+     */
     private fun showVehiclePicker(
         result: ApiManager.SessionStatusResult,
         vehicles: List<ApiManager.VehicleInfo>
     ) {
-        val labels = vehicles.map { vehicleLabel(it) }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("CarPayIn에 연결할 차량")
-            .setItems(labels) { _, which ->
-                completeRegistration(result, vehicles[which])
-            }
-            .setOnCancelListener {
-                didCompleteLogin = false
-                btnRefreshQr.visibility = View.VISIBLE
-                btnCancel.visibility = View.VISIBLE
-                tvPollingStatus.text = "Vehicle selection required"
-                tvSubMessage.text = "Choose the Hyundai vehicle to link with this car."
-            }
-            .show()
+        val decorView = window.decorView as FrameLayout
+
+        val overlay = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt())
+            elevation = 999f
+        }
+        fun dismiss() { runOnUiThread { decorView.removeView(overlay) } }
+        fun onCancel() {
+            dismiss()
+            didCompleteLogin = false
+            btnRefreshQr.visibility = View.VISIBLE
+            btnCancel.visibility = View.VISIBLE
+            tvPollingStatus.text = ""
+            tvSubMessage.text = ""
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFFFFFFFF.toInt())
+            setPadding(dp(20), dp(20), dp(20), dp(12))
+            val lp = FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.78).toInt(),
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.gravity = Gravity.CENTER
+            layoutParams = lp
+        }
+        card.addView(TextView(this).apply {
+            text = "CarPayIn에 연결할 차량"
+            setTextColor(0xFF191F28.toInt()); textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(12) }
+        })
+
+        val listContainer = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(8) }
+        }
+        val listInner = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        vehicles.forEachIndexed { i, vehicle ->
+            listInner.addView(Button(this).apply {
+                text = vehicleLabel(vehicle)
+                textSize = 14f; setTextColor(0xFF1B64DA.toInt())
+                setBackgroundColor(Color.TRANSPARENT)
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                setOnClickListener { dismiss(); completeRegistration(result, vehicles[i]) }
+            })
+        }
+        listContainer.addView(listInner)
+        card.addView(listContainer)
+
+        card.addView(Button(this).apply {
+            text = "취소"; textSize = 14f; setTextColor(Color.BLACK)
+            setBackgroundColor(Color.TRANSPARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.gravity = Gravity.END }
+            setOnClickListener { onCancel() }
+        })
+
+        overlay.addView(card)
+        overlay.setOnClickListener { onCancel() }
+        card.setOnClickListener { }
+        decorView.addView(overlay)
     }
+
+    private fun dp(value: Int): Int =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
 
     private fun vehicleLabel(vehicle: ApiManager.VehicleInfo): String {
         val model = vehicle.modelName.ifBlank { "Hyundai vehicle" }
@@ -275,8 +356,8 @@ class RegistrationActivity : Activity() {
             return
         }
 
-        tvPollingStatus.text = "Linking Hyundai vehicle"
-        tvSubMessage.text = "Confirming that this QR session matches the selected vehicle."
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
         btnRefreshQr.visibility = View.GONE
         btnCancel.visibility = View.GONE
 
@@ -333,11 +414,7 @@ class RegistrationActivity : Activity() {
 
     private fun launchOAuthPending() {
         handler.postDelayed({
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                action = MainActivity.ACTION_SHOW_OAUTH_PENDING
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra(MainActivity.EXTRA_SHOW_OAUTH_PENDING, true)
-            })
+            setResult(RESULT_OK)
             finish()
         }, 800)
     }
@@ -347,15 +424,8 @@ class RegistrationActivity : Activity() {
         isPolling = false
         btnRefreshQr.visibility = View.VISIBLE
         btnCancel.visibility = View.VISIBLE
-        tvPollingStatus.text = "Vehicle link failed"
-        tvSubMessage.text = when {
-            rawMessage.orEmpty().contains("vin_hash_mismatch") ->
-                "This QR session no longer matches the vehicle. Refresh the QR and try again."
-            rawMessage.orEmpty().contains("car_id_not_in_hyundai_list") ->
-                "The selected vehicle was not returned by MyHyundai. Refresh the QR and try again."
-            else ->
-                "Refresh the QR and try again."
-        }
+        tvPollingStatus.text = ""
+        tvSubMessage.text = ""
     }
 
     override fun onDestroy() {

@@ -119,19 +119,19 @@ API:
 처리:
 
 - `oauth_state`로 원래 `session_id`를 찾는다.
-- 현대 OAuth token API에 code를 보내 access/refresh token을 받는다.
-- 현대 user profile API로 `user_id`, `name`을 조회한다.
-- 현대 vehicle list API로 차량 목록을 조회한다.
-- DB `users`를 upsert한다.
-- 현대 refresh token을 암호화해서 `hyundai_tokens`에 저장한다.
-- 현대 access token은 Redis `hyundai_access:{user_id}`에만 캐시한다.
-- Redis `hyundai_oauth:{session_id}`에 OAuth 임시 결과를 저장한다.
-- Redis `app_login_result:{session_id}`에 polling 결과를 저장한다.
+- 매핑된 `qr_session:{session_id}`가 존재하고 만료되지 않았는지 확인한다.
+- 현대 OAuth token API에 `code`를 보내 현대 `access_token`과 `refresh_token`을 받는다.
+- 현대 `access_token`으로 user profile API를 즉시 호출해 `user_id`, `name`을 조회한다.
+- 같은 현대 `access_token`으로 vehicle list API를 즉시 호출해 차량 목록을 조회한다.
+- 현대 `access_token`과 `refresh_token`은 위 조회가 끝난 뒤 더 이상 사용하지 않으며 Redis나 DB에 저장하지 않는다.
+- DB `users`에는 현대 사용자 식별 정보만 upsert한다.
+- 차량 확정 API(`/auth/confirm-car`)에서 사용할 임시 app access token을 발급한다.
+- Redis `hyundai_oauth:{session_id}`에 OAuth 임시 결과를 저장한다. 이 값은 차량 확정 전 내부 조회와 디버깅용이며 TTL은 15분이다.
+- Redis `app_login_result:{session_id}`에 AAOS 앱 polling 결과를 저장한다. 이 값에는 사용자 정보, 차량 목록, 임시 app access token이 포함되며 TTL은 5분이다.
 - `oauth_state`는 used 또는 삭제 상태로 바꾼다.
 
 Redis 변경:
 
-- `hyundai_access:{user_id}` 저장
 - `hyundai_oauth:{session_id}` 저장
 - `app_login_result:{session_id}` 저장
 - `oauth_state:{state}` used 처리 또는 삭제
@@ -139,7 +139,15 @@ Redis 변경:
 DB 변경:
 
 - `users` upsert
-- `hyundai_tokens` upsert
+- 현대 OAuth token 관련 DB 변경 없음
+
+저장하지 않는 데이터:
+
+- 현대 `access_token`
+- 현대 `refresh_token`
+- 현대 token 원문 또는 암호문
+- Redis `hyundai_access:{user_id}`
+- DB `hyundai_tokens`
 
 외부 호출:
 
@@ -157,8 +165,10 @@ DB 변경:
 
 먼저 작성할 테스트:
 
-- 정상 callback이면 user와 hyundai token을 저장한다.
-- 현대 access token은 DB가 아니라 Redis에만 저장한다.
+- 정상 callback이면 user를 upsert하고 차량 목록과 임시 app access token을 Redis polling 결과에 저장한다.
+- 현대 access/refresh token은 DB와 Redis 어디에도 저장하지 않는다.
+- `hyundai_oauth:{session_id}`는 15분 TTL로 저장한다.
+- `app_login_result:{session_id}`는 5분 TTL로 저장한다.
 - 차량 목록을 app_login_result에 저장한다.
 - 잘못된 state면 400을 반환한다.
 - 현대 API 실패면 QR 세션을 failed로 표시한다.

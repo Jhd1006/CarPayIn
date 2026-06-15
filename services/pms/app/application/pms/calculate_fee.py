@@ -61,6 +61,7 @@ class CalculateFeeService:
         )
 
     def _find_session(self, command: CalculateFeeCommand):
+        # 1차: lot_id + plate 조합으로 조회
         if command.lot_id and command.plate:
             finder = getattr(
                 self.pms_session_repository,
@@ -68,8 +69,11 @@ class CalculateFeeService:
                 None,
             )
             if finder:
-                return finder(lot_id=command.lot_id, plate=command.plate)
+                session = finder(lot_id=command.lot_id, plate=command.plate)
+                if session is not None:
+                    return session
 
+        # 2차 폴백: pms_session_id로 조회 (lot+plate 조회 실패 시에도 시도)
         if command.pms_session_id:
             return self.pms_session_repository.get_session_by_id(
                 command.pms_session_id

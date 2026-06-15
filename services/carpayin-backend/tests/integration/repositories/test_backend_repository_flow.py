@@ -3,7 +3,6 @@ from uuid import UUID, uuid4
 
 from app.infra.db.models import (
     AppRefreshToken,
-    HyundaiToken,
     ParkingSession,
     Transaction,
     User,
@@ -15,7 +14,6 @@ from app.infra.repositories.app_refresh_token_repository import (
     SqlAlchemyAppRefreshTokenRepository,
 )
 from app.infra.repositories.billing_key_repository import SqlAlchemyBillingKeyRepository
-from app.infra.repositories.hyundai_token_repository import SqlAlchemyHyundaiTokenRepository
 from app.infra.repositories.parking_session_repository import (
     SqlAlchemyParkingSessionRepository,
 )
@@ -32,7 +30,6 @@ def test_all_backend_business_tables_can_store_and_load_data_from_postgres():
     parking_session_repository = SqlAlchemyParkingSessionRepository(session)
     transaction_repository = SqlAlchemyTransactionRepository(session)
     app_refresh_token_repository = SqlAlchemyAppRefreshTokenRepository(session)
-    hyundai_token_repository = SqlAlchemyHyundaiTokenRepository(session)
 
     unique_id = uuid4().hex
     user_id = f"integration-user-{unique_id}"
@@ -56,13 +53,6 @@ def test_all_backend_business_tables_can_store_and_load_data_from_postgres():
                 "plate": "12TEST34",
             },
         )
-
-        hyundai_token_repository.upsert_token(
-            user_id=user_id,
-            encrypted_refresh_token=f"encrypted-{unique_id}",
-        )
-        stored_hyundai_token = hyundai_token_repository.find_by_user_id(user_id)
-        assert stored_hyundai_token["encrypted_refresh_token"] == f"encrypted-{unique_id}"
 
         app_refresh_token_repository.save_token_hash(
             token_hash=refresh_token_hash,
@@ -158,7 +148,6 @@ def test_all_backend_business_tables_can_store_and_load_data_from_postgres():
             (Transaction, UUID(transaction_id)),
             (ParkingSession, UUID(parking_session_id)),
             (AppRefreshToken, refresh_token_hash),
-            (HyundaiToken, user_id),
             (VehicleBillingKey, car_id),
             (Vehicle, car_id),
             (User, user_id),

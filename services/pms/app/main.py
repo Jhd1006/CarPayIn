@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.api.routes.pms import router as pms_router
 
@@ -17,6 +18,26 @@ async def value_error_handler(request: Request, exc: ValueError):
             "code": "NOT_FOUND" if status_code == 404 else "BAD_REQUEST",
             "message": error_code,
         },
+    )
+
+
+@app.exception_handler(PermissionError)
+async def permission_error_handler(request: Request, exc: PermissionError):
+    return JSONResponse(
+        status_code=401,
+        content={
+            "code": "UNAUTHORIZED",
+            "message": str(exc),
+        },
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    # 동시 LPR 진입 등 유니크 제약 위반 — 이미 활성 세션이 있다는 의미
+    return JSONResponse(
+        status_code=409,
+        content={"code": "CONFLICT", "message": "duplicate_active_session"},
     )
 
 @app.get("/health")

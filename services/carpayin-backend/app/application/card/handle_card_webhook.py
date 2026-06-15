@@ -18,6 +18,8 @@ class HandleCardWebhookCommand:
     card_last_four: str
     status: str
     signature: str
+    signature_timestamp: str = "0"
+    raw_body: bytes = b"{}"
 
 
 @dataclass(frozen=True)
@@ -59,7 +61,7 @@ class VehicleRepository(Protocol):
 
 
 class SignatureVerifier(Protocol):
-    def verify(self, *, order_id: str, signature: str) -> bool:
+    def verify(self, *, timestamp: str, signature: str, body: bytes) -> bool:
         ...
 
 
@@ -97,10 +99,11 @@ class HandleCardWebhookService:
     def execute(self, command: HandleCardWebhookCommand) -> HandleCardWebhookResult:
         # 1. signature 검증
         if not self._signature_verifier.verify(
-            order_id=command.order_id,
+            timestamp=command.signature_timestamp,
             signature=command.signature,
+            body=command.raw_body,
         ):
-            raise ValueError("signature가 유효하지 않습니다.")
+            raise ValueError("invalid_signature")
 
         # 2. card_last_four 형식 검증
         _validate_card_last_four(command.card_last_four)

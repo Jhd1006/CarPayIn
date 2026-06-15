@@ -19,6 +19,7 @@ import com.example.carpayin.network.ApiManager
 import com.example.carpayin.network.MqttManager
 import com.example.carpayin.ui.MainActivity
 import com.example.carpayin.vehicle.GeofenceManager
+import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
 
 /**
@@ -45,6 +46,7 @@ class CarPayInService : Service() {
         const val NOTIF_SERVICE   = 1
         const val NOTIF_PARKING   = 2
         const val NOTIF_PAYMENT   = 3
+        const val NOTIF_PRE_REGISTER = 4
 
         private const val FEE_POLL_MS   = 60_000L
         private const val MQTT_WATCH_MS = 30_000L
@@ -53,7 +55,6 @@ class CarPayInService : Service() {
         var onParkingConfirmed: ((lotId: String, sessionId: String) -> Unit)? = null
         var onPaymentComplete: ((txId: String, approvalNo: String, lotId: String, amount: Int) -> Unit)? = null
         var onConnectionChanged: ((connected: Boolean) -> Unit)? = null
-        var onLotApproaching: ((lotId: String, lotName: String) -> Unit)? = null
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, CarPayInService::class.java))
@@ -91,6 +92,12 @@ class CarPayInService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (isRunning) return START_STICKY
+        // OS가 START_STICKY 서비스를 null intent로 재시작할 때 carId가 없으면 안전하게 종료
+        if (intent == null && ParkingStateManager.getHyundaiCarId(this).isEmpty()) {
+            Log.w(TAG, "null intent 재시작 + carId 없음 → 서비스 종료")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         isRunning = true
 
         val notif = buildServiceNotif("CarPayIn 주차 감시 중")
@@ -105,10 +112,13 @@ class CarPayInService : Service() {
         }
         Log.d(TAG, "서비스 시작")
 
-        VehicleDataManager.init(this)
         carId = ParkingStateManager.getHyundaiCarId(this)
 
+        // 콜백 먼저 등록 후 init → ignition 이벤트 유실 방지
         setupCallbacks()
+
+        // Car API 바인딩은 백그라운드에서 (메인 스레드 블로킹 방지)
+        Thread { VehicleDataManager.init(this) }.start()
 
         Thread {
             runCatching {
@@ -127,8 +137,6 @@ class CarPayInService : Service() {
             handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
         }.start()
 
-        GeofenceManager.start(this)
-
         handler.postDelayed(feePollRunnable, FEE_POLL_MS)
         handler.postDelayed(mqttWatchRunnable, MQTT_WATCH_MS)
 
@@ -141,31 +149,16 @@ class CarPayInService : Service() {
         return START_STICKY
     }
 
-    /**
-     * Android 14(targetSdk 34) 부터 foregroundServiceType="location" 인 서비스를
-     *  위치 권한 없이 시작하면 SecurityException 뿐 아니라
-     *  MissingForegroundServiceTypeException / ForegroundServiceStartNotAllowedException
-     *  같은 RuntimeException 이 발생해 앱이 그대로 종료된다.
-     *
-     * → 단계적으로 폴백을 시도하고, 어떠한 Throwable 도 호출자에게 던지지 않는다.
-     *   반환값: 포그라운드 진입에 성공했으면 true.
-     */
     private fun startForegroundSafely(notif: Notification): Boolean {
-        // 1차: 매니페스트에 선언된 location 타입으로 시도
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                startForeground(NOTIF_SERVICE, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-                return true
-            } catch (t: Throwable) {
-                Log.w(TAG, "location 타입 포그라운드 실패 → fallback: ${t.javaClass.simpleName} ${t.message}")
-            }
-        }
-        // 2차: 타입 없이 (구 API 또는 타입 매칭 실패 시)
         try {
-            startForeground(NOTIF_SERVICE, notif)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIF_SERVICE, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIF_SERVICE, notif)
+            }
             return true
         } catch (t: Throwable) {
-            Log.e(TAG, "기본 포그라운드도 실패: ${t.javaClass.simpleName} ${t.message}")
+            Log.e(TAG, "포그라운드 진입 실패: ${t.javaClass.simpleName} ${t.message}")
         }
         return false
     }
@@ -177,7 +170,6 @@ class CarPayInService : Service() {
         isRunning = false
         handler.removeCallbacks(feePollRunnable)
         handler.removeCallbacks(mqttWatchRunnable)
-        GeofenceManager.stop()
         MqttManager.disconnect()
         VehicleDataManager.release()
         Log.d(TAG, "서비스 종료")
@@ -207,6 +199,7 @@ class CarPayInService : Service() {
         MqttManager.onParkingConfirmed = { lotId, sessionId ->
             Log.d(TAG, "입차 확정 수신: $lotId / $sessionId")
             ParkingStateManager.saveParkingState(this, true, lotId, sessionId)
+            TtsHelper.speak("${lotId} 입차가 확인되었습니다")
             handler.post {
                 onParkingConfirmed?.invoke(lotId, sessionId)
                 updateServiceNotif("🅿 주차 중 — $lotId")
@@ -217,6 +210,7 @@ class CarPayInService : Service() {
 
         MqttManager.onPaymentComplete = { txId, approvalNo, lotId, amount ->
             Log.d(TAG, "결제 완료 수신: $txId / ${"%,d".format(amount)}원")
+            TtsHelper.speak("${"%,d".format(amount)}원 결제가 완료되었습니다")
             TransactionStore.save(this, txId, lotId, amount)
             ParkingStateManager.saveParkingState(this, false)
             handler.post {
@@ -230,28 +224,34 @@ class CarPayInService : Service() {
             )
         }
 
-        GeofenceManager.onParkingLotApproach = geofence@{ lotId, lotName, triggerType ->
-            handler.post { onLotApproaching?.invoke(lotId, lotName) }
-            val plate = ParkingStateManager.getPlateNumber(this) ?: return@geofence
-            val carId = ParkingStateManager.getHyundaiCarId(this).ifBlank { return@geofence }
-            val token = getValidToken() ?: return@geofence
-            Thread {
-                runCatching {
-                    ApiManager.sendPreNotification(carId, plate, lotId, triggerType, token)
-                    Log.d(TAG, "사전 알림 전송 완료: $lotId ($triggerType)")
-                }.onFailure {
-                    Log.e(TAG, "사전 알림 실패: ${it.message}")
+    }
+
+    fun navigateToParkingLot(lotId: String, lotName: String) {
+        Thread {
+            val token = getValidToken() ?: return@Thread
+            runCatching {
+                ApiManager.sendPreNotification(lotId, token)
+                Log.d(TAG, "사전 알림 전송 완료: $lotId")
+                handler.post {
+                    updateServiceNotif("$lotName 사전 등록 완료")
+                    showEventNotif(
+                        NOTIF_PRE_REGISTER,
+                        "제휴 주차장 길안내",
+                        "$lotName 사전 등록이 완료되었습니다"
+                    )
                 }
-            }.start()
-        }
+            }.onFailure {
+                Log.e(TAG, "사전 알림 실패: ${it.message}")
+            }
+        }.start()
     }
 
     private fun pollFee() {
         val lotId     = ParkingStateManager.getLotId(this)
         val sessionId = ParkingStateManager.getSessionId(this)
-        val token     = getValidToken() ?: return
-
+        // getValidToken()은 HTTP 요청을 포함할 수 있으므로 반드시 백그라운드 스레드에서 실행
         Thread {
+            val token = getValidToken() ?: return@Thread
             runCatching {
                 val fee = ApiManager.queryFee(lotId, sessionId, token)
                 handler.post {

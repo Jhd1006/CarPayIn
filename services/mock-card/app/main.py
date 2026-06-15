@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.api.routes.card import router as card_router
 
@@ -13,8 +14,15 @@ async def value_error_handler(request: Request, exc: ValueError):
         content={"code": "BAD_REQUEST", "message": str(exc)},
     )
 
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    return JSONResponse(
+        status_code=409,
+        content={"code": "CONFLICT", "message": "duplicate_key"},
+    )
+
 @app.get("/health")
-def health_check():
+def health_check() -> dict:
     return {"status": "ok"}
 
 app.include_router(card_router)

@@ -8,4 +8,5 @@ psycopg[binary]
 SQLAlchemy
 alembic>=1.14,<2.0
 pytest
+paho-mqtt
 

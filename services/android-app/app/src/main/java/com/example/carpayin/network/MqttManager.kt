@@ -56,33 +56,38 @@ object MqttManager {
     var onConnectionLost: ((cause: Throwable?) -> Unit)? = null
 
     fun connect(carId: String) {
+        // 기존 클라이언트가 있으면 먼저 정리 (같은 clientId로 두 연결이 경쟁하면 브로커가 강제 종료)
         try {
-            client = MqttClient(AppConfig.mqttBrokerUrl, carId, MemoryPersistence())
+            client?.takeIf { it.isConnected }?.disconnect()
+        } catch (_: Exception) {}
+        try {
+            client?.close()
+        } catch (_: Exception) {}
+        client = null
 
-            // 연결 끊김 / 메시지 수신 / 전송 완료 콜백
-            client?.setCallback(object : MqttCallback {
+        try {
+            val newClient = MqttClient(AppConfig.mqttBrokerUrl, carId, MemoryPersistence())
+
+            newClient.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
                     Log.w(TAG, "MQTT 연결 끊김: ${cause?.message}")
                     onConnectionLost?.invoke(cause)
                 }
-                override fun messageArrived(topic: String?, message: MqttMessage?) {
-                    // subscribe 시 IMqttMessageListener로 처리하므로 여기선 무시
-                }
+                override fun messageArrived(topic: String?, message: MqttMessage?) {}
                 override fun deliveryComplete(token: IMqttDeliveryToken?) {}
             })
 
             val options = MqttConnectOptions().apply {
-                isCleanSession = false
+                isCleanSession = false         // 오프라인 중 QoS 1 메시지를 브로커가 버퍼링
                 keepAliveInterval = 60
                 connectionTimeout = 10
-                isAutomaticReconnect = true   // 즉시 재연결은 Paho, 장기 감시는 서비스 워치독
-                setWill(
-                    "system/disconnect/$carId",
-                    "disconnected".toByteArray(),
-                    0, false
-                )
+                isAutomaticReconnect = false   // 서비스 watchdog이 재연결 담당
+                setWill("system/disconnect/$carId", "disconnected".toByteArray(), 0, false)
             }
-            client?.connect(options)
+            newClient.connect(options)
+            client = newClient
+            // persistent session이므로 브로커가 이미 구독 정보를 갖고 있을 수 있지만
+            // 재구독은 멱등적이므로 항상 호출해도 안전
             subscribeTopics(carId)
             Log.d(TAG, "MQTT 연결 성공: carId ${carId.takeLast(8)}")
         } catch (e: Exception) {

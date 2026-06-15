@@ -24,7 +24,6 @@ class User(Base):
     # Relationships
     vehicles = relationship('Vehicle', back_populates='user')
     app_refresh_tokens = relationship('AppRefreshToken', back_populates='user')
-    hyundai_token = relationship('HyundaiToken', back_populates='user', uselist=False)
 
 
 class Vehicle(Base):
@@ -201,17 +200,3 @@ class AppRefreshToken(Base):
         Index('idx_app_refresh_tokens_car_id', 'car_id'),
         Index('idx_app_refresh_tokens_expires_at', 'expires_at'),
     )
-
-
-class HyundaiToken(Base):
-    """현대 API refresh token (암호화 저장, access token은 Redis)"""
-    __tablename__ = 'hyundai_tokens'
-    
-    user_id = Column(Text, ForeignKey('users.user_id'), primary_key=True)
-    hyundai_refresh_token_encrypted = Column(Text, nullable=False)
-    refresh_expires_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    user = relationship('User', back_populates='hyundai_token')

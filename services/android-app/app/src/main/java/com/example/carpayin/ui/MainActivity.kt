@@ -2,6 +2,7 @@ package com.example.carpayin.ui
 
 import com.example.carpayin.R
 import android.content.Intent
+import android.location.Location
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
@@ -9,6 +10,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
+import android.graphics.Rect
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -18,7 +21,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.carpayin.data.ParkingStateManager
 import com.example.carpayin.data.TransactionStore
@@ -27,7 +29,11 @@ import com.example.carpayin.network.MqttManager
 import com.example.carpayin.service.CarPayInService
 import com.example.carpayin.vehicle.GeofenceManager
 import com.example.carpayin.vehicle.NaviHelper
+import com.example.carpayin.vehicle.LlmManager
+import com.example.carpayin.vehicle.SttManager
+import com.example.carpayin.vehicle.TtsHelper
 import com.example.carpayin.vehicle.VehicleDataManager
+import com.example.carpayin.vehicle.VoiceCommandHandler
 
 class MainActivity : AppCompatActivity() {
 
@@ -42,8 +48,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var vin: String = ""
-    private var approachingLotId: String? = null
-    private var navigatingLotId: String? = null
 
     private lateinit var tvStatusDot: TextView
     private lateinit var tvPaymentStatus: TextView
@@ -53,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layoutUnregistered: LinearLayout
     private lateinit var layoutRegistered: ScrollView
     private lateinit var tvHeaderTitle: RelativeLayout
+    private lateinit var mainHeaderLogoTapArea: View
+    private lateinit var btnVoiceMic: Button
     private lateinit var tvFeatureHint: TextView
     private lateinit var sectionCard: LinearLayout
     private lateinit var sectionVehicle: LinearLayout
@@ -86,6 +92,7 @@ class MainActivity : AppCompatActivity() {
 
     private var lastAmount: Int = 0
     private var parkingStartMs: Long = 0L
+    private var isDevMenuVisible = false
     private val timerRunnable = object : Runnable {
         override fun run() {
             updateParkingTimer()
@@ -93,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val REQ_LOCATION_PERM = 300
+
 
     data class BrandTheme(val shortName: String, val bgColor: Int, val brandTextColor: Int, val network: String)
     private enum class RegisteredFeature { CARD, VEHICLE, PARKING, HISTORY }
@@ -110,6 +117,7 @@ class MainActivity : AppCompatActivity() {
         layoutUnregistered = findViewById(R.id.layoutUnregistered)
         layoutRegistered   = findViewById(R.id.layoutRegistered)
         tvHeaderTitle      = findViewById(R.id.tvHeaderTitle)
+        mainHeaderLogoTapArea = findViewById(R.id.mainHeaderLogoTapArea)
         tvFeatureHint      = findViewById(R.id.tvFeatureHint)
         sectionCard        = findViewById(R.id.sectionCard)
         sectionVehicle     = findViewById(R.id.sectionVehicle)
@@ -126,6 +134,7 @@ class MainActivity : AppCompatActivity() {
         btnOAuthPendingCancel = findViewById(R.id.btnOAuthPendingCancel)
 
         btnResetApp        = findViewById(R.id.btnResetApp)
+        btnVoiceMic        = findViewById(R.id.btnVoiceMic)
         mainCardBody       = findViewById(R.id.mainCardBody)
         mainCardBrand      = findViewById(R.id.mainCardBrand)
         mainCardNetwork    = findViewById(R.id.mainCardNetwork)
@@ -146,9 +155,34 @@ class MainActivity : AppCompatActivity() {
         // 한 번만 리스너를 등록해 동작이 중복되거나 덮어써지지 않도록 합니다.
         setupDevTrigger()
 
-        VehicleDataManager.init(this)
+        // prefs에서 VIN 즉시 읽기 (Car API 연결 전, 논블로킹)
         vin = VehicleDataManager.readVin(this)
-        NaviHelper.init(this)
+
+        // 백그라운드: Pleos 패널 소유권 + Car API 바인딩
+        // takePanelControl()은 Pleos IPC 호출 → 메인 스레드에서 실행 시 500ms+ 블로킹
+        NaviHelper.onNavigationEnded = {
+            handler.post {
+                Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
+            }
+        }
+
+        // TTS/STT는 메인 스레드에서 초기화 (Android SpeechRecognizer 요구사항)
+        TtsHelper.init(applicationContext)
+        SttManager.init(applicationContext)
+        setupVoiceCommand()
+        requestMicPermission()
+
+        val appContext = applicationContext
+        Thread {
+            NaviHelper.takePanelControl(appContext)
+            NaviHelper.init(appContext)
+            LlmManager.init(appContext)
+            VehicleDataManager.init(appContext)
+            val realVin = VehicleDataManager.readVin(appContext)
+            if (realVin.isNotBlank() && realVin != vin) {
+                handler.post { vin = realVin }
+            }
+        }.start()
 
         renderStateFromIntent(intent)
     }
@@ -244,7 +278,10 @@ class MainActivity : AppCompatActivity() {
             this,
             if (selected) R.drawable.bg_button_primary else R.drawable.bg_button_secondary
         )
-        button.setTextColor(0xFFFFFFFF.toInt())
+        button.setTextColor(
+            if (selected) 0xFFFFFFFF.toInt()
+            else ContextCompat.getColor(this, R.color.button_on_secondary)
+        )
     }
 
     private fun showUnregisteredState() {
@@ -276,6 +313,7 @@ class MainActivity : AppCompatActivity() {
 
         // 여기서 '카드 등록' 버튼을 누르면 은행사 선택 화면으로 넘어갑니다.
         btnOAuthPendingRegisterCard.setOnClickListener {
+            Log.d(TAG, "btnOAuthPendingRegisterCard clicked")
             launchCardRegistrationOnly()
         }
 
@@ -352,14 +390,12 @@ class MainActivity : AppCompatActivity() {
         // 계정 재연동 버튼은 그대로 유지
         findViewById<Button>(R.id.btnChangeCard).setOnClickListener {
             val accountLabel = if (userName.isNotEmpty()) "$userName 님 계정" else "마이현대 계정"
-            AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-                .setTitle("계정 재연동")
-                .setMessage("$accountLabel\n\nQR 스캔으로 마이현대 계정을 다시 연동하시겠습니까?")
-                .setPositiveButton("재연동") { _, _ ->
-                    startActivityForResult(Intent(this, RegistrationActivity::class.java), 100)
-                }
-                .setNegativeButton("취소", null)
-                .show()
+            showAaosDialog(
+                "계정 재연동",
+                "$accountLabel\n\nQR 스캔으로 마이현대 계정을 다시 연동하시겠습니까?",
+                "취소" to {},
+                "재연동" to { startActivityForResult(Intent(this, RegistrationActivity::class.java), 100) }
+            )
         }
 
         // 카드가 없으므로 정산 버튼은 카드 등록을 유도
@@ -372,9 +408,11 @@ class MainActivity : AppCompatActivity() {
         hideParkingActiveSection()
         findViewById<LinearLayout>(R.id.layoutTxHistory).removeAllViews()
 
+        // 카드 미등록 상태 — 결제 처리 불가이므로 위치 권한 요청(startServicesAndListeners)은 생략.
+        // 카드 등록 완료 후 showRegisteredState()에서 서비스가 시작된다.
         // 주차장 목록은 정보용으로 노출 (탭하면 내비게이션은 가능)
         populateParkingLots()
-        showRegisteredFeature(RegisteredFeature.VEHICLE)
+        showRegisteredFeature(RegisteredFeature.CARD)
     }
 
     private fun showRegisteredState() {
@@ -409,26 +447,22 @@ class MainActivity : AppCompatActivity() {
         // showLoggedInNoCardState 에서 '카드 등록하기' 로 변경되었을 수 있으므로 원래 라벨로 복구
         btnRegisterCardRegistered.text = "카드 등록"
         btnRegisterCardRegistered.setOnClickListener {
-            AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-                .setTitle("카드 변경")
-                .setMessage("새 카드를 등록합니다.\n번호판 확인 후 카드 정보를 입력해 주세요.")
-                .setPositiveButton("변경하기") { _, _ ->
-                    launchCardRegistrationOnly()
-                }
-                .setNegativeButton("취소", null)
-                .show()
+            showAaosDialog(
+                "카드 변경",
+                "새 카드를 등록합니다.\n번호판 확인 후 카드 정보를 입력해 주세요.",
+                "취소" to {},
+                "변경하기" to { launchCardRegistrationOnly() }
+            )
         }
 
         findViewById<Button>(R.id.btnChangeCard).setOnClickListener {
             val accountLabel = if (userName.isNotEmpty()) "$userName 님 계정" else "마이현대 계정"
-            AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-                .setTitle("계정 재연동")
-                .setMessage("$accountLabel\n\nQR 스캔으로 마이현대 계정을 다시 연동하시겠습니까?")
-                .setPositiveButton("재연동") { _, _ ->
-                    startActivityForResult(Intent(this, RegistrationActivity::class.java), 100)
-                }
-                .setNegativeButton("취소", null)
-                .show()
+            showAaosDialog(
+                "계정 재연동",
+                "$accountLabel\n\nQR 스캔으로 마이현대 계정을 다시 연동하시겠습니까?",
+                "취소" to {},
+                "재연동" to { startActivityForResult(Intent(this, RegistrationActivity::class.java), 100) }
+            )
         }
 
         btnSettleNow.setOnClickListener { queryFeeAndShowSettlement() }
@@ -448,20 +482,21 @@ class MainActivity : AppCompatActivity() {
 
         populateParkingLots()
         refreshTransactionHistory()
-        showRegisteredFeature(null)
+        showRegisteredFeature(RegisteredFeature.PARKING)
     }
 
     private fun launchCardRegistrationOnly() {
+        Log.d(TAG, "launchCardRegistrationOnly() called")
         val token = ParkingStateManager.getAccessToken(this)
         if (token.isNullOrBlank()) {
             Log.w(TAG, "Card registration blocked: missing access token")
-            Toast.makeText(this, "로그인 토큰이 없습니다. QR 로그인을 다시 진행해 주세요.", Toast.LENGTH_LONG).show()
+            showAaosDialog("로그인 필요", "로그인 토큰이 없습니다.\nQR 로그인을 다시 진행해 주세요.", "확인" to {})
             return
         }
         val carId = ParkingStateManager.getHyundaiCarId(this)
         if (carId.isBlank()) {
             Log.w(TAG, "Card registration blocked: missing carId")
-            Toast.makeText(this, "연결된 차량 정보가 없습니다. QR 로그인을 다시 진행해 주세요.", Toast.LENGTH_LONG).show()
+            showAaosDialog("차량 정보 없음", "연결된 차량 정보가 없습니다.\nQR 로그인을 다시 진행해 주세요.", "확인" to {})
             return
         }
         Log.d(TAG, "Launching card registration carId=${carId.takeLast(8)} token=${token.take(8)}")
@@ -473,7 +508,7 @@ class MainActivity : AppCompatActivity() {
             startActivityForResult(intent, 101)
         }.onFailure {
             Log.e(TAG, "Failed to launch CardRegistrationActivity", it)
-            Toast.makeText(this, "카드 등록 화면을 열 수 없습니다: ${it.message}", Toast.LENGTH_LONG).show()
+            showAaosDialog("화면 오류", "카드 등록 화면을 열 수 없습니다.\n${it.message}", "확인" to {})
         }
     }
 
@@ -506,7 +541,11 @@ class MainActivity : AppCompatActivity() {
         layoutParkingActive.visibility = View.VISIBLE
         tvActiveLotName.text = if (lotId.isNotEmpty()) lotId else "주차장"
 
-        if (parkingStartMs == 0L) parkingStartMs = System.currentTimeMillis()
+        if (parkingStartMs == 0L) {
+            // 저장된 입차 시간이 있으면 복원, 없으면 현재 시각으로 초기화
+            val savedEntry = ParkingStateManager.getEntryTimeMs(this)
+            parkingStartMs = if (savedEntry > 0L) savedEntry else System.currentTimeMillis()
+        }
 
         handler.removeCallbacks(timerRunnable)
         handler.post(timerRunnable)
@@ -544,144 +583,178 @@ class MainActivity : AppCompatActivity() {
 
     private fun populateParkingLots() {
         layoutParkingLots.removeAllViews()
-        val sorted = GeofenceManager.cachedParkingLots.sortedWith(
-            compareByDescending<GeofenceManager.ParkingLot> { it.id == approachingLotId }.thenByDescending { it.id == navigatingLotId }
-        )
+        val hasLocation = NaviHelper.currentLat != 0.0 && NaviHelper.currentLng != 0.0
 
-        sorted.forEach { lot ->
-            val isNearby    = lot.id == approachingLotId
-            val isNavigating = lot.id == navigatingLotId
+        fun distMeters(lot: GeofenceManager.ParkingLot): Float {
+            val results = FloatArray(1)
+            Location.distanceBetween(NaviHelper.currentLat, NaviHelper.currentLng, lot.lat, lot.lng, results)
+            return results[0]
+        }
 
-            val rowBg = when {
-                isNearby -> roundedBackground(0xFFFFF8E6.toInt(), 0xFFF2C46D.toInt())
-                isNavigating -> roundedBackground(0xFFEEF6FF.toInt(), 0xFF9BC8FF.toInt())
-                else -> getDrawable(R.drawable.bg_card_dark)
+        val lots = if (hasLocation)
+            GeofenceManager.cachedParkingLots.sortedBy { distMeters(it) }
+        else
+            GeofenceManager.cachedParkingLots.sortedBy { it.name }
+
+        lots.forEach { lot ->
+            val distM = if (hasLocation) distMeters(lot) else null
+            val distText = when {
+                distM == null -> "탭하여 내비게이션 시작"
+                distM < 1000  -> "${distM.toInt()} m · 약 ${(distM / 500).toInt() + 1}분"
+                else          -> "${"%.1f".format(distM / 1000)} km · 약 ${(distM / 500).toInt() + 1}분"
             }
 
             val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14)); background = rowBg; isClickable = true; isFocusable = true
+                orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = getDrawable(R.drawable.bg_card_dark); isClickable = true; isFocusable = true
+                foreground = TypedValue().let { tv -> theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true); getDrawable(tv.resourceId) }
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.setMargins(0, 0, 0, dp(8)) }
             }
-
-            val tvIcon = TextView(this).apply { text = when { isNavigating -> "🧭"; isNearby -> "🚗"; else -> "📍" }; textSize = 16f }
-            val subText = when { isNavigating -> "내비게이션 안내 중 · 탭하여 취소"; isNearby -> "접근 중 · 사전 등록됨"; else -> "탭하여 내비게이션 시작" }
+            val tvIcon = TextView(this).apply { text = "📍"; textSize = 16f }
             val tvInfo = TextView(this).apply {
-                text = "${lot.name}\n$subText"
-                setTextColor(when { isNavigating -> Color.parseColor("#1B64DA"); isNearby -> Color.parseColor("#8A6200"); else -> Color.parseColor("#191F28") })
-                textSize = 13f
+                text = "${lot.name}\n$distText"
+                setTextColor(Color.parseColor("#191F28")); textSize = 13f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also { it.setMargins(dp(10), 0, 0, 0) }
             }
-            val tvBadge = TextView(this).apply {
-                text = when { isNavigating -> "안내 중"; isNearby -> "사전 등록됨"; else -> "제휴" }
-                setTextColor(when { isNavigating -> Color.parseColor("#1B64DA"); isNearby -> Color.parseColor("#8A6200"); else -> Color.parseColor("#0F8F68") })
-                textSize = 11f
-            }
-
+            val tvBadge = TextView(this).apply { text = "제휴"; setTextColor(Color.parseColor("#0F8F68")); textSize = 11f }
             row.addView(tvIcon); row.addView(tvInfo); row.addView(tvBadge); layoutParkingLots.addView(row)
-            row.setOnClickListener { if (isNavigating) confirmCancelNavigation(lot) else startNavigationTo(lot) }
+            row.setOnClickListener { startNavigationTo(lot) }
         }
     }
 
     private fun startNavigationTo(lot: GeofenceManager.ParkingLot) {
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("🧭 내비게이션 시작")
-            .setMessage("${lot.name}\n\n목적지로 경로 안내를 시작합니다.\n도착 전 차량 정보가 주차장에 자동으로 등록됩니다.")
-            .setPositiveButton("시작") { dialog, _ ->
-                dialog.dismiss()
-                navigatingLotId = lot.id
-                populateParkingLots()
-                NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
-
-                val plate = ParkingStateManager.getPlateNumber(this)
-                val token = ParkingStateManager.getAccessToken(this)
-                val carId = ParkingStateManager.getHyundaiCarId(this)
-                if (plate != null && token != null && carId.isNotBlank()) {
-                    Thread { runCatching { ApiManager.sendPreNotification(carId, plate, lot.id, "NAVI", token) } }.start()
+        if (!hasCompletedCardRegistration()) {
+            TtsHelper.speak("결제 카드가 등록되지 않았습니다. 주차 요금이 자동으로 결제되지 않을 수 있습니다")
+        }
+        showAaosDialog(
+            "🧭 내비게이션 시작",
+            "${lot.name}\n\n목적지로 경로 안내를 시작합니다.\n도착 전 차량 정보가 주차장에 자동으로 등록됩니다.",
+            "취소" to {},
+            "시작" to {
+                val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
+                if (navStarted) {
+                    TtsHelper.speak("${lot.name}으로 경로 안내를 시작합니다")
+                    handler.postDelayed({
+                        Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
+                    }, 1_500)
+                    val token = ParkingStateManager.getAccessToken(this)
+                    if (token != null) {
+                        Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
+                    }
+                    Toast.makeText(this, "🧭 ${lot.name} 경로 안내 시작", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
                 }
-                Toast.makeText(this, "🧭 ${lot.name} 경로 안내 시작", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("취소", null)
-            .show()
+        )
     }
 
-    private fun confirmCancelNavigation(lot: GeofenceManager.ParkingLot) {
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("내비게이션 취소")
-            .setMessage("${lot.name} 경로 안내를 취소하시겠습니까?")
-            .setPositiveButton("취소") { dialog, _ ->
-                dialog.dismiss(); NaviHelper.cancelNavigation(); navigatingLotId = null; populateParkingLots()
-                Toast.makeText(this, "경로 안내가 취소되었습니다", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("계속 안내") { dialog, _ -> dialog.dismiss() }
-            .show()
+    private fun styleDialogButtons(dialog: AlertDialog) {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.BLACK)
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.BLACK)
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.BLACK)
+    }
+
+    /**
+     * AlertDialog 대신 window.decorView에 직접 overlay를 추가한다.
+     * AlertDialog는 별도 Window를 생성하므로 Pleos panel ownership이 적용 안 됨.
+     * 같은 Window 안에 overlay를 그리면 takePanelControl()의 효과가 그대로 유지된다.
+     * buttons: Pair(라벨, 클릭 액션) — 마지막 버튼이 파란색 primary 취급
+     */
+    private fun showAaosDialog(
+        title: String,
+        message: String,
+        vararg buttons: Pair<String, () -> Unit>,
+        cancelable: Boolean = true,
+        customView: android.view.View? = null
+    ) {
+        val decorView = window.decorView as android.widget.FrameLayout
+
+        val overlay = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt())
+            elevation = 999f
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBackground(0xFFFFFFFF.toInt())
+            setPadding(dp(24), dp(20), dp(24), dp(8))
+            val lp = android.widget.FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.78).toInt(),
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.gravity = android.view.Gravity.CENTER
+            layoutParams = lp
+        }
+
+        card.addView(TextView(this).apply {
+            text = title
+            setTextColor(0xFF191F28.toInt())
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(10) }
+        })
+        card.addView(TextView(this).apply {
+            text = message
+            setTextColor(0xFF4E5968.toInt())
+            textSize = 14f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(8) }
+        })
+        customView?.let { v ->
+            card.addView(v, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = dp(8) })
+        }
+
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        fun dismiss() { runOnUiThread { decorView.removeView(overlay) } }
+
+        buttons.forEachIndexed { i, (label, action) ->
+            btnRow.addView(Button(this).apply {
+                text = label
+                textSize = 14f
+                setTextColor(if (i == buttons.lastIndex) 0xFF1B64DA.toInt() else Color.BLACK)
+                setBackgroundColor(Color.TRANSPARENT)
+                minHeight = dp(48)
+                setPadding(dp(8), 0, dp(8), 0)
+                setOnClickListener { dismiss(); action() }
+            })
+        }
+        card.addView(btnRow)
+
+        overlay.addView(card)
+        overlay.setOnClickListener { if (cancelable) dismiss() }
+        card.setOnClickListener { }
+
+        decorView.addView(overlay)
     }
 
     private fun startServicesAndListeners() {
-        // 콜백/UI 업데이트는 권한과 무관하므로 먼저 등록한다.
         registerServiceCallbacks()
         handler.postDelayed({
             tvStatusDot.setTextColor(
                 if (MqttManager.isConnected()) 0xFF12B981.toInt() else 0xFF8B95A1.toInt()
             )
         }, 2_000)
-
-        val fineGranted = ContextCompat.checkSelfPermission(
-            this, android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (fineGranted) {
-            // 위치 권한이 이미 있으면 location-type 포그라운드 서비스를 안전하게 시작할 수 있다.
-            safeStartCarPayInService()
-        } else {
-            // ⚠️ Android 14(targetSdk 34) 에서 foregroundServiceType="location" 인 서비스를
-            //    위치 권한이 없는 상태로 startForegroundService 하면 SecurityException 또는
-            //    MissingForegroundServiceTypeException 으로 앱이 즉시 종료된다.
-            //    → 권한 다이얼로그 응답이 올 때까지 서비스 시작을 미룬다.
-            Log.d(TAG, "위치 권한 미부여 → 권한 요청 후 서비스 시작 예정")
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(
-                    android.Manifest.permission.ACCESS_FINE_LOCATION,
-                    android.Manifest.permission.ACCESS_COARSE_LOCATION
-                ),
-                REQ_LOCATION_PERM
-            )
-        }
-    }
-
-    /**
-     * Foreground Service 시작 시도. AAOS / 에뮬레이터 별로 OS 정책이 달라
-     * 예기치 못한 RuntimeException 이 발생하더라도 앱이 죽지 않도록 방어한다.
-     */
-    private fun safeStartCarPayInService() {
         try {
             CarPayInService.start(this)
         } catch (t: Throwable) {
             Log.e(TAG, "CarPayInService 시작 실패 (앱은 계속 동작): ${t.javaClass.simpleName} ${t.message}")
-            // 서비스가 안 떠도 화면 자체는 정상 동작하도록 유지.
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_LOCATION_PERM) {
-            val granted = grantResults.isNotEmpty() &&
-                grantResults[0] == PackageManager.PERMISSION_GRANTED
-            if (granted) {
-                Log.d(TAG, "위치 권한 부여됨 → CarPayInService 시작")
-                safeStartCarPayInService()
-            } else {
-                Log.w(TAG, "위치 권한 거부 → 자동 결제 감시는 제한적으로 동작")
-                Toast.makeText(
-                    this,
-                    "위치 권한이 없어 자동 입차 감지는 제한됩니다.\n수동 정산은 계속 사용할 수 있습니다.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
         }
     }
 
@@ -696,14 +769,15 @@ class MainActivity : AppCompatActivity() {
             updateParkingBadge(false); refreshTransactionHistory(); showPaymentComplete(txId, approvalNo, lotId, amount)
         }
         CarPayInService.onConnectionChanged = { connected -> tvStatusDot.setTextColor(if (connected) 0xFF12B981.toInt() else 0xFF8B95A1.toInt()) }
-        CarPayInService.onLotApproaching = { lotId, _ -> approachingLotId = lotId; populateParkingLots() }
-        NaviHelper.onNavigationEnded = { navigatingLotId = null; populateParkingLots() }
     }
 
     private fun showEntryConfirmed(lotId: String) {
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("🅿 입차 확인").setMessage("$lotId\n\n입차가 확인되었습니다.\n시동을 켜거나 [지금 정산하기] 버튼으로 정산할 수 있습니다.")
-            .setPositiveButton("확인") { dialog, _ -> dialog.dismiss() }.setCancelable(false).show()
+        showAaosDialog(
+            "🅿 입차 확인",
+            "$lotId\n\n입차가 확인되었습니다.\n시동을 켜거나 [지금 정산하기] 버튼으로 정산할 수 있습니다.",
+            "확인" to {},
+            cancelable = false
+        )
     }
 
     private fun queryFeeAndShowSettlement() {
@@ -726,13 +800,13 @@ class MainActivity : AppCompatActivity() {
         val h = fee.durationMinutes / 60
         val m = fee.durationMinutes % 60
         val dur = if (h > 0) "${h}시간 ${m}분" else "${m}분"
-
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("🅿 정산 확인").setMessage("${fee.lotName}\n\n주차 시간: $dur\n결제 금액: ${"%,d".format(fee.amount)}원\n\n정산하시겠습니까?")
-            .setPositiveButton("예") { dialog, _ -> dialog.dismiss(); processPayment(sessionId, fee.amount) }
-            .setNegativeButton("취소") { dialog, _ ->
-                dialog.dismiss(); tvPaymentStatus.text = "취소됨 — 출구에서 현장 정산"; tvStatusDot.setTextColor(0xFFE5484D.toInt()); btnSettleNow.isEnabled = true
-            }.setCancelable(false).show()
+        showAaosDialog(
+            "🅿 정산 확인",
+            "${fee.lotName}\n\n주차 시간: $dur\n결제 금액: ${"%,d".format(fee.amount)}원\n\n정산하시겠습니까?",
+            "취소" to { tvPaymentStatus.text = "취소됨 — 출구에서 현장 정산"; tvStatusDot.setTextColor(0xFFE5484D.toInt()); btnSettleNow.isEnabled = true },
+            "예" to { processPayment(sessionId, fee.amount) },
+            cancelable = false
+        )
     }
 
     private fun processPayment(sessionId: String, amount: Int) {
@@ -755,17 +829,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPaymentComplete(txId: String, approvalNo: String, lotId: String, amount: Int) {
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("✓ 결제 완료").setMessage("$lotId\n\n결제 금액: ${"%,d".format(amount)}원\n승인번호: $approvalNo\n거래번호: ${txId.take(14)}…\n\n약 3~5초 후 차단기가 개방됩니다.")
-            .setPositiveButton("확인") { dialog, _ -> dialog.dismiss() }.setCancelable(false).show()
+        showAaosDialog(
+            "✓ 결제 완료",
+            "$lotId\n\n결제 금액: ${"%,d".format(amount)}원\n승인번호: $approvalNo\n거래번호: ${txId.take(14)}…\n\n약 3~5초 후 차단기가 개방됩니다.",
+            "확인" to {},
+            cancelable = false
+        )
     }
 
     private fun showPaymentError(message: String) {
         tvPaymentStatus.text = "결제 실패"; tvStatusDot.setTextColor(0xFFE5484D.toInt())
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("⚠ 결제 실패").setMessage("$message\n\n다른 결제 수단을 사용하거나 현장 무인정산기를 이용해 주세요.")
-            .setPositiveButton("재시도") { _, _ -> queryFeeAndShowSettlement() }
-            .setNegativeButton("현장 정산") { dialog, _ -> dialog.dismiss() }.setCancelable(false).show()
+        showAaosDialog(
+            "⚠ 결제 실패",
+            "$message\n\n다른 결제 수단을 사용하거나 현장 무인정산기를 이용해 주세요.",
+            "현장 정산" to {},
+            "재시도" to { queryFeeAndShowSettlement() },
+            cancelable = false
+        )
     }
 
     private fun refreshTransactionHistory() {
@@ -876,41 +956,227 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (hasCompletedCardRegistration()) registerServiceCallbacks()
+        window.decorView.requestFocus()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(timerRunnable)
+        handler.removeCallbacksAndMessages(null)
+        // static 콜백에서 Activity 참조 해제 (메모리 누수 방지)
+        CarPayInService.onFeeUpdated       = null
+        CarPayInService.onParkingConfirmed = null
+        CarPayInService.onPaymentComplete  = null
+        CarPayInService.onConnectionChanged= null
+        SttManager.release()
+        LlmManager.release()
+        NaviHelper.release()
         VehicleDataManager.release()
+        VoiceCommandHandler.onShowParkingSection = null
+        VoiceCommandHandler.onNavigateTo = null
+        VoiceCommandHandler.onThinking = null
+    }
+
+    private fun setupVoiceCommand() {
+        VoiceCommandHandler.onShowParkingSection = {
+            handler.post {
+                showRegisteredFeature(RegisteredFeature.PARKING)
+            }
+        }
+        VoiceCommandHandler.onNavigateTo = { lot ->
+            handler.post { startNavigationTo(lot) }
+        }
+
+        SttManager.onResult = { text ->
+            handler.post { VoiceCommandHandler.handle(text) }
+        }
+        SttManager.onListeningChanged = { listening ->
+            handler.post {
+                if (listening) btnVoiceMic.text = "🔴"
+                else if (btnVoiceMic.text == "🔴") btnVoiceMic.text = "🎤"
+            }
+        }
+        VoiceCommandHandler.onThinking = { thinking ->
+            handler.post {
+                btnVoiceMic.text = if (thinking) "⏳" else "🎤"
+                btnVoiceMic.isEnabled = !thinking
+            }
+        }
+
+        btnVoiceMic.setOnClickListener {
+            if (SttManager.isListening) {
+                SttManager.toggleListening()
+            } else {
+                TtsHelper.playRaw(com.example.carpayin.R.raw.tts_greeting) {
+                    handler.post { SttManager.toggleListening() }
+                }
+            }
+        }
+    }
+
+    private fun requestMicPermission() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            SttManager.init(applicationContext)
+        }
     }
 
     private fun setupDevTrigger() {
-        DevTapGate.install(this, tvHeaderTitle) { showDevMenu() }
         btnResetApp.setOnClickListener { confirmReset() }
+        mainHeaderLogoTapArea.setOnClickListener { showDevMenu() }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (isDevMenuVisible) return super.dispatchTouchEvent(ev)
+        if (ev.action == MotionEvent.ACTION_UP) {
+            val headerBounds = Rect()
+            tvHeaderTitle.getGlobalVisibleRect(headerBounds)
+            val x = ev.rawX.toInt()
+            val y = ev.rawY.toInt()
+            if (headerBounds.contains(x, y)) {
+                val resetBounds = Rect()
+                btnResetApp.getGlobalVisibleRect(resetBounds)
+                val tappedReset = btnResetApp.visibility == View.VISIBLE && resetBounds.contains(x, y)
+                if (!tappedReset) {
+                    showDevMenu()
+                    return true
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun showDevMenu() {
-        val items = arrayOf("Mock 입차 확정", "Mock 결제 완료", "등록 초기화 (즉시)", "MQTT 재연결", "VIN 표시")
-        androidx.appcompat.app.AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("개발자 메뉴")
-            .setItems(items) { _, idx ->
-                when (idx) {
-                    0 -> { ParkingStateManager.saveParkingState(this, true, "DEV_LOT_01", "sess_dev_001"); showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show() }
-                    1 -> { ParkingStateManager.saveParkingState(this, false); showRegisteredState(); Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show() }
-                    2 -> {
-                        clearRegistrationState()
-                        setIntent(Intent(this, MainActivity::class.java))
-                        renderStateFromStorage()
-                    }
-                    3 -> {
-                        val carId = ParkingStateManager.getHyundaiCarId(this)
-                        if (carId.isNotBlank()) Thread { MqttManager.connect(carId) }.start()
-                        Toast.makeText(this, "MQTT 재연결 시도", Toast.LENGTH_SHORT).show()
-                    }
-                    4 -> Toast.makeText(this, "VIN: $vin", Toast.LENGTH_LONG).show()
-                }
+        if (isDevMenuVisible) return
+        isDevMenuVisible = true
+        val decorView = window.decorView as android.widget.FrameLayout
+
+        val overlay = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xAA000000.toInt())
+            elevation = 999f
+        }
+        fun dismissOverlay() {
+            runOnUiThread {
+                isDevMenuVisible = false
+                decorView.removeView(overlay)
             }
-            .show()
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBackground(0xFFFFFFFF.toInt())
+            val lp = android.widget.FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.78).toInt(),
+                (resources.displayMetrics.heightPixels * 0.75).toInt()
+            )
+            lp.gravity = android.view.Gravity.CENTER
+            layoutParams = lp
+        }
+
+        card.addView(TextView(this).apply {
+            text = "개발자 메뉴"
+            setTextColor(0xFF191F28.toInt()); textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(20), dp(16), dp(20), dp(8))
+        })
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+        }
+
+        fun addBtn(label: String, action: () -> Unit) {
+            container.addView(Button(this).apply {
+                text = label; textSize = 14f
+                setTextColor(0xFF191F28.toInt())
+                background = roundedBackground(0xFFF4F7FB.toInt(), 0xFFDCE5F0.toInt())
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).also { it.setMargins(0, 0, 0, dp(6)) }
+                setOnClickListener { dismissOverlay(); action() }
+            })
+        }
+
+        addBtn("Mock 입차 확정") {
+            ParkingStateManager.saveParkingState(this, true, "LOT_GANGNAM_01", "sess_dev_001")
+            TtsHelper.speak("강남 주차장 입차가 확인되었습니다")
+            showRegisteredState(); Toast.makeText(this, "Mock 입차 확정", Toast.LENGTH_SHORT).show()
+        }
+        addBtn("Mock 결제 완료") {
+            val mockAmount = 3000
+            val mockTxId = "dev_tx_${System.currentTimeMillis()}"
+            TransactionStore.save(this, mockTxId, "LOT_GANGNAM_01", mockAmount)
+            ParkingStateManager.saveParkingState(this, false)
+            TtsHelper.speak("${"%,d".format(mockAmount)}원 결제가 완료되었습니다")
+            showRegisteredState()
+            showPaymentComplete(mockTxId, "DEV-APPROVED", "LOT_GANGNAM_01", mockAmount)
+            Toast.makeText(this, "Mock 결제 완료", Toast.LENGTH_SHORT).show()
+        }
+        addBtn("등록 초기화 (즉시)") {
+            clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java)); renderStateFromStorage()
+        }
+        addBtn("MQTT 재연결") {
+            val carId = ParkingStateManager.getHyundaiCarId(this)
+            if (carId.isNotBlank()) Thread { MqttManager.connect(carId) }.start()
+            Toast.makeText(this, "MQTT 재연결 시도", Toast.LENGTH_SHORT).show()
+        }
+        addBtn("번호판 설정") {
+            val et = android.widget.EditText(this).apply {
+                hint = "예) 12가3456"; inputType = android.text.InputType.TYPE_CLASS_TEXT
+                val saved = ParkingStateManager.getPlateNumber(this@MainActivity)
+                if (!saved.isNullOrBlank()) setText(saved)
+            }
+            showAaosDialog("번호판 직접 설정", "카드 등록 시 자동으로 채워집니다.",
+                "취소" to {},
+                "저장" to {
+                    val plate = java.text.Normalizer.normalize(
+                        et.text.toString().replace("\\s|-|\\.|·".toRegex(), ""),
+                        java.text.Normalizer.Form.NFC
+                    )
+                    if (plate.isNotBlank()) {
+                        ParkingStateManager.savePlateNumber(this, plate)
+                        Toast.makeText(this, "번호판 저장: $plate", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                customView = et
+            )
+        }
+        addBtn("VIN 표시") { Toast.makeText(this, "VIN: $vin", Toast.LENGTH_LONG).show() }
+        addBtn("앱 완전 초기화") {
+            clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java))
+            renderStateFromStorage(); Toast.makeText(this, "초기화 완료", Toast.LENGTH_SHORT).show()
+        }
+
+        card.addView(android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+            addView(container)
+        })
+        card.addView(Button(this).apply {
+            text = "닫기"; textSize = 14f; setTextColor(0xFF1B64DA.toInt())
+            setBackgroundColor(Color.TRANSPARENT); minHeight = dp(48)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(dp(12), 0, dp(12), dp(8)) }
+            setOnClickListener { dismissOverlay() }
+        })
+
+        overlay.addView(card)
+        overlay.setOnClickListener { dismissOverlay() }
+        card.setOnClickListener { }
+        decorView.addView(overlay)
     }
 
     private fun showCardInfoDialog() {
@@ -922,14 +1188,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             "아직 등록된 카드가 없습니다.\n카드 등록 버튼을 눌러 결제 수단을 연결해 주세요."
         }
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("카드 정보")
-            .setMessage(message)
-            .setPositiveButton(if (hasCard) "확인" else "카드 등록") { dialog, _ ->
-                dialog.dismiss()
-                if (!hasCard) launchCardRegistrationOnly()
-            }
-            .show()
+        if (hasCard) {
+            showAaosDialog("카드 정보", message, "확인" to {})
+        } else {
+            showAaosDialog("카드 정보", message, "취소" to {}, "카드 등록" to { launchCardRegistrationOnly() })
+        }
     }
 
     private fun showVehicleInfoDialog() {
@@ -942,11 +1205,7 @@ class MainActivity : AppCompatActivity() {
             if (userName.isNotEmpty()) append("연동 계정: $userName 님\n")
             append(maskVin(vin))
         }
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("차량 정보")
-            .setMessage(message)
-            .setPositiveButton("확인", null)
-            .show()
+        showAaosDialog("차량 정보", message, "확인" to {})
     }
 
     private fun showParkingInfoDialog() {
@@ -956,28 +1215,16 @@ class MainActivity : AppCompatActivity() {
         } else {
             "현재 주차 중인 세션은 없습니다.\n주차장 메뉴에서 제휴 주차장을 선택하면 내비게이션을 시작할 수 있습니다."
         }
-        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("주차 정보")
-            .setMessage(message)
-            .setPositiveButton("확인", null)
-            .show()
+        showAaosDialog("주차 정보", message, "확인" to {})
     }
 
     private fun confirmReset() {
-        val dialog = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
-            .setTitle("⚠ 등록 해제").setMessage("등록된 카드와 차량 정보를 모두 삭제합니다.\n계속하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ ->
-                clearRegistrationState()
-                setIntent(Intent(this, MainActivity::class.java))
-                renderStateFromStorage()
-            }
-            .setNegativeButton("취소", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.BLACK)
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.BLACK)
-        }
-        dialog.show()
+        showAaosDialog(
+            "⚠ 등록 해제",
+            "등록된 카드와 차량 정보를 모두 삭제합니다.\n계속하시겠습니까?",
+            "취소" to {},
+            "삭제" to { clearRegistrationState(); setIntent(Intent(this, MainActivity::class.java)); renderStateFromStorage() }
+        )
     }
 
     private fun roundedBackground(
@@ -1005,16 +1252,8 @@ class MainActivity : AppCompatActivity() {
         val token = ParkingStateManager.getAccessToken(this)
         CarPayInService.stop(this)
         handler.removeCallbacks(timerRunnable)
-        token?.let {
-            Thread {
-                runCatching { ApiManager.unregister(it) }
-                    .onFailure { android.util.Log.w(TAG, "Server unregister failed: ${it.message}") }
-            }.start()
-        }
         ParkingStateManager.clearSession(this)
         TransactionStore.clear(this)
-        approachingLotId = null
-        navigatingLotId = null
     }
 
     private fun hasCompletedCardRegistration(): Boolean {
