@@ -111,7 +111,7 @@ build:ecr:pms:
 
 # ──────────────────────────────────────────────
 # DEPLOY → ECS (carpayin-backend)
-# 서비스 코드 변경 시에만 실행
+# main push 시 항상 실행 (빌드가 스킵돼도 최신 이미지로 재배포)
 # ──────────────────────────────────────────────
 deploy:ecs:carpayin-backend:
   stage: deploy
@@ -130,12 +130,10 @@ deploy:ecs:carpayin-backend:
     - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE_CARPAYIN_BACKEND" --force-new-deployment --region "$AWS_REGION"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      changes:
-        - services/carpayin-backend/**/*
 
 # ──────────────────────────────────────────────
 # DEPLOY → EC2 via SSM (pms, mock-pg)
-# 서비스 코드 또는 docker-compose.yaml 변경 시 실행
+# main push 시 항상 실행 (docker-compose.yaml만 바뀌어도 재배포)
 # GitLab CI/CD 변수 필요: MOCKPMS_EC2_INSTANCE_ID, MOCKPG_EC2_INSTANCE_ID
 # ──────────────────────────────────────────────
 .deploy_ec2:
@@ -199,9 +197,6 @@ deploy:ec2:pms:
     EC2_INSTANCE_ID: $MOCKPMS_EC2_INSTANCE_ID
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      changes:
-        - services/pms/**/*
-        - infra_ec2/mockpms/docker-compose.yaml
 
 deploy:ec2:mock-pg:
   extends: .deploy_ec2
@@ -214,6 +209,3 @@ deploy:ec2:mock-pg:
     EC2_INSTANCE_ID: $MOCKPG_EC2_INSTANCE_ID
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      changes:
-        - services/mock-pg/**/*
-        - infra_ec2/mockpg/docker-compose.yaml
