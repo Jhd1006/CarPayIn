@@ -1026,6 +1026,12 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "입차 웹훅 전송 중...", Toast.LENGTH_SHORT).show()
             Thread {
                 runCatching {
+                    // pre-notify 먼저 등록 (없으면 웹훅이 not_registered 반환하고 알림 안 감)
+                    runCatching {
+                        ApiManager.withAutoRefresh(this) { token ->
+                            ApiManager.sendPreNotification("LOT_GANGNAM_01", token)
+                        }
+                    }
                     ApiManager.triggerDevEntryWebhook("LOT_GANGNAM_01", plate)
                 }.onSuccess {
                     handler.post { Toast.makeText(this, "입차 웹훅 전송 완료 — 알림 대기 중", Toast.LENGTH_SHORT).show() }
