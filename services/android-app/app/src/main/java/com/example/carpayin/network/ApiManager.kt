@@ -8,8 +8,6 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 class SessionExpiredException : Exception("세션이 만료되었습니다. 다시 로그인해 주세요.")
 
@@ -239,31 +237,6 @@ object ApiManager {
     fun triggerDevPaymentNotification(token: String) {
         val response = postJson(URL("$BASE_URL/dev/mock-payment-notification"), "{}", token)
         Log.d(TAG, "Dev 결제 알림: ${response.optString("status", "?")}")
-    }
-
-    fun triggerDevEntryWebhook(lotId: String, plate: String) {
-        val secret = "pms-webhook-secret"
-        val body = """{"pms_session_id":"pms-dev-001","lot_id":"$lotId","plate":"$plate","entry_time":"${java.time.Instant.now()}"}"""
-        val ts = (System.currentTimeMillis() / 1000).toString()
-        val bodyHash = java.security.MessageDigest.getInstance("SHA-256")
-            .digest(body.toByteArray()).joinToString("") { "%02x".format(it) }
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secret.toByteArray(), "HmacSHA256"))
-        val sig = mac.doFinal("$ts.$bodyHash".toByteArray()).joinToString("") { "%02x".format(it) }
-
-        val conn = URL("$BASE_URL/webhook/entry").openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("X-Webhook-Timestamp", ts)
-            conn.setRequestProperty("X-Webhook-Signature", sig)
-            conn.doOutput = true
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 10_000
-            OutputStreamWriter(conn.outputStream).use { it.write(body) }
-            val code = conn.responseCode
-            Log.d(TAG, "Dev 입차 웹훅: HTTP $code")
-        } finally { conn.disconnect() }
     }
 
     private fun postJson(url: URL, body: String, accessToken: String? = null): JSONObject {

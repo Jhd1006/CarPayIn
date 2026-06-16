@@ -1021,26 +1021,6 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        addBtn("Mock 입차 확정") {
-            val plate = ParkingStateManager.getPlateNumber(this) ?: "000가0000"
-            Toast.makeText(this, "입차 웹훅 전송 중...", Toast.LENGTH_SHORT).show()
-            Thread {
-                runCatching {
-                    // pre-notify 먼저 등록 (없으면 웹훅이 not_registered 반환하고 알림 안 감)
-                    runCatching {
-                        ApiManager.withAutoRefresh(this) { token ->
-                            ApiManager.sendPreNotification("LOT_GANGNAM_01", token)
-                        }
-                    }
-                    ApiManager.triggerDevEntryWebhook("LOT_GANGNAM_01", plate)
-                }.onSuccess {
-                    handler.post { Toast.makeText(this, "입차 웹훅 전송 완료 — 알림 대기 중", Toast.LENGTH_SHORT).show() }
-                }.onFailure {
-                    Log.e(TAG, "Dev 입차 웹훅 실패: ${it.message}")
-                    handler.post { Toast.makeText(this, "웹훅 실패: ${it.message}", Toast.LENGTH_LONG).show() }
-                }
-            }.start()
-        }
         addBtn("Mock 결제 완료") {
             Toast.makeText(this, "결제 알림 전송 중...", Toast.LENGTH_SHORT).show()
             Thread {
