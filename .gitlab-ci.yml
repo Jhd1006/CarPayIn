@@ -176,3 +176,78 @@ deploy:ecs:carpayin-backend:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
       when: manual
+
+# ──────────────────────────────────────────────
+# DEPLOY → EC2 via SSM
+# main 브랜치 push 시 자동 실행
+# GitLab CI/CD 변수 필요: MOCKPMS_EC2_INSTANCE_ID, MOCKPG_EC2_INSTANCE_ID
+# ──────────────────────────────────────────────
+.deploy_ec2:
+  stage: deploy
+  tags:
+    - ec2-docker
+  image:
+    name: public.ecr.aws/aws-cli/aws-cli:latest
+    entrypoint: [""]
+  script:
+    - ': "${AWS_REGION:?Set AWS_REGION in GitLab CI/CD variables}"'
+    - ': "${EC2_INSTANCE_ID:?}"'
+    - export ECR_REGISTRY="353488928095.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    - |
+      COMPOSE_B64=$(base64 -w 0 "infra_ec2/${INFRA_DIR}/docker-compose.yaml")
+
+      cat > /tmp/ssm_commands.json << SSMEOF
+      {
+        "commands": [
+          "mkdir -p /home/ubuntu/deploy",
+          "echo ${COMPOSE_B64} | base64 -d | tee /home/ubuntu/deploy/docker-compose.yaml > /dev/null",
+          "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+          "docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:latest",
+          "cd /home/ubuntu/deploy && docker compose up -d --force-recreate"
+        ]
+      }
+      SSMEOF
+
+      COMMAND_ID=$(aws ssm send-command \
+        --instance-ids "${EC2_INSTANCE_ID}" \
+        --document-name "AWS-RunShellScript" \
+        --parameters file:///tmp/ssm_commands.json \
+        --region "${AWS_REGION}" \
+        --query "Command.CommandId" \
+        --output text)
+      echo "SSM Command ID: ${COMMAND_ID}"
+
+      aws ssm wait command-executed \
+        --command-id "${COMMAND_ID}" \
+        --instance-id "${EC2_INSTANCE_ID}" \
+        --region "${AWS_REGION}"
+
+      STATUS=$(aws ssm get-command-invocation \
+        --command-id "${COMMAND_ID}" \
+        --instance-id "${EC2_INSTANCE_ID}" \
+        --region "${AWS_REGION}" \
+        --query "Status" --output text)
+      echo "배포 상태: ${STATUS}"
+      [ "${STATUS}" = "Success" ] || exit 1
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
+      when: manual
+
+deploy:ec2:pms:
+  extends: .deploy_ec2
+  needs:
+    - build:ecr:pms
+  variables:
+    INFRA_DIR: mockpms
+    IMAGE_NAME: pms
+    EC2_INSTANCE_ID: $MOCKPMS_EC2_INSTANCE_ID
+
+deploy:ec2:mock-pg:
+  extends: .deploy_ec2
+  needs:
+    - build:ecr:mock-pg
+  variables:
+    INFRA_DIR: mockpg
+    IMAGE_NAME: mock-pg
+    EC2_INSTANCE_ID: $MOCKPG_EC2_INSTANCE_ID
