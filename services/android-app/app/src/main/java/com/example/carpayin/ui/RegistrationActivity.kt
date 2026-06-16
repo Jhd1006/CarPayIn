@@ -209,16 +209,12 @@ class RegistrationActivity : Activity() {
                 } else {
                     handler.post {
                         pollCount += 1
-                        tvPollingStatus.text = ""
-                        tvSubMessage.text = ""
                         scheduleNextPoll()
                     }
                 }
             } catch (e: Exception) {
                 handler.post {
                     pollCount += 1
-                    tvPollingStatus.text = ""
-                    tvSubMessage.text = ""
                     scheduleNextPoll()
                 }
             }
