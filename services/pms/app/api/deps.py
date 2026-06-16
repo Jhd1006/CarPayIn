@@ -95,6 +95,7 @@ def get_record_payment_complete_service(session: Session = Depends(get_db_sessio
     return RecordPaymentCompleteService(
         payment_request_repository=SqlAlchemyPaymentRequestRepository(session),
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
+        barrier_publisher=barrier_publisher,
     )
 
 
