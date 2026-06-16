@@ -144,7 +144,9 @@ deploy:ecs:carpayin-backend:
           "echo ${COMPOSE_B64} | base64 -d | tee /home/ubuntu/deploy/docker-compose.yaml > /dev/null",
           "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
           "docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:latest",
-          "cd /home/ubuntu/deploy && docker compose up -d --force-recreate"
+          "docker stop $(docker ps -aq) 2>/dev/null || true",
+          "docker rm $(docker ps -aq) 2>/dev/null || true",
+          "cd /home/ubuntu/deploy && docker compose up -d"
         ]
       }
       SSMEOF
