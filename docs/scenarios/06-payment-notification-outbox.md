@@ -56,10 +56,14 @@ MQTT 토픽:
 ```json
 // payment/complete/{car_id} 페이로드
 {
-  "transaction_id": "...",
-  "approval_number": "...",
+  "event_type": "payment.completed",
+  "tx_id": "...",
+  "session_id": "...",
+  "car_id": "...",
   "lot_id": "...",
-  "amount": 6000
+  "amount": 6000,
+  "currency": "KRW",
+  "approval_no": "..."
 }
 ```
 
