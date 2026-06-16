@@ -9,6 +9,7 @@ variables:
 
 # ──────────────────────────────────────────────
 # TEST
+# 모든 브랜치 push + MR 시 실행
 # ──────────────────────────────────────────────
 .test_service:
   stage: test
@@ -21,7 +22,6 @@ variables:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
-    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
 
 test:carpayin-backend:
   extends: .test_service
@@ -42,63 +42,8 @@ test:pms:
     SERVICE_NAME: pms
 
 # ──────────────────────────────────────────────
-# BUILD → GitLab Container Registry
-# main 브랜치 push 또는 버전 태그(x.y.z)에 실행
-# ──────────────────────────────────────────────
-.build_registry_service:
-  stage: build
-  image: docker:27.5.1
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-  script:
-    - IMAGE="$CI_REGISTRY_IMAGE/$IMAGE_NAME"
-    - |
-      if [ -n "$CI_COMMIT_TAG" ]; then
-        TAG="$CI_COMMIT_TAG"
-      elif [ "$CI_COMMIT_BRANCH" = "main" ]; then
-        TAG="0.0.$CI_PIPELINE_IID"
-      else
-        TAG="$CI_COMMIT_REF_SLUG"
-      fi
-    - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:$TAG" -t "$IMAGE:latest" "services/$SERVICE_NAME"
-    - docker push "$IMAGE:$TAG"
-    - docker push "$IMAGE:latest"
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
-
-build:registry:carpayin-backend:
-  extends: .build_registry_service
-  needs:
-    - test:carpayin-backend
-  variables:
-    SERVICE_NAME: carpayin-backend
-    IMAGE_NAME: carpayin-backend
-
-build:registry:mock-pg:
-  extends: .build_registry_service
-  needs:
-    - test:mock-pg
-  variables:
-    SERVICE_NAME: mock-pg
-    IMAGE_NAME: mock-pg
-
-build:registry:pms:
-  extends: .build_registry_service
-  needs:
-    - test:pms
-  variables:
-    SERVICE_NAME: pms
-    IMAGE_NAME: pms
-
-# ──────────────────────────────────────────────
-# BUILD → AWS ECR (버전 태그 + EC2 러너 있을 때만)
+# BUILD → AWS ECR
+# main 머지 시에만 실행
 # ──────────────────────────────────────────────
 .build_ecr_service:
   stage: build
@@ -124,18 +69,11 @@ build:registry:pms:
     - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
     - aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" > /dev/null
   script:
-    - |
-      if [ -n "$CI_COMMIT_TAG" ]; then
-        VERSION_TAG="$CI_COMMIT_TAG"
-      else
-        VERSION_TAG="0.0.$CI_PIPELINE_IID"
-      fi
-    - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:$VERSION_TAG" -t "$IMAGE:latest" "services/$SERVICE_NAME"
-    - docker push "$IMAGE:$VERSION_TAG"
+    - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:0.0.$CI_PIPELINE_IID" -t "$IMAGE:latest" "services/$SERVICE_NAME"
+    - docker push "$IMAGE:0.0.$CI_PIPELINE_IID"
     - docker push "$IMAGE:latest"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
 
 build:ecr:carpayin-backend:
   extends: .build_ecr_service
@@ -162,7 +100,7 @@ build:ecr:pms:
     IMAGE_NAME: pms
 
 # ──────────────────────────────────────────────
-# DEPLOY → ECS (버전 태그 + 수동 승인)
+# DEPLOY → ECS (carpayin-backend)
 # ──────────────────────────────────────────────
 deploy:ecs:carpayin-backend:
   stage: deploy
@@ -180,11 +118,9 @@ deploy:ecs:carpayin-backend:
     - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE_CARPAYIN_BACKEND" --force-new-deployment --region "$AWS_REGION"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
 
 # ──────────────────────────────────────────────
-# DEPLOY → EC2 via SSM
-# main 브랜치 push 시 자동 실행
+# DEPLOY → EC2 via SSM (pms, mock-pg)
 # GitLab CI/CD 변수 필요: MOCKPMS_EC2_INSTANCE_ID, MOCKPG_EC2_INSTANCE_ID
 # ──────────────────────────────────────────────
 .deploy_ec2:
@@ -236,7 +172,6 @@ deploy:ecs:carpayin-backend:
       [ "${STATUS}" = "Success" ] || exit 1
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
 
 deploy:ec2:pms:
   extends: .deploy_ec2
