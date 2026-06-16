@@ -10,6 +10,7 @@ services:
       PMS_WEBHOOK_TOKEN: pms-webhook-token
       CARPAYIN_BACKEND_BASE_URL: http://internal-hd-internal-alb-998881429.ap-northeast-2.elb.amazonaws.com:8000
       PMS_FEE_PER_30_MINUTES: "500"
+      REDIS_URL: redis://mockpms-redis.vkjvvb.ng.0001.apn2.cache.amazonaws.com:6379/0
       BARRIER_ENABLED: "true"
       BARRIER_ENTRY_URL: http://112.218.95.58:40026/open
       BARRIER_EXIT_URL: http://112.218.95.58:40027/open
