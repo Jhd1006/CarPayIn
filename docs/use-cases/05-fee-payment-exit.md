@@ -1,5 +1,13 @@
 # 05. Fee / Payment / Exit Use Cases
 
+## 개발 테스트 단축키
+
+`session_id = "sess_dev_001"`을 사용하면 실제 주차 세션 없이도 요금 조회(`GET /fee/sess_dev_001`)와 결제(`POST /payment`)를 테스트할 수 있다. 인증 검증과 DB 조회를 건너뛰고 하드코딩된 응답을 반환한다. 운영 환경에서는 사용하지 않는다.
+
+## 무료 주차 처리
+
+`amount == 0`이면 PG 호출 없이 즉시 결제 성공으로 처리한다. `approval_no = "FREE"`로 기록된다.
+
 ## 알림 실패 재시도
 
 결제 성공과 알림 발송은 분리한다. 알림 실패가 결제 롤백을 유발하지 않는다.
@@ -35,6 +43,7 @@ API:
 - `session_id`
 - `lot_id`
 - `amount`
+- `duration` (분 단위 주차 시간)
 - `currency`
 - `entry_time`
 - `status=active`
@@ -120,7 +129,7 @@ API:
 - transaction이 없으면 `transactions`에 pending row를 생성한다.
 - Mock PG에 billing payment를 요청한다.
 - PG 성공이면 transaction을 success로 업데이트한다.
-- parking session을 completed로 업데이트한다.
+- parking session을 completed로 업데이트한다. (CarPayIn DB 기준)
 - PMS에 payment complete를 통보한다.
 - 앱 알림용 message를 발행한다.
 - 성공 결과를 반환한다.
