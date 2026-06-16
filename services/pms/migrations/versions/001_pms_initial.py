@@ -30,7 +30,7 @@ def upgrade():
         sa.Column('status', sa.Text(), server_default='active', nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-        sa.CheckConstraint("status IN ('active', 'exited', 'cancelled')", name='ck_pms_parking_sessions_status'),
+        sa.CheckConstraint("status IN ('active', 'paid', 'exited', 'cancelled')", name='ck_pms_parking_sessions_status'),
         sa.PrimaryKeyConstraint('pms_session_id')
     )
     op.create_index('idx_pms_parking_sessions_plate', 'parking_sessions', ['plate'])
