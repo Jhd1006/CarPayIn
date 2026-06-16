@@ -124,13 +124,18 @@ build:registry:pms:
     - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
     - aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" > /dev/null
   script:
-    - export VERSION_TAG="$CI_COMMIT_TAG"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        VERSION_TAG="$CI_COMMIT_TAG"
+      else
+        VERSION_TAG="0.0.$CI_PIPELINE_IID"
+      fi
     - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:$VERSION_TAG" -t "$IMAGE:latest" "services/$SERVICE_NAME"
     - docker push "$IMAGE:$VERSION_TAG"
     - docker push "$IMAGE:latest"
   rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
-      when: on_success
 
 build:ecr:carpayin-backend:
   extends: .build_ecr_service
@@ -174,8 +179,8 @@ deploy:ecs:carpayin-backend:
     - ': "${ECS_SERVICE_CARPAYIN_BACKEND:?Set ECS_SERVICE_CARPAYIN_BACKEND in GitLab CI/CD variables}"'
     - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE_CARPAYIN_BACKEND" --force-new-deployment --region "$AWS_REGION"
   rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
-      when: manual
 
 # ──────────────────────────────────────────────
 # DEPLOY → EC2 via SSM
@@ -232,7 +237,6 @@ deploy:ecs:carpayin-backend:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/'
-      when: manual
 
 deploy:ec2:pms:
   extends: .deploy_ec2
