@@ -43,7 +43,7 @@ test:pms:
 
 # ──────────────────────────────────────────────
 # BUILD → AWS ECR
-# main 머지 시에만 실행
+# 서비스 코드가 변경된 경우에만 실행
 # ──────────────────────────────────────────────
 .build_ecr_service:
   stage: build
@@ -72,8 +72,6 @@ test:pms:
     - docker build --pull -f "services/$SERVICE_NAME/Dockerfile" -t "$IMAGE:0.0.$CI_PIPELINE_IID" -t "$IMAGE:latest" "services/$SERVICE_NAME"
     - docker push "$IMAGE:0.0.$CI_PIPELINE_IID"
     - docker push "$IMAGE:latest"
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
 
 build:ecr:carpayin-backend:
   extends: .build_ecr_service
@@ -82,6 +80,10 @@ build:ecr:carpayin-backend:
   variables:
     SERVICE_NAME: carpayin-backend
     IMAGE_NAME: carpayin-backend
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - services/carpayin-backend/**/*
 
 build:ecr:mock-pg:
   extends: .build_ecr_service
@@ -90,6 +92,10 @@ build:ecr:mock-pg:
   variables:
     SERVICE_NAME: mock-pg
     IMAGE_NAME: mock-pg
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - services/mock-pg/**/*
 
 build:ecr:pms:
   extends: .build_ecr_service
@@ -98,9 +104,14 @@ build:ecr:pms:
   variables:
     SERVICE_NAME: pms
     IMAGE_NAME: pms
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - services/pms/**/*
 
 # ──────────────────────────────────────────────
 # DEPLOY → ECS (carpayin-backend)
+# 서비스 코드 변경 시에만 실행
 # ──────────────────────────────────────────────
 deploy:ecs:carpayin-backend:
   stage: deploy
@@ -110,7 +121,8 @@ deploy:ecs:carpayin-backend:
     name: public.ecr.aws/aws-cli/aws-cli:latest
     entrypoint: [""]
   needs:
-    - build:ecr:carpayin-backend
+    - job: build:ecr:carpayin-backend
+      optional: true
   script:
     - ': "${AWS_REGION:?Set AWS_REGION in GitLab CI/CD variables}"'
     - ': "${ECS_CLUSTER:?Set ECS_CLUSTER in GitLab CI/CD variables}"'
@@ -118,9 +130,12 @@ deploy:ecs:carpayin-backend:
     - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE_CARPAYIN_BACKEND" --force-new-deployment --region "$AWS_REGION"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - services/carpayin-backend/**/*
 
 # ──────────────────────────────────────────────
 # DEPLOY → EC2 via SSM (pms, mock-pg)
+# 서비스 코드 또는 docker-compose.yaml 변경 시 실행
 # GitLab CI/CD 변수 필요: MOCKPMS_EC2_INSTANCE_ID, MOCKPG_EC2_INSTANCE_ID
 # ──────────────────────────────────────────────
 .deploy_ec2:
@@ -172,23 +187,33 @@ deploy:ecs:carpayin-backend:
         --query "Status" --output text)
       echo "배포 상태: ${STATUS}"
       [ "${STATUS}" = "Success" ] || exit 1
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
 
 deploy:ec2:pms:
   extends: .deploy_ec2
   needs:
-    - build:ecr:pms
+    - job: build:ecr:pms
+      optional: true
   variables:
     INFRA_DIR: mockpms
     IMAGE_NAME: pms
     EC2_INSTANCE_ID: $MOCKPMS_EC2_INSTANCE_ID
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - services/pms/**/*
+        - infra_ec2/mockpms/docker-compose.yaml
 
 deploy:ec2:mock-pg:
   extends: .deploy_ec2
   needs:
-    - build:ecr:mock-pg
+    - job: build:ecr:mock-pg
+      optional: true
   variables:
     INFRA_DIR: mockpg
     IMAGE_NAME: mock-pg
     EC2_INSTANCE_ID: $MOCKPG_EC2_INSTANCE_ID
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - services/mock-pg/**/*
+        - infra_ec2/mockpg/docker-compose.yaml
