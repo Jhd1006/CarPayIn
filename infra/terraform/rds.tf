@@ -10,6 +10,7 @@ resource "aws_db_instance" "carpayin_postgresql" {
   max_allocated_storage       = 1000
   performance_insights_enabled = true
   skip_final_snapshot         = true
+  publicly_accessible         = true
 
   lifecycle {
     ignore_changes = [password]
