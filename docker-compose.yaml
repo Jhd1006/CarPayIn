@@ -177,7 +177,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-local}
       MOCK_PG_DATABASE_URL: ${MOCK_PG_DATABASE_URL:-postgresql+psycopg://dev_user:dev_pass@mock-pg-postgres:5432/mock_pg_dev}
-      MOCK_CARD_BASE_URL: ${MOCK_CARD_BASE_URL:-mock-card:8000}
+      MOCK_CARD_BASE_URL: ${MOCK_CARD_BASE_URL:-http://mock-card:8000}
       CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:-http://carpayin-backend:8000}
       PG_PUBLIC_BASE_URL: ${PG_PUBLIC_BASE_URL:-http://10.0.2.2:8002}
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:-mock-pg-webhook-secret}
