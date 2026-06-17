@@ -44,6 +44,9 @@ class HttpxPgClient:
             url = data.get("webview_url") or data.get("pg_url")
             if not url:
                 raise RuntimeError("missing_webview_url")
+            # Mock-PG가 internal URL 기준으로 URL을 생성하므로 public URL로 교체
+            if self._public_base_url != self._base_url and url.startswith(self._base_url):
+                url = self._public_base_url + url[len(self._base_url):]
             return url
         except Exception as e:
             raise RuntimeError(f"pg_url_creation_failed: {e}") from e
