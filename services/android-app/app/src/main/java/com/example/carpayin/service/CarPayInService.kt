@@ -73,8 +73,9 @@ class CarPayInService : Service() {
 
     private val mqttWatchRunnable = object : Runnable {
         override fun run() {
-            if (!MqttManager.isConnected() && carId.isNotEmpty()) {
-                Log.d(TAG, "MQTT 재연결 시도...")
+            // SDK 자동 재연결이 완전히 종료된 경우에만 새 인스턴스 생성
+            if (!MqttManager.isAlive() && carId.isNotEmpty()) {
+                Log.d(TAG, "MQTT 인스턴스 없음 → 재생성")
                 Thread {
                     MqttManager.connect(applicationContext, carId)
                     handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
@@ -176,16 +177,8 @@ class CarPayInService : Service() {
 
     private fun setupCallbacks() {
         MqttManager.onConnectionLost = {
+            // SDK 내부 재연결에 맡김, UI 상태만 업데이트
             handler.post { onConnectionChanged?.invoke(false) }
-            handler.postDelayed({
-                if (!MqttManager.isConnected() && carId.isNotEmpty()) {
-                    Log.d(TAG, "MQTT 끊김 감지 → 즉시 재연결 보강")
-                    Thread {
-                        MqttManager.connect(applicationContext, carId)
-                        handler.post { onConnectionChanged?.invoke(MqttManager.isConnected()) }
-                    }.start()
-                }
-            }, 2_000)
         }
 
         VehicleDataManager.onIgnitionChanged = { ignitionOn ->
