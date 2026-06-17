@@ -22,6 +22,9 @@ object MqttManager {
     var onConnectionLost: ((cause: Throwable?) -> Unit)? = null
 
     fun connect(context: Context, carId: String) {
+        if (connected) return
+        if (mqttManager != null) return  // SDK 내부 reconnect 진행 중
+
         try {
             val credentialsProvider = CognitoCachingCredentialsProvider(
                 context,
@@ -29,9 +32,11 @@ object MqttManager {
                 Regions.AP_NORTHEAST_2
             )
 
-            val clientId = "carpayin-${carId.takeLast(8)}-${System.currentTimeMillis()}"
+            val clientId = "carpayin-${carId.takeLast(8)}"
             mqttManager = AWSIotMqttManager(clientId, IOT_ENDPOINT).apply {
                 keepAlive = 60
+                isAutoReconnect = true
+                maxAutoReconnectAttempts = -1  // 무제한 재시도
             }
 
             mqttManager!!.connect(credentialsProvider) { status, throwable ->
@@ -42,15 +47,20 @@ object MqttManager {
                         subscribeTopics(carId)
                     }
                     AWSIotMqttClientStatus.ConnectionLost -> {
-                        Log.w(TAG, "IoT Core 연결 끊김")
+                        Log.w(TAG, "IoT Core 연결 끊김 - SDK 자동 재연결 대기")
                         connected = false
                         onConnectionLost?.invoke(throwable)
+                    }
+                    AWSIotMqttClientStatus.Reconnecting -> {
+                        Log.d(TAG, "IoT Core 재연결 중...")
+                        connected = false
                     }
                     else -> Log.d(TAG, "IoT Core 상태: $status")
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "IoT Core 연결 실패: ${e.message}")
+            mqttManager = null
         }
     }
 
@@ -79,6 +89,7 @@ object MqttManager {
     }
 
     fun isConnected(): Boolean = connected
+    fun isAlive(): Boolean = mqttManager != null  // SDK 인스턴스 존재 여부 (재연결 중 포함)
 
     fun disconnect() {
         try {
