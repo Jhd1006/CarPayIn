@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
+from app.api.routes.dev import router as dev_router
 from app.api.routes.pg import router as pg_router
 
 
@@ -27,4 +28,5 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 def health_check() -> dict:
     return {"status": "ok"}
 
+app.include_router(dev_router)
 app.include_router(pg_router)
