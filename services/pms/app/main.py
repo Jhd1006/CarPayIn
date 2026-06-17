@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
@@ -43,7 +45,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 
 @app.get("/health")
 def health_check() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "commit": os.getenv("GIT_COMMIT", "unknown")}
     
 app.include_router(dev_router)
 app.include_router(pms_router)
