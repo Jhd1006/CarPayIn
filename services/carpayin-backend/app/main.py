@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends
@@ -45,7 +46,7 @@ app = FastAPI(
 
 @app.get("/health")
 def health_check() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "commit": os.getenv("GIT_COMMIT", "unknown")}
 
 
 @app.exception_handler(ValueError)
