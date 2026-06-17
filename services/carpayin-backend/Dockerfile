@@ -1,7 +1,9 @@
 FROM python:3.12-slim
 
+ARG GIT_COMMIT=unknown
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    GIT_COMMIT=$GIT_COMMIT
 
 RUN useradd --create-home appuser
 
