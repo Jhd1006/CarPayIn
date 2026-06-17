@@ -193,4 +193,4 @@ def get_parking_session(
     if not row:
         raise HTTPException(status_code=404, detail="active session not found")
 
-    return ParkingSessionResponse(session_id=row.session_id)
+    return ParkingSessionResponse(session_id=str(row.session_id))
