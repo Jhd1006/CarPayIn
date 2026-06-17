@@ -1,5 +1,3 @@
-import os
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -12,9 +10,6 @@ router = APIRouter(tags=["Dev"])
 
 @router.post("/dev/reset")
 def dev_reset(session: Session = Depends(get_db_session)) -> dict:
-    if os.getenv("APP_ENV", "local").strip().lower() in {"prod", "production"}:
-        return {"status": "forbidden", "message": "not allowed in production"}
-
     session.execute(text("""
         TRUNCATE TABLE
             payment_requests,
