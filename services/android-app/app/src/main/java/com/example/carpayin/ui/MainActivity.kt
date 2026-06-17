@@ -620,15 +620,16 @@ class MainActivity : AppCompatActivity() {
             "${lot.name}\n\n목적지로 경로 안내를 시작합니다.\n도착 전 차량 정보가 주차장에 자동으로 등록됩니다.",
             "취소" to {},
             "시작" to {
+                // pre-notify는 내비 성공 여부와 무관하게 즉시 전송
+                val token = ParkingStateManager.getAccessToken(this)
+                if (token != null) {
+                    Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
+                }
                 val navStarted = NaviHelper.setDestination(this, lot.lat, lot.lng, lot.name, lot.id)
                 if (navStarted) {
                     handler.postDelayed({
                         Thread { NaviHelper.reacquirePanelControl(applicationContext) }.start()
                     }, 1_500)
-                    val token = ParkingStateManager.getAccessToken(this)
-                    if (token != null) {
-                        Thread { runCatching { ApiManager.sendPreNotification(lot.id, token) } }.start()
-                    }
                 } else {
                     Toast.makeText(this, "내비게이션을 시작할 수 없습니다", Toast.LENGTH_SHORT).show()
                 }
