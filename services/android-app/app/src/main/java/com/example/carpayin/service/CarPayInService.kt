@@ -196,6 +196,9 @@ class CarPayInService : Service() {
             handler.post {
                 onParkingConfirmed?.invoke(lotId, sessionId)
                 updateServiceNotif("🅿 주차 중 — $lotId")
+                startActivity(Intent(applicationContext, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                })
             }
             showEventNotif(NOTIF_PARKING, "🅿 입차 확인", "$lotId 에 입차되었습니다")
             handler.postDelayed({ pollFee() }, 1_000)
