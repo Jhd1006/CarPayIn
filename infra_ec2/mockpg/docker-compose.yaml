@@ -6,8 +6,8 @@ services:
       - "8000:8000"
     environment:
       APP_ENV: production
-      MOCK_PG_DATABASE_URL: postgresql+psycopg://mockpg:mockpgdb1234@10.1.130.39:5432/mockpgdb
-      PG_WEBHOOK_SECRET: mock-pg-webhook-secret
+      MOCK_PG_DATABASE_URL: ${MOCK_PG_DATABASE_URL}
+      PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET}
       CARPAYIN_BACKEND_BASE_URL: http://internal-hd-internal-alb-998881429.ap-northeast-2.elb.amazonaws.com:8000
       MOCK_CARD_BASE_URL: http://10.1.129.32:8003
       MOCK_PG_ALLOW_FAKE_CARD_ON_VERIFY_FAILURE: "true"

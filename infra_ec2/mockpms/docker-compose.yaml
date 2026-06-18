@@ -6,12 +6,12 @@ services:
       - "8000:8000"
     environment:
       APP_ENV: production
-      PMS_DATABASE_URL: postgresql+psycopg://mockpms:mockpmsdb1234@10.2.131.54:5432/mockpmsdb
-      PMS_WEBHOOK_TOKEN: pms-webhook-token
+      PMS_DATABASE_URL: ${PMS_DATABASE_URL}
+      PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN}
       CARPAYIN_BACKEND_BASE_URL: http://internal-hd-internal-alb-998881429.ap-northeast-2.elb.amazonaws.com:8000
       PMS_FEE_PER_30_MINUTES: "500"
       PMS_REDIS_URL: redis://mockpms-redis.vkjvvb.ng.0001.apn2.cache.amazonaws.com:6379/0
       BARRIER_ENABLED: "true"
-      BARRIER_ENTRY_URL: http://112.218.95.58:40026/open
-      BARRIER_EXIT_URL: http://112.218.95.58:40027/open
+      BARRIER_ENTRY_URL: ${BARRIER_ENTRY_URL}
+      BARRIER_EXIT_URL: ${BARRIER_EXIT_URL}
     restart: unless-stopped

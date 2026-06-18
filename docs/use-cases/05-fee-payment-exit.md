@@ -6,7 +6,10 @@
 
 ## 무료 주차 처리
 
-`amount == 0`이면 PG 호출 없이 즉시 결제 성공으로 처리한다. `approval_no = "FREE"`로 기록된다.
+`amount == 0`이면 PG 호출과 billing key 검증 없이 결제 성공으로 처리한다.
+유료 결제와 동일하게 `transactions`와 `payment_notification_outbox`에 이력을
+남기며, `billing_key = "FREE"`, `approval_no = "FREE"`로 기록한다.
+동일 요청은 idempotency key로 기존 transaction을 반환한다.
 
 ## 알림 실패 재시도
 
@@ -15,7 +18,8 @@
 처리 흐름:
 
 - PG 결제가 성공하면 `transactions`를 `success`로 갱신한다.
-- AWS SQS로 결제 완료 이벤트를 발행하고, Lambda → AWS IoT Core 경로로 앱에 알림을 Push한다 (로컬 개발 시에는 paho-mqtt로 Mosquitto에 직접 발행한다).
+- 결제 성공 transaction과 함께 `payment_notification_outbox` pending 이벤트를 저장한다.
+- `PaymentOutboxWorker`가 이벤트를 claim해 AWS SQS로 발행하고, Lambda → AWS IoT Core 경로로 앱에 알림을 Push한다 (로컬 개발 시에는 paho-mqtt로 Mosquitto에 직접 발행한다).
 - PMS에 `POST /payment/complete`로 결제 완료를 통보한다.
 - PMS 통보가 실패하면 `pms_payment_retry:{tx_id}` Redis 키로 저장한다 (TTL 7일).
 - `NotifyRetryWorker`가 60초마다 실패 키를 순회해 PMS 통보를 재시도한다.
@@ -148,7 +152,7 @@ DB 변경:
 
 - Mock PG billing payment API
 - PMS payment complete API
-- SQS publish → Lambda → AWS IoT Core (로컬 개발 시: paho-mqtt → Mosquitto)
+- payment outbox → SQS publish → Lambda → AWS IoT Core (로컬 개발 시: paho-mqtt → Mosquitto)
 
 실패 케이스:
 
