@@ -21,6 +21,7 @@ sequenceDiagram
     LPR->>PMS: Detect plate at entry gate
     PMS->>PMS: Open entry barrier (all cars)
     PMS->>PMSDB: INSERT parking_sessions (all cars)
+    PMS->>PmsRedis: Save parking_session:{lot_id}:{plate} status=active TTL 72h
     PMS->>PmsRedis: Check pre_reg:{lot_id}:{plate}
     PMS->>PmsRedis: Delete pre_reg key (consume)
     PMS->>PMS: Sign raw body with PMS_WEBHOOK_SECRET
