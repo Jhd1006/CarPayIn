@@ -39,3 +39,17 @@ def seed_billing_key(
     session.commit()
     return {"status": "ok", "billing_key": billing_key}
 
+@router.post("/dev/seed-card-token")
+def seed_card_token(
+    card_token: str,
+) -> dict:
+    import os
+    import httpx
+    mock_card_base_url = os.getenv("MOCK_CARD_BASE_URL", "").rstrip("/")
+    resp = httpx.post(
+        f"{mock_card_base_url}/dev/seed-card-token",
+        params={"card_token": card_token},
+    )
+    if resp.status_code != 200:
+        return {"status": "failed", "detail": resp.text}
+    return {"status": "ok", "card_token": card_token}
