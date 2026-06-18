@@ -19,6 +19,7 @@ import com.example.carpayin.network.ApiManager
 import com.example.carpayin.network.MqttManager
 import com.example.carpayin.ui.MainActivity
 import com.example.carpayin.vehicle.GeofenceManager
+import com.example.carpayin.vehicle.NaviHelper
 import com.example.carpayin.vehicle.VehicleDataManager
 
 /**
@@ -191,6 +192,7 @@ class CarPayInService : Service() {
         MqttManager.onParkingConfirmed = { lotId, sessionId ->
             Log.d(TAG, "입차 확정 수신: $lotId / $sessionId")
             ParkingStateManager.saveParkingState(this, true, lotId, sessionId)
+            NaviHelper.cancelNavigation()
             handler.post {
                 onParkingConfirmed?.invoke(lotId, sessionId)
                 updateServiceNotif("🅿 주차 중 — $lotId")
