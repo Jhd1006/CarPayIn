@@ -57,14 +57,19 @@ android {
         create("local") {
             dimension = "env"
             buildConfigField("String", "CARPAYIN_BACKEND_BASE_URL", "\"http://10.0.2.2:8000\"")
-            buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"https://pretext-armless-wieldable.ngrok-free.dev\"")
+            buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"${localConfig("CARPAYIN_QR_BASE_URL", "http://10.0.2.2:8000")}\"")
             buildConfigField("Boolean", "CARPAYIN_EMULATOR_LOCALHOST_REWRITE", "true")
+            // 로컬에서는 IoT Core 미사용 — MqttManager가 connected=false 상태 유지
+            buildConfigField("String", "IOT_ENDPOINT", "\"\"")
+            buildConfigField("String", "COGNITO_IDENTITY_POOL_ID", "\"\"")
         }
         create("aws") {
             dimension = "env"
-            buildConfigField("String", "CARPAYIN_BACKEND_BASE_URL", "\"http://hd-public-alb-204074971.ap-northeast-2.elb.amazonaws.com\"")
-            buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"http://hd-public-alb-204074971.ap-northeast-2.elb.amazonaws.com\"")
+            buildConfigField("String", "CARPAYIN_BACKEND_BASE_URL", "\"${localConfig("CARPAYIN_BACKEND_BASE_URL", "")}\"")
+            buildConfigField("String", "CARPAYIN_QR_BASE_URL", "\"${localConfig("CARPAYIN_QR_BASE_URL", "")}\"")
             buildConfigField("Boolean", "CARPAYIN_EMULATOR_LOCALHOST_REWRITE", "false")
+            buildConfigField("String", "IOT_ENDPOINT", "\"${localConfig("IOT_ENDPOINT", "")}\"")
+            buildConfigField("String", "COGNITO_IDENTITY_POOL_ID", "\"${localConfig("COGNITO_IDENTITY_POOL_ID", "")}\"")
         }
     }
 

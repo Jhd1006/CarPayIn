@@ -2,16 +2,20 @@ sequenceDiagram
     participant User as User
     participant App as AAOS App
     participant Backend as Car Pay-in Backend
-    participant Redis as Redis
+    participant Redis as carpayin-redis
     participant DB as Car Pay-in DB
     participant PMS as Parking PMS
+    participant PmsRedis as pms-redis
+    participant PMSDB as PMS DB
     participant PG as Mock PG
     participant PGDB as Mock PG DB
     participant Card as Mock Card
     participant CardDB as Mock Card DB
-    participant SQS as Amazon SQS
-    participant Lambda as Payment Notification Lambda
+    participant SQS as AWS SQS
+    participant Lambda as AWS Lambda
     participant IoT as AWS IoT Core
+    participant LPR as LPR Camera
+    participant Barrier as Barrier Controller
 
     App->>App: Detect ignition ON and parked=true
     App->>Backend: GET /fee/{session_id}
@@ -31,7 +35,7 @@ sequenceDiagram
     Backend->>Redis: Validate parking_fee_quote:{session_id}
     Backend->>DB: Read parking_sessions
     Backend->>DB: Read vehicle_billing_keys
-    Backend->>DB: INSERT transactions with status=pending
+    Backend->>DB: INSERT transactions status=pending
 
     Backend->>PG: Request billing payment
     PG->>PGDB: Check idempotency_key
@@ -41,12 +45,35 @@ sequenceDiagram
     PG->>PGDB: INSERT or UPDATE transactions
     PG-->>Backend: Return pg_tx_id and approval_no
 
-    Backend->>DB: UPDATE transactions with status=success
+    Backend->>DB: UPDATE transactions status=success
     Backend->>DB: INSERT payment_notification_outbox status=pending
-    Backend->>DB: UPDATE parking_sessions with status=completed
-    Backend->>PMS: Notify paid
-    Backend-->>App: Return payment complete and parked=false
-    Backend->>SQS: Send payment.completed from outbox
-    SQS->>Lambda: Trigger payment notification handler
-    Lambda->>IoT: Publish payment.completed
-    IoT-->>App: Payment completed notification
+    Backend->>DB: UPDATE parking_sessions status=completed
+    Backend->>PMS: POST /payment/complete
+    PMS->>PMSDB: UPDATE parking_sessions status=paid
+    PMS->>PmsRedis: UPDATE parking_session:{lot_id}:{plate} status=paid
+    PMS-->>Backend: Return success
+    Backend-->>App: Return payment complete
+    App->>App: parked=false
+    Backend->>SQS: Publish payment.completed event
+    SQS->>Lambda: Trigger notification Lambda
+    Lambda->>IoT: Publish to car/{car_id}/payment topic
+    IoT-->>App: Payment notification
+
+    Note over LPR,PMSDB: Car drives to exit gate
+    LPR->>PMS: Detect plate at exit gate
+    PMS->>PmsRedis: Read parking_session:{lot_id}:{plate}
+    alt status=paid (Redis hit)
+        PMS->>Barrier: HTTP POST /open (exit)
+        PMS->>PmsRedis: Delete parking_session key
+        PMS->>PMSDB: UPDATE parking_sessions status=exited
+    else Redis miss (restart/TTL expired)
+        PMS->>PMSDB: Read paid session by lot_id and plate
+        alt paid session found
+            PMS->>Barrier: HTTP POST /open (exit)
+            PMS->>PMSDB: UPDATE parking_sessions status=exited
+        else no paid session
+            Note over PMS: Barrier stays closed (not paid)
+        end
+    else status=active (not paid)
+        Note over PMS: Barrier stays closed (not paid)
+    end

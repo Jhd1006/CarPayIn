@@ -25,8 +25,8 @@ PG_PUBLIC_BASE_URL=https://<mock-pg-alb-or-domain>
 PMS_BASE_URL=https://<pms-alb-or-domain>
 
 AWS_REGION=ap-northeast-2
-PAYMENT_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
-PAYMENT_NOTIFICATION_PUBLISH_ENABLED=true
+SQS_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
+SQS_NOTIFICATION_PUBLISH_ENABLED=true
 
 APP_TOKEN_SECRET=<long-random-secret>
 APP_REFRESH_TOKEN_HASH_SECRET=<long-random-secret-optional>
@@ -54,7 +54,7 @@ SQS 메시지를 받아 AWS IoT Core topic으로 publish하는 Lambda에 넣을 
 APP_ENV=aws
 AWS_REGION=ap-northeast-2
 AWS_IOT_ENDPOINT=<aws-iot-data-endpoint>
-PAYMENT_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
+SQS_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
 ```
 
 ## mock-pg
@@ -88,24 +88,24 @@ PMS_FEE_PER_30_MINUTES=500
 
 ## Android
 
-Android 앱은 `services/android-app/local.properties` 또는 Gradle property/env로 값을 주입할 수 있다.
+Android 앱은 `services/android-app/local.properties`에 값을 넣거나 Gradle property/환경변수로 주입할 수 있다. `build.gradle.kts`의 `localConfig()` 함수가 순서대로 local.properties → Gradle property → 환경변수를 탐색한다.
 
-로컬 에뮬레이터:
+로컬 에뮬레이터 (`local` flavor):
 
 ```text
-CARPAYIN_BACKEND_BASE_URL=http://10.0.2.2:8000
+# services/android-app/local.properties
 CARPAYIN_QR_BASE_URL=https://<ngrok-or-public-backend-url>
-CARPAYIN_MQTT_BROKER_URL=tcp://10.0.2.2:1883
-CARPAYIN_EMULATOR_LOCALHOST_REWRITE=true
+# IOT_ENDPOINT, COGNITO_IDENTITY_POOL_ID 미설정 시 IoT Core 연결 생략
 ```
 
-AWS/실기기:
+AWS/실기기 (`aws` flavor):
 
 ```text
+# services/android-app/local.properties (빌드 환경에만 존재, 커밋하지 않음)
 CARPAYIN_BACKEND_BASE_URL=https://<carpayin-backend-alb-or-domain>
 CARPAYIN_QR_BASE_URL=https://<carpayin-backend-alb-or-domain>
-CARPAYIN_MQTT_BROKER_URL=ssl://<aws-iot-endpoint>:8883
-CARPAYIN_EMULATOR_LOCALHOST_REWRITE=false
+IOT_ENDPOINT=<aws-iot-data-endpoint>.iot.ap-northeast-2.amazonaws.com
+COGNITO_IDENTITY_POOL_ID=ap-northeast-2:<cognito-identity-pool-id>
 ```
 
 ## Local Docker Compose
