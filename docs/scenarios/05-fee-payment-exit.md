@@ -13,13 +13,20 @@
 - 사용자: 차량 화면에서 요금을 확인하고 결제를 승인한다.
 - AAOS App: 시동 ON과 `parked=true` 상태를 감지하고 요금 조회/결제 요청을 보낸다.
 - Car Pay-in Backend: 요금 quote를 검증하고, 결제 이력을 만들고, PG와 PMS를 호출한다.
-- Redis: 짧은 시간 동안 유효한 요금 quote를 저장한다.
+- carpayin-redis: 짧은 시간 동안 유효한 요금 quote를 저장한다.
 - Car Pay-in DB: 주차 세션, 차량별 billing key, 결제 이력을 저장한다.
-- Parking PMS: 현재 요금을 계산하고, 결제 완료 통보를 받는다.
+- Parking PMS: 현재 요금을 계산하고, 결제 완료 통보를 받아 출차 판단을 처리한다.
+- pms-redis: 출차 판단을 위한 실시간 주차 상태(`parking_session:{lot_id}:{plate}`)를 저장한다.
+- PMS DB: PMS 기준 주차 세션과 결제 이력을 저장한다.
 - Mock PG: billing key 기반 결제를 처리한다.
 - Mock PG DB: PG 기준 거래 이력과 idempotency key를 저장한다.
 - Mock Card: card token으로 카드 승인 요청을 처리한다.
 - Mock Card DB: 카드사 기준 거래 이력을 저장한다.
+- AWS SQS: 결제 완료 알림 이벤트를 비동기로 전달한다.
+- AWS Lambda: SQS 이벤트를 받아 IoT Core에 발행한다.
+- AWS IoT Core: 앱에 결제 완료 알림을 Push한다.
+- LPR Camera: 출구에서 번호판을 인식한다 (Webots에서는 GPS 근접 감지로 대체).
+- Barrier Controller: 차단기 개방 명령을 HTTP로 수신한다 (Webots 시뮬레이션).
 
 ## 핵심 개념
 
@@ -73,10 +80,11 @@
 25. 백엔드는 PMS에 paid 통보를 보낸다 (`POST /payment/complete`).
 26. PMS는 PMS DB의 `parking_sessions` 상태를 `paid`로 변경하고, pms-redis의 `parking_session:{lot_id}:{plate}` 상태도 `paid`로 업데이트한다. 이 시점에 차단기는 열지 않는다.
 27. 앱은 결제 완료 응답을 받고 로컬 상태를 `parked=false`로 바꾼다.
-28. 차량이 출구에 도착하면 출구 LPR이 번호판을 인식한다 (Webots 시뮬레이션에서는 GPS 근접 감지로 대체).
-29. PMS는 pms-redis의 `parking_session:{lot_id}:{plate}`를 **우선** 조회한다. Redis 재시작 등으로 키가 유실된 경우에만 DB `parking_sessions`를 fallback으로 조회한다.
-30. 조회된 세션 상태가 `paid`이면 PMS는 MQTT로 출구 차단기 개방 명령을 보내고, Redis 키를 삭제하고, DB 세션을 `exited`로 변경하고 `exit_time`을 기록한다.
-31. 세션 상태가 `active`(미결제)이면 차단기를 열지 않는다. 세션 자체가 없으면 `not_found`를 반환한다.
+28. 백엔드는 결제 완료 이벤트를 AWS SQS에 발행한다. SQS → Lambda → AWS IoT Core 경로로 앱에 결제 완료 알림이 Push된다 (로컬 개발 시에는 paho-mqtt로 Mosquitto에 직접 발행).
+29. 차량이 출구에 도착하면 출구 LPR이 번호판을 인식한다 (Webots 시뮬레이션에서는 GPS 근접 감지로 대체).
+30. PMS는 pms-redis의 `parking_session:{lot_id}:{plate}`를 **우선** 조회한다. Redis 재시작 등으로 키가 유실된 경우에만 DB `parking_sessions`를 fallback으로 조회한다.
+31. 조회된 세션 상태가 `paid`이면 PMS는 HTTP로 출구 차단기 개방 명령을 보내고, Redis 키를 삭제하고, DB 세션을 `exited`로 변경하고 `exit_time`을 기록한다.
+32. 세션 상태가 `active`(미결제)이면 차단기를 열지 않는다. 세션 자체가 없으면 `not_found`를 반환한다.
 
 ## 이 단계가 끝나면 남는 데이터
 
@@ -108,4 +116,4 @@ PMS DB:
 
 ## 발표 멘트
 
-다섯 번째 단계는 요금 조회, 결제, 출차입니다. 앱은 시동 ON 시점에 `parked=true`인지 확인하고, 주차 중일 때만 백엔드에 요금 조회를 요청합니다. 백엔드는 Redis의 요금 quote를 먼저 확인하고, 없으면 DB의 주차 세션과 PMS 요금 정보를 기반으로 quote를 생성합니다. 사용자가 결제를 승인하면 백엔드는 quote와 금액을 검증하고, 결제 요청을 `transactions`에 pending으로 먼저 저장합니다. 이후 billing key로 PG 결제를 요청하고, 승인 결과가 오면 transaction을 success로 확정하고 주차 세션을 completed로 변경합니다. 백엔드는 PMS에 결제 완료를 통보하고, PMS는 DB 세션을 `paid`로, pms-redis 키 상태도 `paid`로 업데이트합니다. 이후 차량이 출구에 도착하면 출구 LPR이 번호판을 확인하고, PMS는 pms-redis를 우선 조회해 `paid` 상태이면 차단기를 열고 Redis 키를 삭제한 뒤 DB 세션을 `exited`로 전환합니다.
+다섯 번째 단계는 요금 조회, 결제, 출차입니다. 앱은 시동 ON 시점에 `parked=true`인지 확인하고, 주차 중일 때만 백엔드에 요금 조회를 요청합니다. 백엔드는 Redis의 요금 quote를 먼저 확인하고, 없으면 DB의 주차 세션과 PMS 요금 정보를 기반으로 quote를 생성합니다. 사용자가 결제를 승인하면 백엔드는 quote와 금액을 검증하고, 결제 요청을 `transactions`에 pending으로 먼저 저장합니다. 이후 billing key로 PG 결제를 요청하고, 승인 결과가 오면 transaction을 success로 확정하고 주차 세션을 completed로 변경합니다. 백엔드는 PMS에 결제 완료를 통보하고, PMS는 DB와 pms-redis 상태를 `paid`로 업데이트합니다. 동시에 백엔드는 결제 완료 이벤트를 SQS에 발행하고, Lambda → AWS IoT Core 경로로 앱에 알림을 Push합니다. 이후 차량이 출구에 도착하면 출구 LPR이 번호판을 확인하고, PMS는 pms-redis를 우선 조회해 `paid` 상태이면 HTTP로 차단기를 열고 Redis 키를 삭제한 뒤 DB 세션을 `exited`로 전환합니다.
