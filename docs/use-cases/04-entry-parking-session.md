@@ -105,6 +105,9 @@ API:
   - 발행 실패 시 `entry_notify_retry:{session_id}`에 이벤트를 저장한다 (TTL 1시간).
   - `NotifyRetryWorker`가 60초마다 재시도해 앱 알림을 보낸다.
 
+> **PMS 측 처리 (동일 webhook 처리 내):**
+> PMS는 LPR 인식 즉시 DB `parking_sessions`를 생성하고, pms-redis `parking_session:{lot_id}:{plate}`에 `status=active`를 저장한다 (TTL 72시간). 이 키는 이후 결제 완료 시 `paid`로 갱신되고, 출차 LPR에서 삭제된다.
+
 Redis 변경:
 
 - `parking_pre_notify:{lot_id}:{plate}` 삭제
