@@ -5,13 +5,15 @@ CarPayIn 전체 흐름 부하테스트 스크립트 (동시 N명)
 
 흐름:
   1. POST /dev/seed-test-user (1회, count=N)
-  2. 각 유저별 동시에:
-     a. POST /parking/navigate          (CarPayIn - pre-notify + Redis 등록)
+  2. 각 유저의 billing_key를 MockPG DB에도 등록
+  3. 각 유저의 card_token을 MockCard DB에도 등록 (CarPayIn → MockPG → MockCard 체인)
+  4. 각 유저별 동시에:
+     a. POST /parking/navigate          (CarPayIn)
      b. POST /parking/pre-register      (PMS)
      c. POST /lpr/entry                 (PMS → CarPayIn /webhook/entry 자동 호출)
      d. GET  /fee/{session_id}          (CarPayIn)
      e. POST /payment                   (CarPayIn)
-  3. POST /dev/reset (선택, 테스트 후 초기화)
+  5. 테스트 후 CarPayIn + MockPG + MockPMS 초기화
 """
 
 import asyncio
@@ -23,9 +25,34 @@ import httpx
 
 CARPAYIN_URL     = "http://hd-public-alb-204074971.ap-northeast-2.elb.amazonaws.com"
 PMS_URL          = "http://mockpms-public-alb-810192222.ap-northeast-2.elb.amazonaws.com"
+PG_URL           = "http://mockpg-public-alb-581820362.ap-northeast-2.elb.amazonaws.com"
 LOT_ID           = "LOT_GANGNAM_01"
 CONCURRENT_USERS = 5
 ENTRY_TIME       = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
+
+# ── 시드 함수 ────────────────────────────────────────────────────────────────
+
+async def seed_pg_billing_key(client: httpx.AsyncClient, billing_key: str) -> bool:
+    resp = await client.post(
+        f"{PG_URL}/dev/seed-billing-key",
+        params={"billing_key": billing_key},
+    )
+    if resp.status_code != 200:
+        print(f"  [pg seed] 실패 {resp.status_code}: {resp.text}")
+        return False
+    return True
+
+
+async def seed_card_token(client: httpx.AsyncClient, card_token: str) -> bool:
+    resp = await client.post(
+        f"{CARPAYIN_URL}/dev/seed-card-token",
+        params={"card_token": card_token},
+    )
+    if resp.status_code != 200:
+        print(f"  [card seed] 실패 {resp.status_code}: {resp.text}")
+        return False
+    return True
+
 
 # ── 단계별 함수 ──────────────────────────────────────────────────────────────
 
@@ -112,10 +139,7 @@ async def step_payment(client: httpx.AsyncClient, user: dict, session_id: str, a
 
 # ── 유저 1명 전체 흐름 ────────────────────────────────────────────────────────
 
-STEPS = ["navigate", "pms_pre_register", "lpr_entry", "session_조회", "fee", "payment"]
-
 async def run_user_flow(client: httpx.AsyncClient, user: dict) -> dict:
-    """유저 1명 흐름 실행. 결과 dict 반환."""
     plate = user["plate"]
     result = {"plate": plate, "success": False, "failed_at": None}
     print(f"\n[{plate}] 시작")
@@ -172,11 +196,20 @@ async def main() -> None:
         users = resp.json()["users"]
         print(f"시드 완료: {len(users)}명")
 
-        # 2. 동시 실행
+        # 2. MockPG billing_key 등록 + MockCard card_token 등록
+        print("\n=== MockPG billing_key 등록 ===")
+        for user in users:
+            ok = await seed_pg_billing_key(client, user["billing_key"])
+            print(f"  [{user['plate']}] pg seed {'OK' if ok else '실패'}")
+            card_token = f"load-card-token-{user['billing_key']}"
+            ok = await seed_card_token(client, card_token)
+            print(f"  [{user['plate']}] card seed {'OK' if ok else '실패'}")
+
+        # 3. 동시 실행
         print("\n=== 전체 흐름 동시 실행 ===")
         results = await asyncio.gather(*[run_user_flow(client, u) for u in users])
 
-        # 3. 결과 요약
+        # 4. 결과 요약
         success = [r for r in results if r["success"]]
         failed  = [r for r in results if not r["success"]]
 
@@ -196,10 +229,12 @@ async def main() -> None:
 
         print()
 
-        # # 4. (선택) 테스트 후 초기화 — 주석 해제하면 DB/Redis 전체 삭제
-        # await client.post(f"{CARPAYIN_URL}/dev/reset")
-        # await client.post(f"{PMS_URL}/dev/reset")
-        # print("초기화 완료")
+        # 5. 테스트 후 초기화
+        print("=== 초기화 ===")
+        await client.post(f"{CARPAYIN_URL}/dev/reset")
+        await client.post(f"{PMS_URL}/dev/reset")
+        await client.post(f"{PG_URL}/dev/reset")
+        print("초기화 완료")
 
 
 if __name__ == "__main__":
