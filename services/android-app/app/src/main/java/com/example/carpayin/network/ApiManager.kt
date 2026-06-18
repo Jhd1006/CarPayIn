@@ -234,11 +234,6 @@ object ApiManager {
         return PaymentResult(response.getString("tx_id"), response.getString("approval_no"))
     }
 
-    fun triggerDevPaymentNotification(token: String) {
-        val response = postJson(URL("$BASE_URL/dev/mock-payment-notification"), "{}", token)
-        Log.d(TAG, "Dev 결제 알림: ${response.optString("status", "?")}")
-    }
-
     private fun postJson(url: URL, body: String, accessToken: String? = null): JSONObject {
         val conn = url.openConnection() as HttpURLConnection
         return try {

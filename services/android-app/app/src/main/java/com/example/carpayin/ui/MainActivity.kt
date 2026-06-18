@@ -1022,21 +1022,6 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        addBtn("Mock 결제 완료") {
-            Toast.makeText(this, "결제 알림 전송 중...", Toast.LENGTH_SHORT).show()
-            Thread {
-                runCatching {
-                    ApiManager.withAutoRefresh(this) { token ->
-                        ApiManager.triggerDevPaymentNotification(token)
-                    }
-                }.onSuccess {
-                    handler.post { Toast.makeText(this, "결제 알림 전송 완료 — 알림 대기 중", Toast.LENGTH_SHORT).show() }
-                }.onFailure {
-                    Log.e(TAG, "Dev 결제 알림 실패: ${it.message}")
-                    handler.post { Toast.makeText(this, "결제 알림 실패: ${it.message}", Toast.LENGTH_LONG).show() }
-                }
-            }.start()
-        }
         addBtn("MQTT 재연결") {
             val carId = ParkingStateManager.getHyundaiCarId(this)
             if (carId.isNotBlank()) Thread { MqttManager.connect(applicationContext, carId) }.start()
