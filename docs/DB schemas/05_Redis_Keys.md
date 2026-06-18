@@ -272,6 +272,33 @@ TTL은 7일이다.
 
 ---
 
+## [PMS Redis] parking_session:{lot_id}:{plate}
+
+주차 중인 차량의 실시간 상태를 저장한다.
+LPR 입차 시 생성되고, 출차 LPR이 확인되면 삭제된다.
+출차 판단(paid 여부 확인)은 DB가 아닌 이 키를 우선 조회한다. Redis 재시작 등으로 키가 유실된 경우에만 DB를 fallback으로 조회한다.
+
+**Redis 인스턴스: pms-redis (port 6380)**
+
+TTL은 72시간이다.
+
+```json
+{
+  "pms_session_id": "pms-sess-abc123",
+  "lot_id": "LOT_GN_01",
+  "plate": "12가3456",
+  "entry_time": "2026-06-18T10:00:00",
+  "status": "active"
+}
+```
+
+상태 전이:
+- `active`: 입차 후 결제 전
+- `paid`: Car Pay-in 결제 완료 통보 수신 후 → 출차 차단기 개방 대기
+
+출차 LPR이 `paid` 상태를 확인하면 차단기를 개방하고 키를 삭제한다.
+이후 해당 차량의 재입차는 새 키로 처리된다.
+
 ## [PMS Redis] pre_reg:{lot_id}:{plate}
 
 Car Pay-in 앱에서 사전 입차 등록된 차량번호를 PMS Redis에 저장한다.
@@ -306,8 +333,10 @@ Redis는 두 인스턴스로 서비스를 분리 운영한다.
 QR 로그인, OAuth state 매핑, 현대 OAuth 임시 결과, AAOS 앱 로그인 polling, 카드 등록 웹뷰 상태, 사전 입차 등록 상태, 요금 quote, 알림 재시도 이벤트(`entry_notify_retry:*`, `pms_payment_retry:*`)처럼 짧은 시간 동안만 필요한 데이터를 TTL 기반으로 관리한다.
 
 **pms-redis (port 6380)** — PMS 전용:
-Car Pay-in 앱에서 사전 등록된 차량번호를 `pre_reg:{lot_id}:{plate}` 키로 TTL 1시간 관리한다.
-LPR 입차 시 확인 후 삭제(consume)한다. DB가 아닌 Redis를 사용하므로 만료되면 자동으로 제거된다.
+- `pre_reg:{lot_id}:{plate}`: Car Pay-in 사전 등록 차량 여부. LPR 입차 시 확인 후 삭제. TTL 1시간.
+- `parking_session:{lot_id}:{plate}`: 주차 중인 차량의 실시간 상태(`active` / `paid`). 출차 판단 시 DB 대신 우선 조회. 출차 완료 시 삭제. TTL 72시간.
+
+Redis = 실시간 상태판 (빠른 조회), DB = 영구 이력 (감사/정산용)으로 책임을 분리한다.
 
 현대 access/refresh token은 OAuth callback에서 동기로 사용 후 즉시 버린다. Redis나 DB에 저장하지 않는다.
 장기 보관이 필요한 사용자, 차량, 빌링키, 결제 이력, 앱 refresh token은 DB에 저장한다.

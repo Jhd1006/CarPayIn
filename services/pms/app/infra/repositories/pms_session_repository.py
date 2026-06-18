@@ -76,6 +76,15 @@ class SqlAlchemyPmsSessionRepository:
         obj.exit_time = datetime.now(timezone.utc)
         self.session.commit()
 
+    def mark_cancelled(self, pms_session_id):
+        """미결제 출차 시 cancelled 상태 + exit_time 기록."""
+        obj = self.session.get(PMSParkingSession, pms_session_id)
+        if obj is None:
+            raise LookupError("session_not_found")
+        obj.status = "cancelled"
+        obj.exit_time = datetime.now(timezone.utc)
+        self.session.commit()
+
     @staticmethod
     def _to_dict(obj):
         return {
