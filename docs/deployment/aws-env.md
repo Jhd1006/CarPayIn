@@ -25,8 +25,8 @@ PG_PUBLIC_BASE_URL=https://<mock-pg-alb-or-domain>
 PMS_BASE_URL=https://<pms-alb-or-domain>
 
 AWS_REGION=ap-northeast-2
-PAYMENT_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
-PAYMENT_NOTIFICATION_PUBLISH_ENABLED=true
+SQS_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
+SQS_NOTIFICATION_PUBLISH_ENABLED=true
 
 APP_TOKEN_SECRET=<long-random-secret>
 APP_REFRESH_TOKEN_HASH_SECRET=<long-random-secret-optional>
@@ -54,7 +54,7 @@ SQS 메시지를 받아 AWS IoT Core topic으로 publish하는 Lambda에 넣을 
 APP_ENV=aws
 AWS_REGION=ap-northeast-2
 AWS_IOT_ENDPOINT=<aws-iot-data-endpoint>
-PAYMENT_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
+SQS_NOTIFICATION_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/<account-id>/<payment-notification-queue>
 ```
 
 ## mock-pg
