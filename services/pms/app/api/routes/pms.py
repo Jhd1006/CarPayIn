@@ -7,6 +7,7 @@ from app.api.deps import (
     get_payment_webhook_signature_verifier,
     get_record_payment_complete_service,
     get_register_pre_notify_service,
+    get_session_status_service,
 )
 from app.api.schemas.pms import (
     CalculateFeeResponse,
@@ -18,8 +19,13 @@ from app.api.schemas.pms import (
     PaymentCompleteResponse,
     PreRegisterRequest,
     PreRegisterResponse,
+    SessionStatusResponse,
 )
 from app.application.pms.calculate_fee import CalculateFeeCommand, CalculateFeeService
+from app.application.pms.get_session_status import (
+    GetSessionStatusCommand,
+    GetSessionStatusService,
+)
 from app.application.pms.handle_lpr_entry import (
     HandleLprEntryCommand,
     HandleLprEntryService,
@@ -116,6 +122,16 @@ def calculate_fee(
         entry_time=result.entry_time,
         calculated_at=result.calculated_at,
     )
+
+
+@router.get("/parking/session-status", response_model=SessionStatusResponse)
+def get_session_status(
+    plate: str,
+    lot_id: str,
+    service: GetSessionStatusService = Depends(get_session_status_service),
+) -> SessionStatusResponse:
+    result = service.execute(GetSessionStatusCommand(lot_id=lot_id, plate=plate))
+    return SessionStatusResponse(status=result.status)
 
 
 @router.post(
