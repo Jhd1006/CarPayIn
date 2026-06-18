@@ -71,12 +71,12 @@
 23. 백엔드는 Car Pay-in DB의 `transactions`를 `success`로 업데이트한다.
 24. 백엔드는 `parking_sessions`를 `completed`로 업데이트한다.
 25. 백엔드는 PMS에 paid 통보를 보낸다 (`POST /payment/complete`).
-26. PMS는 PMS DB의 `parking_sessions` 상태를 `paid`로 변경한다. 이 시점에 차단기는 열지 않는다.
+26. PMS는 PMS DB의 `parking_sessions` 상태를 `paid`로 변경하고, pms-redis의 `parking_session:{lot_id}:{plate}` 상태도 `paid`로 업데이트한다. 이 시점에 차단기는 열지 않는다.
 27. 앱은 결제 완료 응답을 받고 로컬 상태를 `parked=false`로 바꾼다.
 28. 차량이 출구에 도착하면 출구 LPR이 번호판을 인식한다 (Webots 시뮬레이션에서는 GPS 근접 감지로 대체).
-29. PMS는 해당 번호판의 `parking_sessions`에서 `paid` 상태인 세션을 조회한다.
-30. `paid` 세션이 있으면 PMS는 MQTT로 출구 차단기 개방 명령을 보내고, 세션을 `exited`로 변경하고 `exit_time`을 기록한다.
-31. `paid` 세션이 없으면 차단기를 열지 않는다 (사전 정산이 되지 않은 차량).
+29. PMS는 pms-redis의 `parking_session:{lot_id}:{plate}`를 **우선** 조회한다. Redis 재시작 등으로 키가 유실된 경우에만 DB `parking_sessions`를 fallback으로 조회한다.
+30. 조회된 세션 상태가 `paid`이면 PMS는 MQTT로 출구 차단기 개방 명령을 보내고, Redis 키를 삭제하고, DB 세션을 `exited`로 변경하고 `exit_time`을 기록한다.
+31. 세션 상태가 `active`(미결제)이면 차단기를 열지 않는다. 세션 자체가 없으면 `not_found`를 반환한다.
 
 ## 이 단계가 끝나면 남는 데이터
 
@@ -108,4 +108,4 @@ PMS DB:
 
 ## 발표 멘트
 
-다섯 번째 단계는 요금 조회, 결제, 출차입니다. 앱은 시동 ON 시점에 `parked=true`인지 확인하고, 주차 중일 때만 백엔드에 요금 조회를 요청합니다. 백엔드는 Redis의 요금 quote를 먼저 확인하고, 없으면 DB의 주차 세션과 PMS 요금 정보를 기반으로 quote를 생성합니다. 사용자가 결제를 승인하면 백엔드는 quote와 금액을 검증하고, 결제 요청을 `transactions`에 pending으로 먼저 저장합니다. 이후 billing key로 PG 결제를 요청하고, 승인 결과가 오면 transaction을 success로 확정하고 주차 세션을 completed로 변경합니다. 백엔드는 PMS에 결제 완료를 통보하고, PMS는 세션을 `paid`로 표시합니다. 이후 차량이 출구에 도착하면 출구 LPR이 번호판을 확인하고, PMS는 `paid` 세션이 있으면 차단기를 열고 `exited`로 전환합니다.
+다섯 번째 단계는 요금 조회, 결제, 출차입니다. 앱은 시동 ON 시점에 `parked=true`인지 확인하고, 주차 중일 때만 백엔드에 요금 조회를 요청합니다. 백엔드는 Redis의 요금 quote를 먼저 확인하고, 없으면 DB의 주차 세션과 PMS 요금 정보를 기반으로 quote를 생성합니다. 사용자가 결제를 승인하면 백엔드는 quote와 금액을 검증하고, 결제 요청을 `transactions`에 pending으로 먼저 저장합니다. 이후 billing key로 PG 결제를 요청하고, 승인 결과가 오면 transaction을 success로 확정하고 주차 세션을 completed로 변경합니다. 백엔드는 PMS에 결제 완료를 통보하고, PMS는 DB 세션을 `paid`로, pms-redis 키 상태도 `paid`로 업데이트합니다. 이후 차량이 출구에 도착하면 출구 LPR이 번호판을 확인하고, PMS는 pms-redis를 우선 조회해 `paid` 상태이면 차단기를 열고 Redis 키를 삭제한 뒤 DB 세션을 `exited`로 전환합니다.
