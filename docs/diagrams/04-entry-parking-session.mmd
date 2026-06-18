@@ -7,6 +7,10 @@ sequenceDiagram
     participant PmsRedis as pms-redis
     participant PMSDB as PMS DB
     participant LPR as LPR Camera
+    participant Barrier as Barrier Controller
+    participant SQS as AWS SQS
+    participant Lambda as AWS Lambda
+    participant IoT as AWS IoT Core
 
     App->>Backend: POST /parking/navigate {lot_id}
     Backend->>DB: Read vehicles (car_id from token)
@@ -19,7 +23,7 @@ sequenceDiagram
     Backend-->>App: Return registered
 
     LPR->>PMS: Detect plate at entry gate
-    PMS->>PMS: Open entry barrier (all cars)
+    PMS->>Barrier: HTTP POST /open (entry, all cars)
     PMS->>PMSDB: INSERT parking_sessions (all cars)
     PMS->>PmsRedis: Save parking_session:{lot_id}:{plate} status=active TTL 72h
     PMS->>PmsRedis: Check pre_reg:{lot_id}:{plate}
@@ -31,4 +35,7 @@ sequenceDiagram
     Backend->>CpRedis: Read parking_pre_notify:{lot_id}:{plate}
     Backend->>DB: INSERT parking_sessions
     Backend->>CpRedis: Delete parking_pre_notify:{lot_id}:{plate}
-    Backend-->>App: MQTT notify entry → parked=true
+    Backend->>SQS: Publish parking.confirmed event
+    SQS->>Lambda: Trigger notification Lambda
+    Lambda->>IoT: Publish to car/{car_id}/parking topic
+    IoT-->>App: Entry notification → parked=true
