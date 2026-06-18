@@ -1,22 +1,32 @@
 """
-CarPayIn 차량 컨트롤러 (Webots 내부 실행)
+CarPayIn 차량 컨트롤러 - 물리 기반 자율주행
 
-역할: 차량 이동 + 주차장 4m 이내 진입 시 PMS /lpr/entry 트리거
-     결제 완료 후 출구 게이트 도착 시 PMS /lpr/exit 트리거
+Phase 순서:
+  approaching_entry → 입차 차단기 앞까지 주행 후 정차
+  at_entry_gate     → LPR 입차 트리거 + 차단기 열림 대기
+  entering          → 차단기 통과 후 주차장 내부 진입
+  parking           → 주차 지점까지 주행 후 정차
+  at_parking        → PMS 결제 완료 폴링 (5초 간격)
+  uturn             → U턴 루프 (서 → 북 → 동)
+  to_exit           → 출구 차선 합류
+  approaching_exit  → 출차 차단기 앞까지 주행 후 정차
+  at_exit_gate      → LPR 출차 트리거 + 차단기 열림 대기 (미결제 시 재시도)
+  exiting           → 차단기 통과 후 출차 완료
+  done              → 정지
 
-좌표계: Webots Z-up → translation[X, Y, Z] 에서 X,Y가 수평 평면, Z가 고도
-  - ToyotaPrius 시작: (70.7132, 1.04608, -0.173432)
-  - 주차장 목표:      (53.33, 3.67)
-  - 출구 게이트:      (70.7, 1.0)  ← 시작점 근처로 복귀 시 출차 감지
-
-WEBOTS_DRIVE_MODE:
-  auto   - 60초에 걸쳐 주차장까지 자동 이동, 입차 후 30초 대기, 출구로 복귀
-  manual - 방향키 / WASD 직접 조작, E키로 수동 출차 트리거
+좌표 기준 (Car Pay-in.wbt):
+  입차 차단기: Robot(9.08, 13.29) + Solid(40.70, -11.63) = world (49.78, 1.65)
+  출차 차단기: Robot(9.03, 11.94) + Solid(40.70, -11.63) = world (49.73, 0.31)
+  주차 지점:   PARKING_SPOT Pose (13.14, -7.04)
+  차량 시작:   ToyotaPrius (70.71, 1.05)
 """
-import math, json, os, urllib.request
+import math
+import json
+import os
+import urllib.request
 from datetime import datetime, timezone
 
-# ── Webots 컨트롤러 임포트 ──────────────────────────────────────────────
+# ── Webots 드라이버 임포트 ──────────────────────────────────────────────
 try:
     from vehicle import Driver
     robot = Driver()
@@ -26,11 +36,14 @@ except Exception:
     robot = Robot()
     USING_DRIVER = False
 
-from controller import Keyboard
-
 timestep = int(robot.getBasicTimeStep())
 
-# ── .env 로드 ───────────────────────────────────────────────────────────
+
+def step_robot():
+    return robot.step() if USING_DRIVER else robot.step(timestep)
+
+
+# ── .env 로드 ────────────────────────────────────────────────────────────
 _here = os.path.dirname(os.path.abspath(__file__))
 _env_path = os.path.join(_here, ".env")
 if os.path.exists(_env_path):
@@ -40,195 +53,343 @@ if os.path.exists(_env_path):
             if not _line or _line.startswith("#") or "=" not in _line:
                 continue
             _k, _, _v = _line.partition("=")
-            _k = _k.strip(); _v = _v.strip().strip('"').strip("'")
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
             if _k and _k not in os.environ:
                 os.environ[_k] = _v
 
-PMS_URL    = os.environ.get("PARKING_PMS_URL", "http://localhost:8001")
-PLATE      = os.environ.get("WEBOTS_PLATE", "12가3456")
-LOT_ID     = os.environ.get("WEBOTS_LOT_ID", "LOT_TEST_01")
-DRIVE_MODE = os.environ.get("WEBOTS_DRIVE_MODE", "auto").lower()
+PMS_URL = os.environ.get("PARKING_PMS_URL", "http://localhost:8001")
+PLATE   = os.environ.get("WEBOTS_PLATE",    "12가3456")
+LOT_ID  = os.environ.get("WEBOTS_LOT_ID",   "LOT_TEST_01")
 
-# ── 좌표 상수 ────────────────────────────────────────────────────────────
-PARKING_LOT_X = 53.33
-PARKING_LOT_Y = 3.67
-START_X, START_Y = 70.7, 1.0   # 출구 게이트 = 시작점 근처
+ENTRY_BARRIER_PORT = 8100
+EXIT_BARRIER_PORT  = 8101
 
-ENTRY_TRIGGER_DIST = 4.0    # 입차 트리거 거리 (m)
-EXIT_TRIGGER_DIST  = 4.0    # 출차 트리거 거리 (m, 출구 게이트 기준)
-AUTO_PARK_HOLD_SEC = 30.0   # auto 모드: 주차 후 출차 전 대기 (초)
-AUTO_DURATION      = 60.0   # auto 모드: 주차장까지 이동 시간 (초)
-AUTO_RETURN_DURATION = 30.0 # auto 모드: 출구까지 복귀 시간 (초)
+# ── 웨이포인트 정의 (x, y, target_speed_kmh) ─────────────────────────────
+# 차단기 Y 좌표
+_ENTRY_Y = 1.65
+_EXIT_Y  = 0.31
+
+WP = {
+    # 입차 차단기 앞 정차 지점 (X=53.5: 차단기 X=49.78 기준 약 4m 앞)
+    "approaching_entry": [
+        (53.5,   _ENTRY_Y,  10.0),
+    ],
+    # 차단기 통과 → 주차장 내부
+    "entering": [
+        (47.0,   _ENTRY_Y,  10.0),
+        (28.0,   _ENTRY_Y,  15.0),
+    ],
+    # 주차 지점 (13.14, -7.04) 까지
+    "parking": [
+        (20.0,    1.0,      10.0),
+        (20.0,   -6.0,       8.0),
+        (13.0,   -7.0,       5.0),
+    ],
+    # U턴: 서 → 북 방향 루프
+    "uturn": [
+        ( 7.0,   -7.0,       8.0),
+        ( 7.0,    2.0,      10.0),
+    ],
+    # 출구 차선 합류
+    "to_exit": [
+        (20.0,    0.5,      12.0),
+        (37.0,   _EXIT_Y,  12.0),
+    ],
+    # 출차 차단기 앞 정차 지점 (X=47.5: 차단기 X=49.73 기준 약 2m 앞)
+    "approaching_exit": [
+        (47.5,   _EXIT_Y,    8.0),
+    ],
+    # 차단기 통과 → 출차 완료
+    "exiting": [
+        (57.0,   _EXIT_Y,   12.0),
+        (74.0,   _EXIT_Y,   10.0),
+    ],
+}
+
+# 단계 순서 (주행 단계와 특수 대기 단계 교대)
+STATE_SEQUENCE = [
+    "approaching_entry",
+    "at_entry_gate",
+    "entering",
+    "parking",
+    "at_parking",
+    "uturn",
+    "to_exit",
+    "approaching_exit",
+    "at_exit_gate",
+    "exiting",
+    "done",
+]
+
+# 도달 판정 거리
+ARRIVE_STOP = 2.5   # m — 정차 직전 마지막 웨이포인트
+ARRIVE_PASS = 5.0   # m — 통과용 중간 웨이포인트
+
+# 속도/조향 파라미터
+SLOW_RADIUS = 8.0   # m — 이 거리부터 감속
+MIN_SPEED   = 2.0   # km/h — 최저 속도
+KP_STEER    = 1.2   # 조향 P 게인
+MAX_STEER   = 0.4   # rad
+
+# 타임아웃
+ENTRY_BARRIER_TIMEOUT = 15.0   # s
+EXIT_BARRIER_TIMEOUT  = 15.0   # s
+EXIT_RETRY_INTERVAL   = 8.0    # s — 미결제 재시도 간격
+PARK_POLL_INTERVAL    = 5.0    # s — PMS 결제 상태 폴링 간격
+BARRIER_POLL_INTERVAL = 0.5    # s — 차단기 상태 폴링 간격
+
 
 # ── HTTP 헬퍼 ────────────────────────────────────────────────────────────
-def post_json(url, data):
+def _get(url, timeout=3):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        print(f"[VC] GET {url}: {e}", flush=True)
+        return None
+
+
+def _post(url, data, timeout=10):
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json; charset=utf-8"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=3) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read())
     except Exception as e:
-        print(f"[VC] POST 실패 {url}: {e}", flush=True)
+        print(f"[VC] POST {url}: {e}", flush=True)
         return None
 
-def trigger_entry(sim_time_ref):
-    entry_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    print(f"[LPR] 입차 감지 → PMS /lpr/entry  plate={PLATE}", flush=True)
-    res = post_json(f"{PMS_URL}/lpr/entry", {
-        "plate": PLATE,
-        "lot_id": LOT_ID,
-        "entry_time": entry_time,
-    })
+
+def is_barrier_open(port):
+    data = _get(f"http://localhost:{port}/status")
+    return bool(data and data.get("is_open"))
+
+
+def get_pms_status():
+    data = _get(f"{PMS_URL}/parking/session-status?plate={PLATE}&lot_id={LOT_ID}")
+    return data.get("status") if data else None
+
+
+def trigger_entry():
+    t = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    print(f"[LPR] 입차 → plate={PLATE}", flush=True)
+    res = _post(f"{PMS_URL}/lpr/entry", {"plate": PLATE, "lot_id": LOT_ID, "entry_time": t})
     print(f"[LPR] 입차 응답: {res}", flush=True)
+    return res
+
 
 def trigger_exit():
-    exit_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    print(f"[LPR] 출차 감지 → PMS /lpr/exit  plate={PLATE}", flush=True)
-    res = post_json(f"{PMS_URL}/lpr/exit", {
-        "plate": PLATE,
-        "lot_id": LOT_ID,
-        "exit_time": exit_time,
-    })
+    print(f"[LPR] 출차 → plate={PLATE}", flush=True)
+    res = _post(f"{PMS_URL}/lpr/exit", {"plate": PLATE, "lot_id": LOT_ID})
     print(f"[LPR] 출차 응답: {res}", flush=True)
+    return res
 
-# ── GPS 센서 초기화 ──────────────────────────────────────────────────────
+
+# ── 조향/속도 계산 ────────────────────────────────────────────────────────
+def compute_steer(wx, wy, tx, ty, heading):
+    bearing = math.atan2(ty - wy, tx - wx)
+    err = bearing - heading
+    err = (err + math.pi) % (2 * math.pi) - math.pi
+    return max(-MAX_STEER, min(MAX_STEER, KP_STEER * err))
+
+
+def approach_speed(dist, target_speed):
+    if dist > SLOW_RADIUS:
+        return target_speed
+    return max(MIN_SPEED, target_speed * dist / SLOW_RADIUS)
+
+
+def drive(speed, steer):
+    if USING_DRIVER:
+        robot.setCruisingSpeed(speed)
+        robot.setSteeringAngle(steer)
+
+
+def stop():
+    drive(0, 0)
+
+
+# ── 센서 초기화 ───────────────────────────────────────────────────────────
 gps = robot.getDevice("gps")
 if gps:
     gps.enable(timestep)
 
-# ── 키보드 초기화 ────────────────────────────────────────────────────────
-keyboard = Keyboard()
-keyboard.enable(timestep)
-
-# ── Supervisor: 자신의 translation 필드 참조 (auto 모드 이동용) ──────────
 translation_field = None
 GROUND_Z = -0.173432
 try:
     self_node = robot.getSelf()
     translation_field = self_node.getField("translation")
     GROUND_Z = translation_field.getSFVec3f()[2]
-    print(f"[VC] 시작 — mode={DRIVE_MODE}, plate={PLATE}, lot={LOT_ID}", flush=True)
 except Exception as e:
-    print(f"[VC] Supervisor 불가: {e} — mode={DRIVE_MODE}", flush=True)
+    print(f"[VC] Supervisor 불가: {e}", flush=True)
 
-print(f"[VC] PMS URL: {PMS_URL}", flush=True)
-if DRIVE_MODE == "manual":
-    print("[VC] 조작: 방향키/WASD 이동,  E = 수동 출차 트리거", flush=True)
+# ── 상태 초기화 ───────────────────────────────────────────────────────────
+state_idx = 0
+state     = STATE_SEQUENCE[0]
+wp_idx    = 0
 
-# ── 상태 변수 ────────────────────────────────────────────────────────────
-# auto 모드 phase: "to_parking" → "parked" → "to_exit" → "exited"
-auto_phase  = "to_parking"
-auto_t      = 0.0
-park_hold_t = 0.0   # 주차 후 대기 타이머
+# GPS 기반 헤딩 추정 (초기: 차단기 방향인 -X)
+heading  = math.pi
+prev_wx  = 70.7
+prev_wy  = 1.05
+wx, wy   = prev_wx, prev_wy
 
-entry_triggered = False
-exit_triggered  = False
-last_lpr_time   = 0.0
+# at_entry_gate
+entry_lpr_sent   = False
+entry_wait_t     = 0.0
+entry_poll_t     = 0.0
 
-current_speed = 0.0
-current_steer = 0.0
-MAX_SPEED  = 20.0
-MAX_STEER  = 0.4
-SPEED_STEP = 2.0
-STEER_STEP = 0.5
+# at_parking
+park_poll_t      = 0.0
+
+# at_exit_gate
+exit_lpr_sent    = False
+exit_lpr_res     = None
+exit_wait_t      = 0.0
+exit_poll_t      = 0.0
+exit_retry_t     = 0.0
+
+
+def advance_state():
+    global state_idx, state, wp_idx
+    global entry_lpr_sent, entry_wait_t, entry_poll_t
+    global park_poll_t
+    global exit_lpr_sent, exit_lpr_res, exit_wait_t, exit_poll_t, exit_retry_t
+
+    state_idx += 1
+    state     = STATE_SEQUENCE[min(state_idx, len(STATE_SEQUENCE) - 1)]
+    wp_idx    = 0
+
+    entry_lpr_sent = False
+    entry_wait_t = entry_poll_t = 0.0
+    park_poll_t  = 0.0
+    exit_lpr_sent = False
+    exit_lpr_res  = None
+    exit_wait_t = exit_poll_t = exit_retry_t = 0.0
+
+    print(f"[VC] ── {state} ──", flush=True)
+
+
+print(f"[VC] 시작 — plate={PLATE}, lot={LOT_ID}, PMS={PMS_URL}", flush=True)
+print(f"[VC] 모드: 물리 기반 자율주행", flush=True)
+print(f"[VC] ── {state} ──", flush=True)
 
 # ════════════════════════════════════════════════════════════════════════
-while robot.step(timestep) != -1:
-    sim_time = robot.getTime()
+while step_robot() != -1:
     dt = timestep / 1000.0
 
-    # ── 1. 위치 결정 ────────────────────────────────────────────────────
-    if DRIVE_MODE == "auto":
-        if auto_phase == "to_parking":
-            progress = min(auto_t / AUTO_DURATION, 1.0)
-            wx = START_X + (PARKING_LOT_X - START_X) * progress
-            wy = START_Y + (PARKING_LOT_Y - START_Y) * progress
-            if translation_field:
-                translation_field.setSFVec3f([wx, wy, GROUND_Z])
-            auto_t += dt
-            if progress >= 1.0:
-                auto_phase = "parked"
-                park_hold_t = 0.0
-                print("[VC] 주차 완료 — 출차 대기 중", flush=True)
+    # ── GPS 위치 + 헤딩 갱신 ─────────────────────────────────────────────
+    if gps:
+        vals = gps.getValues()
+        wx, wy = vals[0], vals[1]
+    elif translation_field:
+        cur = translation_field.getSFVec3f()
+        wx, wy = cur[0], cur[1]
 
-        elif auto_phase == "parked":
-            wx, wy = PARKING_LOT_X, PARKING_LOT_Y
-            park_hold_t += dt
-            if park_hold_t >= AUTO_PARK_HOLD_SEC:
-                auto_phase = "to_exit"
-                auto_t = 0.0
-                print("[VC] 출구로 복귀 시작", flush=True)
+    moved = math.sqrt((wx - prev_wx) ** 2 + (wy - prev_wy) ** 2)
+    if moved > 0.12:
+        heading = math.atan2(wy - prev_wy, wx - prev_wx)
+        prev_wx, prev_wy = wx, wy
 
-        elif auto_phase == "to_exit":
-            progress = min(auto_t / AUTO_RETURN_DURATION, 1.0)
-            wx = PARKING_LOT_X + (START_X - PARKING_LOT_X) * progress
-            wy = PARKING_LOT_Y + (START_Y - PARKING_LOT_Y) * progress
-            if translation_field:
-                translation_field.setSFVec3f([wx, wy, GROUND_Z])
-            auto_t += dt
-            if progress >= 1.0:
-                auto_phase = "exited"
+    # ════════════════════════════════════════════════════════════════════
+    # 주행 단계 — 웨이포인트 추종
+    # ════════════════════════════════════════════════════════════════════
+    if state in WP:
+        wps = WP[state]
+        if wp_idx >= len(wps):
+            stop()
+            advance_state()
+            continue
 
-        else:  # exited — 루프 리셋
-            wx, wy = START_X, START_Y
-            auto_phase = "to_parking"
-            auto_t = 0.0
-            entry_triggered = False
-            exit_triggered  = False
-            print("[VC] 시뮬레이션 루프 재시작", flush=True)
+        tx, ty, tspeed = wps[wp_idx]
+        dist    = math.sqrt((wx - tx) ** 2 + (wy - ty) ** 2)
+        is_last = (wp_idx == len(wps) - 1)
+        thresh  = ARRIVE_STOP if is_last else ARRIVE_PASS
 
-    else:
-        # manual 모드: GPS 또는 translation 에서 현재 위치 읽기
-        if gps:
-            vals = gps.getValues()
-            wx, wy = vals[0], vals[1]
-        elif translation_field:
-            cur = translation_field.getSFVec3f()
-            wx, wy = cur[0], cur[1]
+        if dist < thresh:
+            if is_last:
+                stop()
+                advance_state()
+            else:
+                wp_idx += 1
         else:
-            wx, wy = START_X, START_Y
+            steer = compute_steer(wx, wy, tx, ty, heading)
+            speed = approach_speed(dist, tspeed) if is_last else tspeed
+            drive(speed, steer)
 
-        # 키보드 입력
-        key = keyboard.getKey()
+    # ════════════════════════════════════════════════════════════════════
+    # at_entry_gate — LPR 입차 + 차단기 열림 대기
+    # ════════════════════════════════════════════════════════════════════
+    elif state == "at_entry_gate":
+        if not entry_lpr_sent:
+            trigger_entry()
+            entry_lpr_sent = True
+            print("[VC] 입차 차단기 열림 대기…", flush=True)
 
-        if key in (Keyboard.UP, ord('W')):
-            current_speed = min(current_speed + SPEED_STEP, MAX_SPEED)
-        elif key in (Keyboard.DOWN, ord('S')):
-            current_speed = max(current_speed - SPEED_STEP, -MAX_SPEED * 0.3)
-        else:
-            current_speed = 0.0 if abs(current_speed) < 1.0 else current_speed * 0.8
+        entry_wait_t += dt
 
-        if key in (Keyboard.LEFT, ord('A')):
-            current_steer = max(current_steer - STEER_STEP, -MAX_STEER)
-        elif key in (Keyboard.RIGHT, ord('D')):
-            current_steer = min(current_steer + STEER_STEP, MAX_STEER)
-        else:
-            current_steer = 0.0 if abs(current_steer) < 0.01 else current_steer * 0.7
+        if entry_wait_t >= 2.0:   # 최소 2초 대기 후 폴링 시작
+            entry_poll_t += dt
+            if entry_poll_t >= BARRIER_POLL_INTERVAL:
+                entry_poll_t = 0.0
+                if is_barrier_open(ENTRY_BARRIER_PORT):
+                    print("[VC] 입차 차단기 열림 확인 → 통과 시작", flush=True)
+                    advance_state()
 
-        if USING_DRIVER:
-            robot.setCruisingSpeed(current_speed)
-            robot.setSteeringAngle(current_steer)
+        if entry_wait_t >= ENTRY_BARRIER_TIMEOUT:
+            print("[VC] 입차 차단기 타임아웃 → 강제 통과", flush=True)
+            advance_state()
 
-        # E 키: 수동 출차 트리거
-        if key == ord('E') and entry_triggered and not exit_triggered:
-            exit_triggered = True
-            trigger_exit()
+    # ════════════════════════════════════════════════════════════════════
+    # at_parking — PMS 결제 완료 폴링
+    # ════════════════════════════════════════════════════════════════════
+    elif state == "at_parking":
+        park_poll_t += dt
+        if park_poll_t >= PARK_POLL_INTERVAL:
+            park_poll_t = 0.0
+            status = get_pms_status()
+            print(f"[VC] PMS 세션 상태: {status}", flush=True)
+            if status == "paid":
+                print("[VC] 결제 완료! 출차 시작", flush=True)
+                advance_state()
 
-    # ── 2. 입차 LPR 트리거 ──────────────────────────────────────────────
-    dist_to_entry = math.sqrt((wx - PARKING_LOT_X) ** 2 + (wy - PARKING_LOT_Y) ** 2)
+    # ════════════════════════════════════════════════════════════════════
+    # at_exit_gate — LPR 출차 + 차단기 열림 대기 (미결제 시 재시도)
+    # ════════════════════════════════════════════════════════════════════
+    elif state == "at_exit_gate":
+        if not exit_lpr_sent:
+            exit_lpr_res  = trigger_exit()
+            exit_lpr_sent = True
+            exit_wait_t   = 0.0
+            exit_retry_t  = 0.0
 
-    if (dist_to_entry <= ENTRY_TRIGGER_DIST
-            and not entry_triggered
-            and (sim_time - last_lpr_time) > 30.0):
-        entry_triggered = True
-        last_lpr_time = sim_time
-        trigger_entry(sim_time)
+        status = exit_lpr_res.get("status") if exit_lpr_res else None
 
-    # ── 3. 출차 LPR 트리거 (auto 모드: 출구 근접 감지) ──────────────────
-    if DRIVE_MODE == "auto" and entry_triggered and not exit_triggered:
-        dist_to_exit = math.sqrt((wx - START_X) ** 2 + (wy - START_Y) ** 2)
-        if dist_to_exit <= EXIT_TRIGGER_DIST and auto_phase == "to_exit":
-            exit_triggered = True
-            trigger_exit()
+        if status == "opened":
+            exit_wait_t += dt
+            exit_poll_t += dt
+            if exit_wait_t >= 2.0 and exit_poll_t >= BARRIER_POLL_INTERVAL:
+                exit_poll_t = 0.0
+                if is_barrier_open(EXIT_BARRIER_PORT):
+                    print("[VC] 출차 차단기 열림 확인 → 출차 시작", flush=True)
+                    advance_state()
+            if exit_wait_t >= EXIT_BARRIER_TIMEOUT:
+                print("[VC] 출차 차단기 타임아웃 → 강제 출차", flush=True)
+                advance_state()
+
+        elif status in ("not_paid", "not_found", None):
+            exit_retry_t += dt
+            if exit_retry_t >= EXIT_RETRY_INTERVAL:
+                print("[VC] 미결제 또는 오류 → 출차 재시도", flush=True)
+                exit_lpr_res  = trigger_exit()
+                exit_lpr_sent = True
+                exit_wait_t   = 0.0
+                exit_retry_t  = 0.0
+
+    # ════════════════════════════════════════════════════════════════════
+    # done
+    # ════════════════════════════════════════════════════════════════════
+    elif state == "done":
+        stop()

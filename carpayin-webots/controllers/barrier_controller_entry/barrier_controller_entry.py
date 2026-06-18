@@ -25,6 +25,7 @@ else:
 
 _lock      = threading.Lock()
 _cmd_queue = []
+_is_open   = False
 
 
 def _enqueue(cmd: str) -> None:
@@ -47,7 +48,9 @@ class BarrierHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/status":
-            self._ok({"gate": GATE, "port": HTTP_PORT})
+            with _lock:
+                is_open = _is_open
+            self._ok({"gate": GATE, "port": HTTP_PORT, "is_open": is_open})
         else:
             self.send_response(404)
             self.end_headers()
@@ -77,10 +80,14 @@ while robot.step(timestep) != -1:
             if cmd == "open":
                 motor.setPosition(POS_OPEN)
                 open_timer = OPEN_HOLD_MS
+                with _lock:
+                    _is_open = True
                 print(f"{TAG} 열림")
             elif cmd == "close":
                 motor.setPosition(POS_CLOSE)
                 open_timer = 0
+                with _lock:
+                    _is_open = False
                 print(f"{TAG} 닫힘")
 
     if open_timer > 0:
@@ -88,4 +95,6 @@ while robot.step(timestep) != -1:
         if open_timer <= 0:
             if motor:
                 motor.setPosition(POS_CLOSE)
+            with _lock:
+                _is_open = False
             print(f"{TAG} 자동 닫힘")

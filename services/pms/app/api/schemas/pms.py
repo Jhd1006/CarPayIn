@@ -58,3 +58,7 @@ class LprExitRequest(BaseModel):
 class LprExitResponse(BaseModel):
     status: str
     pms_session_id: str | None = None
+
+
+class SessionStatusResponse(BaseModel):
+    status: str  # "active" | "paid" | "not_found"
