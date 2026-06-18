@@ -75,12 +75,41 @@ API:
 - PMS DB `payment_requests`에 success 이력을 저장한다.
 - `X-Webhook-Timestamp`, `X-Webhook-Signature`로 Car Pay-in Backend의 결제 완료 통보를 검증한다.
 - idempotency_key로 중복 저장을 막는다.
+- PMS DB `parking_sessions` 상태를 `paid`로 변경한다.
+- pms-redis `parking_session:{lot_id}:{plate}` 상태도 `paid`로 업데이트한다.
 
 먼저 작성할 테스트:
 
 - 결제 완료 요청을 success로 저장한다.
+- 신규 결제 완료 시 PMS 세션이 paid로 마킹된다.
 - signature가 틀리면 401을 반환한다.
-- 같은 idempotency_key 재요청은 기존 결과를 반환한다.
+- 같은 idempotency_key 재요청은 기존 결과를 반환하고 세션 상태를 변경하지 않는다.
+
+## UC-PMS-005. LPR 출차 이벤트 처리
+
+서비스:
+
+- Mock PMS
+
+API:
+
+- `POST /lpr/exit`
+
+처리:
+
+- pms-redis `parking_session:{lot_id}:{plate}`를 우선 조회한다.
+- Redis 키가 `paid` 상태이면 MQTT로 출구 차단기를 열고, Redis 키를 삭제하고, DB 세션을 `exited`로 변경한다.
+- Redis 키가 `active` 상태(미결제)이면 차단기를 열지 않고 `not_paid`를 반환한다.
+- Redis 키가 없으면 DB fallback으로 `paid` 세션을 조회한다.
+- DB fallback에서 `paid` 세션을 찾으면 차단기를 열고 DB 세션을 `exited`로 변경한다.
+- 어디서도 `paid` 세션을 찾지 못하면 `not_found`를 반환한다.
+
+먼저 작성할 테스트:
+
+- Redis에 paid 상태가 있으면 차단기를 열고 출차 처리한다.
+- Redis에 active 상태(미결제)이면 차단기를 열지 않는다.
+- Redis 키가 없을 때 DB에 paid 세션이 있으면 차단기를 열고 출차 처리한다.
+- Redis 키가 없고 DB에도 paid 세션이 없으면 not_found를 반환한다.
 
 ## UC-PG-001. 카드 등록 WebView 완료와 billing key 발급
 
