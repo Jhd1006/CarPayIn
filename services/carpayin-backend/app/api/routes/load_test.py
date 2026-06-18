@@ -87,9 +87,8 @@ def seed_test_user(
             text("""
                 INSERT INTO vehicles (car_id, user_id, car_sellname, plate)
                 VALUES (:car_id, :user_id, :car_sellname, :plate)
-                ON CONFLICT (plate) DO UPDATE
-                    SET car_id   = EXCLUDED.car_id,
-                        user_id  = EXCLUDED.user_id
+                ON CONFLICT (car_id) DO UPDATE
+                    SET plate = EXCLUDED.plate
             """),
             {
                 "car_id":       car_id,
