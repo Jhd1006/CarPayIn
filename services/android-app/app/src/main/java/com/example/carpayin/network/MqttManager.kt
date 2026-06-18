@@ -7,12 +7,14 @@ import com.amazonaws.mobileconnectors.iot.AWSIotMqttClientStatusCallback.AWSIotM
 import com.amazonaws.mobileconnectors.iot.AWSIotMqttManager
 import com.amazonaws.mobileconnectors.iot.AWSIotMqttQos
 import com.amazonaws.regions.Regions
+import com.example.carpayin.BuildConfig
 import org.json.JSONObject
 
 object MqttManager {
     private const val TAG = "MqttManager"
-    private const val IDENTITY_POOL_ID = "ap-northeast-2:bd67c4db-bbb7-4768-9ca9-552f1e0d4d12"
-    private const val IOT_ENDPOINT = "a2etz9h9ig30tw-ats.iot.ap-northeast-2.amazonaws.com"
+    // BuildConfig 필드로 주입 — local.properties 또는 Gradle property에서 설정
+    private val IDENTITY_POOL_ID get() = BuildConfig.COGNITO_IDENTITY_POOL_ID
+    private val IOT_ENDPOINT get() = BuildConfig.IOT_ENDPOINT
 
     private var mqttManager: AWSIotMqttManager? = null
     private var connected = false
@@ -24,6 +26,10 @@ object MqttManager {
     fun connect(context: Context, carId: String) {
         if (connected) return
         if (mqttManager != null) return  // SDK 내부 reconnect 진행 중
+        if (IOT_ENDPOINT.isEmpty() || IDENTITY_POOL_ID.isEmpty()) {
+            Log.d(TAG, "IoT Core 미설정 (로컬 빌드) — 연결 생략")
+            return
+        }
 
         try {
             val credentialsProvider = CognitoCachingCredentialsProvider(
