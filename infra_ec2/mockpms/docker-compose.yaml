@@ -8,7 +8,7 @@ services:
       APP_ENV: production
       PMS_DATABASE_URL: ${PMS_DATABASE_URL}
       PMS_WEBHOOK_TOKEN: ${PMS_WEBHOOK_TOKEN}
-      CARPAYIN_BACKEND_BASE_URL: http://internal-hd-internal-alb-998881429.ap-northeast-2.elb.amazonaws.com:8000
+      CARPAYIN_BACKEND_BASE_URL: ${CARPAYIN_BACKEND_BASE_URL:?CARPAYIN_BACKEND_BASE_URL is required}
       PMS_FEE_PER_30_MINUTES: "500"
       PMS_REDIS_URL: redis://mockpms-redis.vkjvvb.ng.0001.apn2.cache.amazonaws.com:6379/0
       BARRIER_ENABLED: "true"
