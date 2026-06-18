@@ -65,45 +65,56 @@ LOT_ID  = os.environ.get("WEBOTS_LOT_ID",   "LOT_GANGNAM_01")
 ENTRY_BARRIER_PORT = 8100
 EXIT_BARRIER_PORT  = 8101
 
-# ── 웨이포인트 정의 (x, y, target_speed_kmh) ─────────────────────────────
 # 차단기 Y 좌표
 _ENTRY_Y = 1.65
 _EXIT_Y  = 0.31
+_PARK_Y  = -3.0   # 주차 차로 Y: 걸림 없는 범위
 
 WP = {
-    # 입차 차단기 앞 정차 (차단기 X=49.78 기준 약 6m 앞)
+    # 1. 입차 차단기 앞 정차 (X=53.5, 차단기 X=49.78 기준 약 3.7m 앞)
     "approaching_entry": [
-        (56.0,   _ENTRY_Y,   8.0),
+        (53.5, _ENTRY_Y, 8.0),
     ],
-    # 차단기 통과 — 천천히 진입
+    # 2. 차단기 통과 후 주차장 직진
     "entering": [
-        (44.0,   _ENTRY_Y,   5.0),
+        (47.0, _ENTRY_Y, 8.0),
+        (25.0, _ENTRY_Y, 8.0),
     ],
-    # 입차 후 단순 루프: 서→남→동 방향으로 출차 차선 합류
+    # 3. 주차장 서쪽 끝까지 직진 (Y 고정)
     "parking": [
-        (32.0,   _ENTRY_Y,   5.0),   # 서쪽으로 이동
-        (25.0,    1.0,        4.0),   # 남서 방향
-        (25.0,   _EXIT_Y,    4.0),   # 출차 차선 Y로 이동
-        (40.0,   _EXIT_Y,    5.0),   # 동쪽으로 이동
+        (5.0, _ENTRY_Y, 6.0),
     ],
-    # 출차 차단기 앞 정차 (차단기 X=49.73 기준 약 4m 앞)
+    # 4. 크게 U턴: 남쪽 하강 → 동쪽 이동 → 북쪽 상승 → 출구 차선 합류
+    "uturn": [
+        ( 5.0, -8.0, 5.0),   # 서쪽 끝에서 남쪽으로 꺾기
+        (20.0, -8.0, 6.0),   # 남쪽 차선 동쪽으로 이동
+        (20.0, _EXIT_Y, 5.0),# 출구 차선(Y=0.31) 까지 북쪽으로
+    ],
+    # 5. 출구 방향 직진 → 센서 이전 정차 (차단기 X=49.73 기준 6.7m 앞)
+    "to_exit": [
+        (38.0, _EXIT_Y, 8.0),
+        (43.0, _EXIT_Y, 7.0),
+    ],
+    # 6. 결제 후 차단기 접근
     "approaching_exit": [
-        (46.0,   _EXIT_Y,    5.0),
+        (47.5, _EXIT_Y, 6.0),
     ],
-    # 차단기 통과 → 출차 완료
+    # 7. 출차
     "exiting": [
-        (57.0,   _EXIT_Y,   10.0),
-        (74.0,   _EXIT_Y,   10.0),
+        (57.0, _EXIT_Y, 10.0),
+        (74.0, _EXIT_Y, 10.0),
     ],
 }
 
-# 단계 순서
+# 단계 순서 (주행 단계와 특수 대기 단계 교대)
 STATE_SEQUENCE = [
     "approaching_entry",
     "at_entry_gate",
     "entering",
     "parking",
-    "at_parking",
+    "uturn",
+    "to_exit",
+    "at_parking",        # 출구 차단기 센서 이전 정차, 결제 완료 대기
     "approaching_exit",
     "at_exit_gate",
     "exiting",
@@ -224,16 +235,14 @@ wp_idx    = 0
 
 # GPS 기반 헤딩 추정 (초기: 차단기 방향인 -X)
 heading  = math.pi
-prev_wx  = 70.7
-prev_wy  = 1.05
+prev_wx  = 53.5
+prev_wy  = 1.65
 wx, wy   = prev_wx, prev_wy
 
 # at_entry_gate
-entry_lpr_sent     = False
-entry_wait_t       = 0.0
-entry_poll_t       = 0.0
-entry_open_wait_t  = 0.0   # 차단기 열림 확인 후 추가 대기
-entry_open_confirmed = False
+entry_lpr_sent   = False
+entry_wait_t     = 0.0
+entry_poll_t     = 0.0
 
 # at_parking
 park_poll_t      = 0.0
@@ -248,7 +257,7 @@ exit_retry_t     = 0.0
 
 def advance_state():
     global state_idx, state, wp_idx
-    global entry_lpr_sent, entry_wait_t, entry_poll_t, entry_open_wait_t, entry_open_confirmed
+    global entry_lpr_sent, entry_wait_t, entry_poll_t
     global park_poll_t
     global exit_lpr_sent, exit_lpr_res, exit_wait_t, exit_poll_t, exit_retry_t
 
@@ -257,8 +266,7 @@ def advance_state():
     wp_idx    = 0
 
     entry_lpr_sent = False
-    entry_wait_t = entry_poll_t = entry_open_wait_t = 0.0
-    entry_open_confirmed = False
+    entry_wait_t = entry_poll_t = 0.0
     park_poll_t  = 0.0
     exit_lpr_sent = False
     exit_lpr_res  = None
@@ -337,20 +345,13 @@ while step_robot() != -1:
 
         entry_wait_t += dt
 
-        if entry_open_confirmed:
-            # 차단기 완전 개방 대기 (arm 회전 시간)
-            entry_open_wait_t += dt
-            if entry_open_wait_t >= 3.0:
-                print("[VC] 차단기 완전 개방 확인 → 진입", flush=True)
-                advance_state()
-        elif entry_wait_t >= 2.0:
+        if entry_wait_t >= 2.0:
             entry_poll_t += dt
             if entry_poll_t >= BARRIER_POLL_INTERVAL:
                 entry_poll_t = 0.0
                 if is_barrier_open(ENTRY_BARRIER_PORT):
-                    print("[VC] 입차 차단기 열림 확인 — 3초 후 진입", flush=True)
-                    entry_open_confirmed = True
-                    entry_open_wait_t = 0.0
+                    print("[VC] 입차 차단기 열림 확인 → 통과 시작", flush=True)
+                    advance_state()
 
         if entry_wait_t >= ENTRY_BARRIER_TIMEOUT:
             print("[VC] 입차 차단기 타임아웃 → 강제 통과", flush=True)
