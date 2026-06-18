@@ -21,10 +21,11 @@ class RecordPaymentCompleteResult:
 
 
 class RecordPaymentCompleteService:
-    def __init__(self, payment_request_repository, pms_session_repository=None, barrier_publisher=None):
+    def __init__(self, payment_request_repository, pms_session_repository=None, barrier_publisher=None, parking_session_store=None):
         self.payment_request_repository = payment_request_repository
         self.pms_session_repository = pms_session_repository
         self.barrier_publisher = barrier_publisher
+        self.parking_session_store = parking_session_store
 
     def execute(self, command: RecordPaymentCompleteCommand) -> RecordPaymentCompleteResult:
         existing = self.payment_request_repository.get_by_idempotency_key(command.idempotency_key)
@@ -43,8 +44,15 @@ class RecordPaymentCompleteService:
 
         if self.pms_session_repository is not None:
             try:
+                session = self.pms_session_repository.get_session_by_id(command.pms_session_id)
                 self.pms_session_repository.mark_paid(command.pms_session_id)
                 _logger.info("pms_session_paid: %s", command.pms_session_id)
+                if session and self.parking_session_store is not None:
+                    self.parking_session_store.update_status(
+                        lot_id=session["lot_id"],
+                        plate=session["plate"],
+                        status="paid",
+                    )
             except LookupError:
                 _logger.warning("session_not_found_on_payment: %s", command.pms_session_id)
 

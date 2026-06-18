@@ -1,7 +1,8 @@
 from app.infra.redis.client import redis_client
-from app.infra.redis.stores import RedisPreRegistrationStore
+from app.infra.redis.stores import RedisParkingSessionStore, RedisPreRegistrationStore
 
 __all__ = [
     "redis_client",
     "RedisPreRegistrationStore",
+    "RedisParkingSessionStore",
 ]

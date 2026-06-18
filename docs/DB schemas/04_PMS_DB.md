@@ -124,7 +124,9 @@ PMS DB는 Mock 주차장 시뮬레이션을 위한 DB이다.
 사전등록은 임시 상태이므로 DB 테이블이 아닌 pms-redis에 `pre_reg:{lot_id}:{plate}` 키로 TTL 1시간 관리한다. migration `003_drop_pre_registrations`로 제거되었다.
 
 LPR은 모든 차량에 차단기를 열고 세션을 생성한다. Car Pay-in 사전 등록 차량(Redis에 키 존재)만 백엔드 webhook을 받는다.
-출차 시 `paid` 상태인 세션이 있어야 출구 차단기가 열린다. 사전 정산이 없는 차량은 열리지 않는다.
+출차 시 pms-redis `parking_session:{lot_id}:{plate}` 키의 상태가 `paid`이어야 출구 차단기가 열린다. Redis 키 유실 시 DB를 fallback으로 조회한다. 결제되지 않은 차량은 차단기가 열리지 않는다.
+
+Redis는 실시간 상태판(입차→active, 결제→paid, 출차→삭제), DB는 영구 이력 전용으로 책임을 분리한다.
 
 주차장 정보, 게이트 정보, 요금 정책은 DB에 저장하지 않고 서버 코드에서 하드코딩한다.
 PMS는 카드 정보나 빌링키를 저장하지 않으며, 결제는 Car Pay-in 서버에 요청한다.
