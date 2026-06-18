@@ -5,10 +5,6 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/Asphalt.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/toyota/ToyotaPrius.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/lincoln/LincolnMKZ.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/bmw/BmwX5.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/tesla/TeslaModel3.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinter.proto"
 EXTERNPROTO "../protos/ParkingLines.proto"
 
 WorldInfo {
@@ -79,11 +75,6 @@ Robot {
   ]
   name "barrier_entry"
   controller "barrier_controller_entry"
-}
-LincolnMKZ {
-  translation 17.97500005423932 16.729615582932507 -0.17519559428851492
-  rotation -0.0068892162159174064 -0.006888971628035975 -0.9999525392586583 1.5708427675658807
-  name "vehicle(5)"
 }
 ParkingLines {
   translation 12 12 0
@@ -160,41 +151,11 @@ Robot {
     ""
   ]
 }
-LincolnMKZ {
-  translation 1.188629990127617 4.09896308388269 -0.17519558653771555
-  rotation -0.006889215840381246 -0.0068889710514621295 -0.9999525392652179 1.5708427672853407
-  name "vehicle(4)"
-}
-MercedesBenzSprinter {
-  translation 3.5095199970931894 -11.020386075006229 -0.5975867324722868
-  rotation 0.03269729368445927 -0.0326971530075226 0.998930319477247 1.5718702571462206
-}
-TeslaModel3 {
-  translation 15.471900012081841 4.013305966627021 -0.12291242739021141
-  rotation -0.007617771305689941 -0.007617930809679074 -0.9999419666613224 1.570853341782092
-  name "vehicle(3)"
-}
-BmwX5 {
-  translation 5.816329994028454 4.346467498947765 -0.12955218133876417
-  rotation -0.010938563635912849 -0.010938613353229102 -0.9998803401225027 1.570914974333465
-}
-DEF left-obs LincolnMKZ {
-  translation 13.194884771792674 -11.112813281472498 -0.1751955865377174
-  rotation 0.006888975554737898 -0.006712656377887198 0.9999537400600884 1.596803842134069
-  color 0.929412 0.2 0.231373
-  name "vehicle(1)"
-}
-DEF right-obs LincolnMKZ {
-  translation 15.673111428989731 -11.143713195170998 -0.17519558653771444
-  rotation 0.006888954822502599 -0.007024332171089003 0.9999515993581909 1.5514218050561983
-  color 0.207843 0.517647 0.894118
-  name "vehicle(2)"
-}
 DEF PARKING_SPOT Pose {
   translation 13.14 -7.04 0.1
 }
 ToyotaPrius {
-  translation 70.7132 1.04608 -0.173432
+  translation 53.5 1.65 -0.173432
   rotation 0.015123266213618024 -0.0007448634262533459 0.9998853594275237 3.043168159562019
   name "Car Pay-in"
   controller "vehicle_controller"
