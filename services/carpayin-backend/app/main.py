@@ -13,6 +13,10 @@ from app.api.routes.payment import router as payment_router
 from app.api.routes.load_test import router as load_test_router
 from app.infra.redis import redis_client
 from app.infra.workers.notify_retry_worker import NotifyRetryWorker
+from app.infra.workers.payment_outbox_worker import (
+    PaymentOutboxWorker,
+    payment_outbox_repository_context,
+)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -26,14 +30,28 @@ def _build_retry_worker() -> NotifyRetryWorker:
     )
 
 
+def _build_payment_outbox_worker() -> PaymentOutboxWorker:
+    from app.api.deps import notification_publisher
+
+    interval_seconds = int(os.getenv("PAYMENT_OUTBOX_POLL_INTERVAL_SECONDS", "5"))
+    return PaymentOutboxWorker(
+        repository_context_factory=payment_outbox_repository_context,
+        notification_publisher=notification_publisher,
+        interval_seconds=interval_seconds,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    worker = _build_retry_worker()
-    worker.start()
+    retry_worker = _build_retry_worker()
+    payment_outbox_worker = _build_payment_outbox_worker()
+    retry_worker.start()
+    payment_outbox_worker.start()
     try:
         yield
     finally:
-        worker.stop()
+        payment_outbox_worker.stop()
+        retry_worker.stop()
 
 
 app = FastAPI(

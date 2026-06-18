@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 import hashlib
+import logging
 import uuid
 
 
 PAYMENT_NOTIFY_RETRY_TTL_SECONDS = 7 * 24 * 60 * 60
+_logger = logging.getLogger("carpayin.process_payment")
 
 
 @dataclass(frozen=True)
@@ -80,11 +82,6 @@ class ProcessPaymentService:
         if session["car_id"] != car_id:
             raise ValueError("session_car_id_mismatch")
 
-        # active billing key 조회
-        billing_key_data = self.billing_key_repository.get_active_billing_key(car_id)
-        if not billing_key_data:
-            raise ValueError("no_active_billing_key")
-
         # idempotency_key 생성
         idempotency_key = hashlib.sha256(
             f"{command.session_id}{car_id}{command.amount}{command.currency}".encode()
@@ -114,24 +111,30 @@ class ProcessPaymentService:
         if command.amount < 0:
             raise ValueError("invalid_amount")
 
-        # 무료 주차(0원): DB CHECK(amount > 0) 제약으로 transaction 행 생성 없이 바로 성공 처리
-        # 멱등성: tx 행이 없으므로 idempotency_key 대신 session.status로 중복 요청을 감지한다
+        # 무료 주차(0원): PG 호출 없이 transaction/outbox 이력을 남기고 성공 처리
         if command.amount == 0:
-            # idempotency_key를 seed로 결정적 tx_id 생성 — 재시도 시 동일한 값을 반환
             tx_id = str(uuid.uuid5(uuid.UUID(int=0), idempotency_key))
-            if session.get("status") == "completed":
-                return ProcessPaymentResult(
-                    status="success",
-                    tx_id=tx_id,
-                    approval_no="FREE",
-                )
             approval_no = "FREE"
+            self.transaction_repository.create_pending_transaction(
+                tx_id=tx_id,
+                idempotency_key=idempotency_key,
+                session_id=command.session_id,
+                amount=command.amount,
+                currency=command.currency,
+                billing_key="FREE",
+            )
             notification_payload = self._build_payment_notification_payload(
                 session=session,
                 tx_id=tx_id,
                 car_id=car_id,
                 approval_no=approval_no,
                 command=command,
+            )
+            notification_enqueued = self._mark_payment_success(
+                idempotency_key=idempotency_key,
+                pg_tx_id=None,
+                approval_no=approval_no,
+                notification_payload=notification_payload,
             )
             self.parking_session_repository.update_session_status(
                 command.session_id, "completed"
@@ -143,20 +146,20 @@ class ProcessPaymentService:
                 idempotency_key=idempotency_key,
                 command=command,
             )
-            self.notification_publisher.publish_payment_notification(
-                session_id=notification_payload["session_id"],
-                car_id=notification_payload["car_id"],
-                lot_id=notification_payload["lot_id"],
-                tx_id=notification_payload["tx_id"],
-                amount=notification_payload["amount"],
-                currency=notification_payload["currency"],
-                approval_no=notification_payload["approval_no"],
-            )
+            if not notification_enqueued:
+                self._publish_payment_notification_best_effort(
+                    notification_payload
+                )
             return ProcessPaymentResult(
                 status="success",
                 tx_id=tx_id,
                 approval_no=approval_no,
             )
+
+        # 유료 결제에 사용할 active billing key 조회
+        billing_key_data = self.billing_key_repository.get_active_billing_key(car_id)
+        if not billing_key_data:
+            raise ValueError("no_active_billing_key")
 
         # pending transaction 생성
         tx_id = str(uuid.uuid4())
@@ -197,7 +200,7 @@ class ProcessPaymentService:
                 approval_no=approval_no,
                 command=command,
             )
-            self._mark_payment_success(
+            notification_enqueued = self._mark_payment_success(
                 idempotency_key=idempotency_key,
                 pg_tx_id=pg_result.get("pg_tx_id"),
                 approval_no=approval_no,
@@ -213,15 +216,10 @@ class ProcessPaymentService:
                 idempotency_key=idempotency_key,
                 command=command,
             )
-            self.notification_publisher.publish_payment_notification(
-                session_id=notification_payload["session_id"],
-                car_id=notification_payload["car_id"],
-                lot_id=notification_payload["lot_id"],
-                tx_id=notification_payload["tx_id"],
-                amount=notification_payload["amount"],
-                currency=notification_payload["currency"],
-                approval_no=notification_payload["approval_no"],
-            )
+            if not notification_enqueued:
+                self._publish_payment_notification_best_effort(
+                    notification_payload
+                )
             return ProcessPaymentResult(
                 status="success",
                 tx_id=tx_id,
@@ -293,6 +291,24 @@ class ProcessPaymentService:
             "approval_no": approval_no,
         }
 
+    def _publish_payment_notification_best_effort(self, payload: dict) -> None:
+        try:
+            self.notification_publisher.publish_payment_notification(
+                session_id=payload["session_id"],
+                car_id=payload["car_id"],
+                lot_id=payload["lot_id"],
+                tx_id=payload["tx_id"],
+                amount=payload["amount"],
+                currency=payload["currency"],
+                approval_no=payload["approval_no"],
+            )
+        except Exception as exc:
+            _logger.warning(
+                "payment_notification_publish_failed: tx_id=%s, error=%s",
+                payload["tx_id"],
+                exc,
+            )
+
     def _mark_payment_success(
         self,
         *,
@@ -300,7 +316,7 @@ class ProcessPaymentService:
         pg_tx_id: str | None,
         approval_no: str,
         notification_payload: dict,
-    ) -> None:
+    ) -> bool:
         if hasattr(
             self.transaction_repository,
             "mark_success_and_enqueue_payment_notification",
@@ -309,10 +325,10 @@ class ProcessPaymentService:
                 idempotency_key=idempotency_key,
                 pg_tx_id=pg_tx_id,
                 approval_no=approval_no,
-                destination=f"carpayin/cars/{notification_payload['car_id']}/payments",
+                destination=f"payment/complete/{notification_payload['car_id']}",
                 payload=notification_payload,
             )
-            return
+            return True
 
         self.transaction_repository.update_transaction_status(
             idempotency_key,
@@ -320,3 +336,4 @@ class ProcessPaymentService:
             pg_tx_id=pg_tx_id,
             approval_no=approval_no,
         )
+        return False

@@ -172,7 +172,7 @@ CREATE TABLE transactions (
   FOREIGN KEY (session_id) REFERENCES parking_sessions(session_id),
   FOREIGN KEY (car_id) REFERENCES vehicles(car_id),
   UNIQUE (idempotency_key),
-  CHECK (amount > 0),
+  CHECK (amount >= 0),
   CHECK (currency ~ '^[A-Z]{3}$'),
   CHECK (status IN ('pending', 'success', 'failed', 'cancelled'))
 );
@@ -197,7 +197,7 @@ ON transactions(pg_tx_id);
 - `car_id`: 현대 차량 ID이므로 `TEXT`
 - `billing_key`: PG에서 받은 외부 키의 스냅샷이므로 `TEXT`
 - `pg_tx_id`: PG가 만든 거래 ID이므로 `TEXT`
-- `amount`: KRW 원 단위 정수이므로 `INTEGER`
+- `amount`: KRW 원 단위 정수이며 무료주차 거래는 `0`이므로 `INTEGER`
 - `currency`: ISO 통화 코드이므로 `CHAR(3)`
 - `status`: `CHECK`로 값 제한
 - `approval_no`: PG 승인번호이므로 `TEXT`
@@ -208,8 +208,12 @@ ON transactions(pg_tx_id);
 ## payment_notification_outbox
 
 결제 성공 이후 앱으로 전달해야 하는 결제 완료 알림 이벤트 이력을 저장한다.
-테이블 스키마는 마이그레이션(`002_payment_notification_outbox`)으로 생성되어 있으나,
-현재 로컬 구현에서는 사용하지 않는다. 알림 재시도는 Redis 키(`pms_payment_retry:{tx_id}`)와 `NotifyRetryWorker`로 처리한다.
+결제 transaction을 `success`로 변경하는 트랜잭션 안에서 outbox row를 함께 생성한다.
+`PaymentOutboxWorker`가 `pending`, `failed` 이벤트를 조회해 SQS 또는 로컬 MQTT로
+발행하고, 성공 시 `published`, 재시도 한도 초과 시 `dead`로 변경한다.
+
+`pms_payment_retry:{tx_id}`와 `NotifyRetryWorker`는 앱 알림 outbox가 아니라
+PMS 결제 완료 통보 실패를 재시도하는 별도 경로다.
 
 ```sql
 CREATE TABLE payment_notification_outbox (
