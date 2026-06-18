@@ -2,15 +2,16 @@
 CarPayIn 차량 컨트롤러 (Webots 내부 실행)
 
 역할: 차량 이동 + 주차장 4m 이내 진입 시 PMS /lpr/entry 트리거
-     (GPS를 외부로 전송하지 않음 - 앱 사전등록은 앱에서 별도 처리)
+     결제 완료 후 출구 게이트 도착 시 PMS /lpr/exit 트리거
 
 좌표계: Webots Z-up → translation[X, Y, Z] 에서 X,Y가 수평 평면, Z가 고도
   - ToyotaPrius 시작: (70.7132, 1.04608, -0.173432)
   - 주차장 목표:      (53.33, 3.67)
+  - 출구 게이트:      (70.7, 1.0)  ← 시작점 근처로 복귀 시 출차 감지
 
 WEBOTS_DRIVE_MODE:
-  auto   - 60초에 걸쳐 주차장까지 자동 이동
-  manual - 방향키 / WASD 키보드 직접 조작
+  auto   - 60초에 걸쳐 주차장까지 자동 이동, 입차 후 30초 대기, 출구로 복귀
+  manual - 방향키 / WASD 직접 조작, E키로 수동 출차 트리거
 """
 import math, json, os, urllib.request
 from datetime import datetime, timezone
@@ -51,7 +52,13 @@ DRIVE_MODE = os.environ.get("WEBOTS_DRIVE_MODE", "auto").lower()
 # ── 좌표 상수 ────────────────────────────────────────────────────────────
 PARKING_LOT_X = 53.33
 PARKING_LOT_Y = 3.67
-START_X, START_Y = 70.7, 1.0
+START_X, START_Y = 70.7, 1.0   # 출구 게이트 = 시작점 근처
+
+ENTRY_TRIGGER_DIST = 4.0    # 입차 트리거 거리 (m)
+EXIT_TRIGGER_DIST  = 4.0    # 출차 트리거 거리 (m, 출구 게이트 기준)
+AUTO_PARK_HOLD_SEC = 30.0   # auto 모드: 주차 후 출차 전 대기 (초)
+AUTO_DURATION      = 60.0   # auto 모드: 주차장까지 이동 시간 (초)
+AUTO_RETURN_DURATION = 30.0 # auto 모드: 출구까지 복귀 시간 (초)
 
 # ── HTTP 헬퍼 ────────────────────────────────────────────────────────────
 def post_json(url, data):
@@ -65,6 +72,26 @@ def post_json(url, data):
     except Exception as e:
         print(f"[VC] POST 실패 {url}: {e}", flush=True)
         return None
+
+def trigger_entry(sim_time_ref):
+    entry_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    print(f"[LPR] 입차 감지 → PMS /lpr/entry  plate={PLATE}", flush=True)
+    res = post_json(f"{PMS_URL}/lpr/entry", {
+        "plate": PLATE,
+        "lot_id": LOT_ID,
+        "entry_time": entry_time,
+    })
+    print(f"[LPR] 입차 응답: {res}", flush=True)
+
+def trigger_exit():
+    exit_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    print(f"[LPR] 출차 감지 → PMS /lpr/exit  plate={PLATE}", flush=True)
+    res = post_json(f"{PMS_URL}/lpr/exit", {
+        "plate": PLATE,
+        "lot_id": LOT_ID,
+        "exit_time": exit_time,
+    })
+    print(f"[LPR] 출차 응답: {res}", flush=True)
 
 # ── GPS 센서 초기화 ──────────────────────────────────────────────────────
 gps = robot.getDevice("gps")
@@ -86,38 +113,71 @@ try:
 except Exception as e:
     print(f"[VC] Supervisor 불가: {e} — mode={DRIVE_MODE}", flush=True)
 
+print(f"[VC] PMS URL: {PMS_URL}", flush=True)
+if DRIVE_MODE == "manual":
+    print("[VC] 조작: 방향키/WASD 이동,  E = 수동 출차 트리거", flush=True)
+
 # ── 상태 변수 ────────────────────────────────────────────────────────────
-lpr_triggered = False
-last_lpr_time = 0.0
-auto_t = 0.0
-AUTO_DURATION = 60.0
+# auto 모드 phase: "to_parking" → "parked" → "to_exit" → "exited"
+auto_phase  = "to_parking"
+auto_t      = 0.0
+park_hold_t = 0.0   # 주차 후 대기 타이머
+
+entry_triggered = False
+exit_triggered  = False
+last_lpr_time   = 0.0
 
 current_speed = 0.0
 current_steer = 0.0
-MAX_SPEED = 20.0
-MAX_STEER = 0.4
+MAX_SPEED  = 20.0
+MAX_STEER  = 0.4
 SPEED_STEP = 2.0
 STEER_STEP = 0.5
 
 # ════════════════════════════════════════════════════════════════════════
 while robot.step(timestep) != -1:
     sim_time = robot.getTime()
+    dt = timestep / 1000.0
 
-    # ── 1. 현재 위치 결정 ────────────────────────────────────────────────
+    # ── 1. 위치 결정 ────────────────────────────────────────────────────
     if DRIVE_MODE == "auto":
-        progress = min(auto_t / AUTO_DURATION, 1.0)
-        wx = START_X + (PARKING_LOT_X - START_X) * progress
-        wy = START_Y + (PARKING_LOT_Y - START_Y) * progress
+        if auto_phase == "to_parking":
+            progress = min(auto_t / AUTO_DURATION, 1.0)
+            wx = START_X + (PARKING_LOT_X - START_X) * progress
+            wy = START_Y + (PARKING_LOT_Y - START_Y) * progress
+            if translation_field:
+                translation_field.setSFVec3f([wx, wy, GROUND_Z])
+            auto_t += dt
+            if progress >= 1.0:
+                auto_phase = "parked"
+                park_hold_t = 0.0
+                print("[VC] 주차 완료 — 출차 대기 중", flush=True)
 
-        if translation_field:
-            translation_field.setSFVec3f([wx, wy, GROUND_Z])
+        elif auto_phase == "parked":
+            wx, wy = PARKING_LOT_X, PARKING_LOT_Y
+            park_hold_t += dt
+            if park_hold_t >= AUTO_PARK_HOLD_SEC:
+                auto_phase = "to_exit"
+                auto_t = 0.0
+                print("[VC] 출구로 복귀 시작", flush=True)
 
-        auto_t += timestep / 1000.0
+        elif auto_phase == "to_exit":
+            progress = min(auto_t / AUTO_RETURN_DURATION, 1.0)
+            wx = PARKING_LOT_X + (START_X - PARKING_LOT_X) * progress
+            wy = PARKING_LOT_Y + (START_Y - PARKING_LOT_Y) * progress
+            if translation_field:
+                translation_field.setSFVec3f([wx, wy, GROUND_Z])
+            auto_t += dt
+            if progress >= 1.0:
+                auto_phase = "exited"
 
-        if progress >= 1.0:
-            print("[VC] 주차장 도착. 재시작 대기", flush=True)
+        else:  # exited — 루프 리셋
+            wx, wy = START_X, START_Y
+            auto_phase = "to_parking"
             auto_t = 0.0
-            lpr_triggered = False
+            entry_triggered = False
+            exit_triggered  = False
+            print("[VC] 시뮬레이션 루프 재시작", flush=True)
 
     else:
         # manual 모드: GPS 또는 translation 에서 현재 위치 읽기
@@ -151,17 +211,24 @@ while robot.step(timestep) != -1:
             robot.setCruisingSpeed(current_speed)
             robot.setSteeringAngle(current_steer)
 
-    # ── 2. 거리 계산 + LPR 트리거 ────────────────────────────────────────
-    dist = math.sqrt((wx - PARKING_LOT_X) ** 2 + (wy - PARKING_LOT_Y) ** 2)
+        # E 키: 수동 출차 트리거
+        if key == ord('E') and entry_triggered and not exit_triggered:
+            exit_triggered = True
+            trigger_exit()
 
-    if dist <= 4.0 and not lpr_triggered and (sim_time - last_lpr_time) > 30.0:
-        entry_time = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-        print(f"[LPR] 진입 감지! dist={dist:.1f}m → PMS /lpr/entry", flush=True)
-        res = post_json(f"{PMS_URL}/lpr/entry", {
-            "plate": PLATE,
-            "lot_id": LOT_ID,
-            "entry_time": entry_time,
-        })
-        print(f"[LPR] 응답: {res}", flush=True)
-        lpr_triggered = True
+    # ── 2. 입차 LPR 트리거 ──────────────────────────────────────────────
+    dist_to_entry = math.sqrt((wx - PARKING_LOT_X) ** 2 + (wy - PARKING_LOT_Y) ** 2)
+
+    if (dist_to_entry <= ENTRY_TRIGGER_DIST
+            and not entry_triggered
+            and (sim_time - last_lpr_time) > 30.0):
+        entry_triggered = True
         last_lpr_time = sim_time
+        trigger_entry(sim_time)
+
+    # ── 3. 출차 LPR 트리거 (auto 모드: 출구 근접 감지) ──────────────────
+    if DRIVE_MODE == "auto" and entry_triggered and not exit_triggered:
+        dist_to_exit = math.sqrt((wx - START_X) ** 2 + (wy - START_Y) ** 2)
+        if dist_to_exit <= EXIT_TRIGGER_DIST and auto_phase == "to_exit":
+            exit_triggered = True
+            trigger_exit()
