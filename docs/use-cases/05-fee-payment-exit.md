@@ -15,7 +15,7 @@
 처리 흐름:
 
 - PG 결제가 성공하면 `transactions`를 `success`로 갱신한다.
-- MQTT로 앱에 결제 완료 알림을 발송한다.
+- AWS SQS로 결제 완료 이벤트를 발행하고, Lambda → AWS IoT Core 경로로 앱에 알림을 Push한다 (로컬 개발 시에는 paho-mqtt로 Mosquitto에 직접 발행한다).
 - PMS에 `POST /payment/complete`로 결제 완료를 통보한다.
 - PMS 통보가 실패하면 `pms_payment_retry:{tx_id}` Redis 키로 저장한다 (TTL 7일).
 - `NotifyRetryWorker`가 60초마다 실패 키를 순회해 PMS 통보를 재시도한다.
@@ -148,7 +148,7 @@ DB 변경:
 
 - Mock PG billing payment API
 - PMS payment complete API
-- MQTT publish
+- SQS publish → Lambda → AWS IoT Core (로컬 개발 시: paho-mqtt → Mosquitto)
 
 실패 케이스:
 
