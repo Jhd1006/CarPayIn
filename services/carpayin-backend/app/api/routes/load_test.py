@@ -45,6 +45,7 @@ class SeededUser(BaseModel):
     plate: str
     lot_id: str
     access_token: str    # ← 부하테스트 스크립트에서 Bearer 로 그대로 사용
+    billing_key: str     # ← MockPG 시드에 사용
 
 
 class SeedResponse(BaseModel):
@@ -86,8 +87,9 @@ def seed_test_user(
             text("""
                 INSERT INTO vehicles (car_id, user_id, car_sellname, plate)
                 VALUES (:car_id, :user_id, :car_sellname, :plate)
-                ON CONFLICT (car_id) DO UPDATE
-                    SET plate = EXCLUDED.plate
+                ON CONFLICT (plate) DO UPDATE
+                    SET car_id   = EXCLUDED.car_id,
+                        user_id  = EXCLUDED.user_id
             """),
             {
                 "car_id":       car_id,
@@ -138,6 +140,7 @@ def seed_test_user(
             plate=plate,
             lot_id=req.lot_id,
             access_token=access_token,
+            billing_key=billing_key,
         ))
 
     session.commit()
