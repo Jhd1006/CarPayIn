@@ -24,6 +24,9 @@ class FakePmsSessionRepository:
     def __init__(self):
         self.paid = []
 
+    def get_session_by_id(self, pms_session_id: str) -> dict:
+        return {"pms_session_id": pms_session_id, "lot_id": "lot-001", "plate": "123가4567"}
+
     def mark_paid(self, pms_session_id: str) -> None:
         self.paid.append(pms_session_id)
 
