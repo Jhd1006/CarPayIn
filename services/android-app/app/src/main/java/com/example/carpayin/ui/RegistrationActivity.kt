@@ -122,9 +122,10 @@ class RegistrationActivity : Activity() {
 
         Thread {
             try {
-                val authStartUrl = ApiManager.createQrSession(loginSessionId, vinHash).ifBlank {
-                    "${ApiManager.QR_BASE_URL}/auth/hyundai/start?session_id=$loginSessionId"
-                }
+                val authStartUrl = runCatching { ApiManager.createQrSession(loginSessionId, vinHash) }
+                    .getOrDefault("").ifBlank {
+                        "${ApiManager.QR_BASE_URL}/auth/hyundai/start?session_id=$loginSessionId"
+                    }
                 val bits = QRCodeWriter().encode(authStartUrl, BarcodeFormat.QR_CODE, 512, 512)
                 val bitmap = Bitmap.createBitmap(bits.width, bits.height, Bitmap.Config.ARGB_8888)
                 for (x in 0 until bits.width) {
