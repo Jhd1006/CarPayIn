@@ -4,6 +4,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.application.pms.calculate_fee import CalculateFeeService
+from app.application.pms.get_session_status import GetSessionStatusService
 from app.application.pms.handle_lpr_entry import HandleLprEntryService
 from app.application.pms.handle_lpr_exit import HandleLprExitService
 from app.application.pms.record_payment_complete import RecordPaymentCompleteService
@@ -101,6 +102,10 @@ def get_record_payment_complete_service(session: Session = Depends(get_db_sessio
         barrier_publisher=barrier_publisher,
         parking_session_store=parking_session_store,
     )
+
+
+def get_session_status_service() -> GetSessionStatusService:
+    return GetSessionStatusService(parking_session_store=parking_session_store)
 
 
 def get_payment_webhook_signature_verifier() -> WebhookSignatureVerifier:
