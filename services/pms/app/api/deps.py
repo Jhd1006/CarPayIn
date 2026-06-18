@@ -12,7 +12,7 @@ from app.infra.clients import HttpxCarPayInWebhookClient
 from app.infra.db.session import get_db_session
 from app.infra.fees import SimpleFeeCalculator
 from app.infra.mqtt import build_barrier_publisher
-from app.infra.redis import RedisPreRegistrationStore, redis_client
+from app.infra.redis import RedisParkingSessionStore, RedisPreRegistrationStore, redis_client
 from app.infra.repositories.payment_request_repository import SqlAlchemyPaymentRequestRepository
 from app.infra.repositories.pms_session_repository import SqlAlchemyPmsSessionRepository
 from app.infra.security import WebhookSignatureVerifier
@@ -60,6 +60,7 @@ fee_calculator = SimpleFeeCalculator(
 )
 barrier_publisher = build_barrier_publisher()
 pre_registration_store = RedisPreRegistrationStore(redis_client)
+parking_session_store = RedisParkingSessionStore(redis_client)
 
 
 def get_register_pre_notify_service() -> RegisterPreNotifyService:
@@ -74,6 +75,7 @@ def get_handle_lpr_entry_service(session: Session = Depends(get_db_session)) -> 
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
         carpayin_webhook_client=carpayin_webhook_client,
         barrier_publisher=barrier_publisher,
+        parking_session_store=parking_session_store,
     )
 
 
@@ -88,6 +90,7 @@ def get_handle_lpr_exit_service(session: Session = Depends(get_db_session)) -> H
     return HandleLprExitService(
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
         barrier_publisher=barrier_publisher,
+        parking_session_store=parking_session_store,
     )
 
 
@@ -96,6 +99,7 @@ def get_record_payment_complete_service(session: Session = Depends(get_db_sessio
         payment_request_repository=SqlAlchemyPaymentRequestRepository(session),
         pms_session_repository=SqlAlchemyPmsSessionRepository(session),
         barrier_publisher=barrier_publisher,
+        parking_session_store=parking_session_store,
     )
 
 
