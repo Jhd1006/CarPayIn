@@ -496,6 +496,59 @@ class TestProcessPayment:
         assert str(exc_info.value) == "no_active_billing_key"
         assert len(fake_pg_client.payment_requests) == 0
 
+    def test_free_parking_creates_success_transaction_and_outbox_without_card(
+        self,
+        process_payment_service,
+        fake_fee_quote_store,
+        fake_parking_session_repository,
+        fake_transaction_repository,
+        fake_pg_client,
+        fake_pms_client,
+        fake_notification_publisher,
+    ):
+        fake_fee_quote_store.add_quote(VALID_SESSION_ID, 0, VALID_CURRENCY)
+        fake_parking_session_repository.add_session(
+            session_id=VALID_SESSION_ID,
+            car_id=VALID_CAR_ID,
+            lot_id=VALID_LOT_ID,
+            plate=VALID_PLATE,
+            entry_time=VALID_ENTRY_TIME,
+        )
+        command = ProcessPaymentCommand(
+            access_token=VALID_ACCESS_TOKEN,
+            session_id=VALID_SESSION_ID,
+            amount=0,
+            currency=VALID_CURRENCY,
+        )
+
+        first_result = process_payment_service.execute(command)
+        second_result = process_payment_service.execute(command)
+
+        idempotency_key = _make_idempotency_key(
+            VALID_SESSION_ID,
+            VALID_CAR_ID,
+            0,
+            VALID_CURRENCY,
+        )
+        tx = fake_transaction_repository.get_transaction_by_idempotency_key(
+            idempotency_key
+        )
+        notifications = list(
+            fake_transaction_repository.payment_notifications.values()
+        )
+
+        assert first_result.status == "success"
+        assert first_result.approval_no == "FREE"
+        assert second_result.tx_id == first_result.tx_id
+        assert tx["status"] == "success"
+        assert tx["amount"] == 0
+        assert tx["billing_key"] == "FREE"
+        assert len(notifications) == 1
+        assert notifications[0]["payload"]["approval_no"] == "FREE"
+        assert fake_pg_client.payment_requests == []
+        assert len(fake_pms_client.notify_calls) == 2
+        assert fake_notification_publisher.published_messages == []
+
     def test_valid_request_creates_pending_transaction_and_calls_pg(
         self,
         process_payment_service,
@@ -582,7 +635,7 @@ class TestProcessPayment:
         assert notification["status"] == "pending"
         assert notification["event_type"] == "payment.completed"
         assert notification["channel"] == "iot"
-        assert notification["destination"] == f"carpayin/cars/{VALID_CAR_ID}/payments"
+        assert notification["destination"] == f"payment/complete/{VALID_CAR_ID}"
         assert notification["payload"]["tx_id"] == tx["tx_id"]
         assert notification["payload"]["session_id"] == VALID_SESSION_ID
         assert notification["payload"]["car_id"] == VALID_CAR_ID
@@ -597,8 +650,8 @@ class TestProcessPayment:
         # PMS notify 호출 확인
         assert len(fake_pms_client.notify_calls) == 1
 
-        # 알림 발행 확인
-        assert len(fake_notification_publisher.published_messages) == 1
+        # 앱 알림은 outbox worker가 비동기로 발행하므로 요청 경로에서 직접 발행하지 않음
+        assert len(fake_notification_publisher.published_messages) == 0
 
         # 응답 확인
         assert result.status == "success"
@@ -825,15 +878,16 @@ class TestProcessPayment:
         assert len(fake_pms_client.notify_calls) == 1
         assert fake_payment_notify_retry_store.retry_events == {}
  
-    def test_notification_publish_called_with_correct_payload(
+    def test_notification_is_enqueued_instead_of_published_directly(
         self,
         process_payment_service,
         fake_fee_quote_store,
         fake_parking_session_repository,
         fake_billing_key_repository,
+        fake_transaction_repository,
         fake_notification_publisher,
     ):
-        """결제 성공 시 MQTT 알림이 올바른 payload로 발행된다."""
+        """결제 성공 시 앱 알림은 outbox에 저장되고 요청 경로에서 직접 발행하지 않는다."""
         fake_fee_quote_store.add_quote(VALID_SESSION_ID, VALID_AMOUNT, VALID_CURRENCY)
         fake_parking_session_repository.add_session(
             session_id=VALID_SESSION_ID,
@@ -853,11 +907,15 @@ class TestProcessPayment:
  
         process_payment_service.execute(command)
  
-        assert len(fake_notification_publisher.published_messages) == 1
-        msg = fake_notification_publisher.published_messages[0]
+        notifications = list(
+            fake_transaction_repository.payment_notifications.values()
+        )
+        assert len(notifications) == 1
+        msg = notifications[0]["payload"]
         assert msg["session_id"] == VALID_SESSION_ID
         assert msg["car_id"] == VALID_CAR_ID
         assert msg["lot_id"] == VALID_LOT_ID
         assert msg["amount"] == VALID_AMOUNT
         assert msg["currency"] == VALID_CURRENCY
         assert msg["approval_no"] == VALID_APPROVAL_NO
+        assert fake_notification_publisher.published_messages == []
