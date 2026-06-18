@@ -137,7 +137,7 @@ deploy:ecs:carpayin-backend:
 # GitLab CI/CD 변수 필요 (Settings → CI/CD → Variables):
 #   공통:          AWS_REGION, MOCKPMS_EC2_INSTANCE_ID, MOCKPG_EC2_INSTANCE_ID
 #   mockpms 전용:  MOCKPMS_DATABASE_URL (Masked), MOCKPMS_WEBHOOK_TOKEN (Masked)
-#                  BARRIER_ENTRY_URL, BARRIER_EXIT_URL
+#                  CARPAYIN_BACKEND_BASE_URL, BARRIER_ENTRY_URL, BARRIER_EXIT_URL
 #   mockpg 전용:   MOCKPG_DATABASE_URL (Masked), MOCKPG_WEBHOOK_SECRET (Masked)
 # ──────────────────────────────────────────────
 .deploy_ec2:
@@ -155,8 +155,9 @@ deploy:ecs:carpayin-backend:
       # 서비스별 민감 환경변수를 base64로 인코딩해 EC2 .env 파일로 전달
       case "${INFRA_DIR}" in
         mockpms)
+          : "${CARPAYIN_BACKEND_BASE_URL:?Set CARPAYIN_BACKEND_BASE_URL in GitLab CI/CD variables (Settings -> CI/CD -> Variables)}"
           ENV_CONTENT=$(printf 'PMS_DATABASE_URL=%s\nPMS_WEBHOOK_TOKEN=%s\nCARPAYIN_BACKEND_BASE_URL=%s\nBARRIER_ENTRY_URL=%s\nBARRIER_EXIT_URL=%s\n' \
-            "${MOCKPMS_DATABASE_URL:-}" "${MOCKPMS_WEBHOOK_TOKEN:-}" "${CARPAYIN_BACKEND_BASE_URL:-${CARPAYIN_BACKEND_URL:-}}" "${BARRIER_ENTRY_URL:-}" "${BARRIER_EXIT_URL:-}")
+            "${MOCKPMS_DATABASE_URL:-}" "${MOCKPMS_WEBHOOK_TOKEN:-}" "${CARPAYIN_BACKEND_BASE_URL}" "${BARRIER_ENTRY_URL:-}" "${BARRIER_EXIT_URL:-}")
           ;;
         mockpg)
           ENV_CONTENT=$(printf 'MOCK_PG_DATABASE_URL=%s\nPG_WEBHOOK_SECRET=%s\n' \
