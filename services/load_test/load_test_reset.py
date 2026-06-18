@@ -6,6 +6,7 @@ import httpx
 CARPAYIN_URL     = "http://hd-public-alb-204074971.ap-northeast-2.elb.amazonaws.com"
 PMS_URL          = "http://mockpms-public-alb-810192222.ap-northeast-2.elb.amazonaws.com"
 PG_URL           = "http://mockpg-public-alb-581820362.ap-northeast-2.elb.amazonaws.com"
+CARD_URL         = "http://192.168.200.200:40002/"
 LOT_ID           = "LOT_GANGNAM_01"
 CONCURRENT_USERS = 5
 ENTRY_TIME       = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
@@ -19,6 +20,7 @@ async def main():
         await client.post(f"{CARPAYIN_URL}/dev/reset")
         await client.post(f"{PMS_URL}/dev/reset")
         await client.post(f"{PG_URL}/dev/reset")
+        await client.post(f"{CARD_URL}/dev/reset")
         print("초기화 완료")
 
 # 프로그램 진입점
