@@ -11,6 +11,7 @@ sequenceDiagram
     participant PGDB as Mock PG DB
     participant Card as Mock Card
     participant CardDB as Mock Card DB
+    participant Outbox as PaymentOutboxWorker
     participant SQS as AWS SQS
     participant Lambda as AWS Lambda
     participant IoT as AWS IoT Core
@@ -54,7 +55,9 @@ sequenceDiagram
     PMS-->>Backend: Return success
     Backend-->>App: Return payment complete
     App->>App: parked=false
-    Backend->>SQS: Publish payment.completed event
+    Outbox->>DB: Claim pending outbox event
+    Outbox->>SQS: Publish payment.completed event
+    Outbox->>DB: UPDATE outbox status=published
     SQS->>Lambda: Trigger notification Lambda
     Lambda->>IoT: Publish to car/{car_id}/payment topic
     IoT-->>App: Payment notification
