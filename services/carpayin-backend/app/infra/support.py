@@ -148,7 +148,10 @@ class SqsNotificationPublisher(LoggingNotificationPublisher):
 
 def build_notification_publisher() -> LoggingNotificationPublisher:
     queue_url = os.getenv("SQS_NOTIFICATION_QUEUE_URL", "").strip()
-    if queue_url:
+    publish_enabled = os.getenv("SQS_NOTIFICATION_PUBLISH_ENABLED", "true").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    if queue_url and publish_enabled:
         return SqsNotificationPublisher(queue_url=queue_url)
 
     # fallback: MQTT (로컬 개발용)

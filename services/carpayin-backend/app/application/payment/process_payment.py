@@ -114,10 +114,17 @@ class ProcessPaymentService:
         if command.amount < 0:
             raise ValueError("invalid_amount")
 
-        tx_id = str(uuid.uuid4())
-
         # 무료 주차(0원): DB CHECK(amount > 0) 제약으로 transaction 행 생성 없이 바로 성공 처리
+        # 멱등성: tx 행이 없으므로 idempotency_key 대신 session.status로 중복 요청을 감지한다
         if command.amount == 0:
+            # idempotency_key를 seed로 결정적 tx_id 생성 — 재시도 시 동일한 값을 반환
+            tx_id = str(uuid.uuid5(uuid.UUID(int=0), idempotency_key))
+            if session.get("status") == "completed":
+                return ProcessPaymentResult(
+                    status="success",
+                    tx_id=tx_id,
+                    approval_no="FREE",
+                )
             approval_no = "FREE"
             notification_payload = self._build_payment_notification_payload(
                 session=session,
@@ -152,6 +159,7 @@ class ProcessPaymentService:
             )
 
         # pending transaction 생성
+        tx_id = str(uuid.uuid4())
         self.transaction_repository.create_pending_transaction(
             tx_id=tx_id,
             idempotency_key=idempotency_key,
