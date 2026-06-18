@@ -116,7 +116,7 @@ class ProcessPaymentService:
 
         tx_id = str(uuid.uuid4())
 
-        # 무료 주차(0원): PG 호출 없이 바로 성공 처리
+        # 무료 주차(0원): DB CHECK(amount > 0) 제약으로 transaction 행 생성 없이 바로 성공 처리
         if command.amount == 0:
             approval_no = "FREE"
             notification_payload = self._build_payment_notification_payload(
@@ -125,12 +125,6 @@ class ProcessPaymentService:
                 car_id=car_id,
                 approval_no=approval_no,
                 command=command,
-            )
-            self._mark_payment_success(
-                idempotency_key=idempotency_key,
-                pg_tx_id=None,
-                approval_no=approval_no,
-                notification_payload=notification_payload,
             )
             self.parking_session_repository.update_session_status(
                 command.session_id, "completed"
