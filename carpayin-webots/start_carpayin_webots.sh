@@ -4,32 +4,64 @@ set -u
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORLD_FILE="${WEBOTS_WORLD:-$PROJECT_DIR/worlds/Car Pay-in.wbt}"
 
-# ── 로컬 모드 자동 감지 ─────────────────────────────────────────────────────
-# 인자 없이 실행하거나 --local이면 localhost 기준으로 동작
-USE_LOCAL=false
-if [[ "${1:-}" == "--local" || -z "${1:-}" ]]; then
-  # 백엔드가 localhost:8000에 응답하면 로컬 모드
-  if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
-    USE_LOCAL=true
-  fi
-fi
+# ── 모드 결정 ────────────────────────────────────────────────────────────────
+#
+#  우선순위:
+#  1) PARKING_PMS_URL / BACKEND_URL 환경변수가 이미 세팅된 경우 → 그대로 사용
+#  2) --local 또는 인자 없이 localhost:8000 이 응답하는 경우     → 로컬 모드
+#  3) ./start_carpayin_webots.sh <노트북IP>                       → 원격 모드
+#  4) ./start_carpayin_webots.sh --aws                            → AWS 모드
+#     (CARPAYIN_BACKEND_URL / CARPAYIN_PMS_URL 환경변수 필요)
+#
+ARG="${1:-}"
 
-if $USE_LOCAL; then
-  export BACKEND_URL="http://localhost:8000"
-  export PARKING_PMS_URL="http://localhost:8001"
-  export GPS_PROXY_URL=""
-  export ADB_HOST=""
-  export ADB_TARGET="emulator-5554"
-  echo "[CarPayIn] 로컬 모드 – 백엔드/PMS/에뮬레이터가 모두 이 머신에서 실행 중"
-else
-  # ── 원격 노트북 모드 (에뮬레이터가 다른 PC에 있을 때) ───────────────────
-  NOTEBOOK_IP="${CARPAYIN_NOTEBOOK_IP:-${1:-}}"
-  if [[ -z "$NOTEBOOK_IP" ]]; then
-    echo "노트북 IP를 첫 번째 인자로 전달하거나 CARPAYIN_NOTEBOOK_IP 환경변수를 설정하세요."
-    echo "  예) $0 192.168.1.100"
-    echo "  또는: $0 --local  (모든 서비스가 이 머신에서 실행 중일 때)"
+if [[ -n "${PARKING_PMS_URL:-}" && -n "${BACKEND_URL:-}" ]]; then
+  echo "[CarPayIn] 환경변수 모드 – PARKING_PMS_URL=${PARKING_PMS_URL}"
+
+elif [[ "$ARG" == "--aws" ]]; then
+  # ── AWS 모드 ──────────────────────────────────────────────────────────────
+  # .env.aws 파일이 있으면 자동 로드 (환경변수 직접 export보다 우선순위 낮음)
+  if [[ -f "$PROJECT_DIR/.env.aws" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" || "$line" == \#* ]] && continue
+      [[ "$line" != *=* ]] && continue
+      key="${line%%=*}"
+      val="${line#*=}"
+      [[ -z "${!key:-}" ]] && export "$key=$val"
+    done < "$PROJECT_DIR/.env.aws"
+    echo "[CarPayIn] .env.aws 로드됨"
+  fi
+  if [[ -z "${CARPAYIN_PMS_URL:-}" || -z "${CARPAYIN_BACKEND_URL:-}" ]]; then
+    echo "AWS 모드에서는 환경변수가 필요합니다:"
+    echo "  방법 1) .env.aws.example → .env.aws 로 복사 후 값 채우기"
+    echo "  방법 2) export CARPAYIN_PMS_URL=http://<pms-alb>"
+    echo "          export CARPAYIN_BACKEND_URL=http://<carpayin-backend-alb>"
     exit 1
   fi
+  export BACKEND_URL="$CARPAYIN_BACKEND_URL"
+  export PARKING_PMS_URL="$CARPAYIN_PMS_URL"
+  export GPS_PROXY_URL=""
+  export ADB_HOST=""
+  export ADB_TARGET=""
+  echo "[CarPayIn] AWS 모드 – PMS: $PARKING_PMS_URL"
+
+elif [[ "$ARG" == "--local" || -z "$ARG" ]]; then
+  # ── 로컬 모드 ──────────────────────────────────────────────────────────────
+  if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+    export BACKEND_URL="http://localhost:8000"
+    export PARKING_PMS_URL="http://localhost:8001"
+    export GPS_PROXY_URL=""
+    export ADB_HOST=""
+    export ADB_TARGET="emulator-5554"
+    echo "[CarPayIn] 로컬 모드 – 백엔드/PMS/에뮬레이터가 모두 이 머신에서 실행 중"
+  else
+    echo "로컬 모드: localhost:8000 에 응답이 없습니다. 백엔드가 실행 중인지 확인하세요."
+    exit 1
+  fi
+
+else
+  # ── 원격 노트북 모드 ───────────────────────────────────────────────────────
+  NOTEBOOK_IP="$ARG"
   export BACKEND_URL="http://$NOTEBOOK_IP:8000"
   export PARKING_PMS_URL="http://$NOTEBOOK_IP:8001"
   export GPS_PROXY_URL="http://$NOTEBOOK_IP:5600"
@@ -51,7 +83,11 @@ echo "[CarPayIn] Drive mode: $WEBOTS_DRIVE_MODE"
 
 # ── Webots 실행 파일 탐색 ────────────────────────────────────────────────────
 WEBOTS_BIN="${WEBOTS_BIN:-}"
-for candidate in     /usr/local/webots/webots     /snap/bin/webots     /opt/webots/webots     "$HOME/webots/webots"; do
+for candidate in \
+    /usr/local/webots/webots \
+    /snap/bin/webots \
+    /opt/webots/webots \
+    "$HOME/webots/webots"; do
   if [[ -z "$WEBOTS_BIN" && -x "$candidate" ]]; then
     WEBOTS_BIN="$candidate"
   fi

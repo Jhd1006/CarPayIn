@@ -126,7 +126,7 @@ class Transaction(Base):
     
     # Constraints and Indexes
     __table_args__ = (
-        CheckConstraint('amount > 0', name='ck_transactions_amount'),
+        CheckConstraint('amount >= 0', name='ck_transactions_amount'),
         CheckConstraint("currency ~ '^[A-Z]{3}$'", name='ck_transactions_currency'),
         CheckConstraint("status IN ('pending', 'success', 'failed', 'cancelled')", name='ck_transactions_status'),
         Index('idx_transactions_session_id', 'session_id'),

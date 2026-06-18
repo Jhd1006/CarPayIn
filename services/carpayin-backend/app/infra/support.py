@@ -94,6 +94,7 @@ class MqttNotificationPublisher(LoggingNotificationPublisher):
                 "mqtt_publish_failed",
                 extra={"topic": topic, "error": str(exc)},
             )
+            raise
 
 
 class SqsNotificationPublisher(LoggingNotificationPublisher):
@@ -135,8 +136,7 @@ class SqsNotificationPublisher(LoggingNotificationPublisher):
 
     def _send(self, body: dict) -> None:
         if not self._sqs:
-            self._logger.warning("sqs_unavailable", extra={"body": body})
-            return
+            raise RuntimeError("sqs_unavailable")
         try:
             self._sqs.send_message(
                 QueueUrl=self._queue_url,
@@ -144,6 +144,7 @@ class SqsNotificationPublisher(LoggingNotificationPublisher):
             )
         except Exception as exc:
             self._logger.warning("sqs_publish_failed", extra={"error": str(exc)})
+            raise
 
 
 def build_notification_publisher() -> LoggingNotificationPublisher:
