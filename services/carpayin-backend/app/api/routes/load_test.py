@@ -196,3 +196,18 @@ def get_parking_session(
         raise HTTPException(status_code=404, detail="active session not found")
 
     return ParkingSessionResponse(session_id=str(row.session_id))
+
+@router.post("/seed-card-token")
+def seed_card_token(
+    card_token: str,
+) -> dict:
+    import httpx
+    import os
+    pg_base_url = os.getenv("PG_BASE_URL", "").rstrip("/")
+    resp = httpx.post(
+        f"{pg_base_url}/dev/seed-card-token",
+        params={"card_token": card_token},
+    )
+    if resp.status_code != 200:
+        return {"status": "failed", "detail": resp.text}
+    return {"status": "ok", "card_token": card_token}
