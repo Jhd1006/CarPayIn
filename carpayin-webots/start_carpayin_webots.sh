@@ -20,10 +20,22 @@ if [[ -n "${PARKING_PMS_URL:-}" && -n "${BACKEND_URL:-}" ]]; then
 
 elif [[ "$ARG" == "--aws" ]]; then
   # ── AWS 모드 ──────────────────────────────────────────────────────────────
+  # .env.aws 파일이 있으면 자동 로드 (환경변수 직접 export보다 우선순위 낮음)
+  if [[ -f "$PROJECT_DIR/.env.aws" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" || "$line" == \#* ]] && continue
+      [[ "$line" != *=* ]] && continue
+      key="${line%%=*}"
+      val="${line#*=}"
+      [[ -z "${!key:-}" ]] && export "$key=$val"
+    done < "$PROJECT_DIR/.env.aws"
+    echo "[CarPayIn] .env.aws 로드됨"
+  fi
   if [[ -z "${CARPAYIN_PMS_URL:-}" || -z "${CARPAYIN_BACKEND_URL:-}" ]]; then
     echo "AWS 모드에서는 환경변수가 필요합니다:"
-    echo "  export CARPAYIN_PMS_URL=https://<pms-alb-or-domain>"
-    echo "  export CARPAYIN_BACKEND_URL=https://<carpayin-backend-alb-or-domain>"
+    echo "  방법 1) .env.aws.example → .env.aws 로 복사 후 값 채우기"
+    echo "  방법 2) export CARPAYIN_PMS_URL=http://<pms-alb>"
+    echo "          export CARPAYIN_BACKEND_URL=http://<carpayin-backend-alb>"
     exit 1
   fi
   export BACKEND_URL="$CARPAYIN_BACKEND_URL"
