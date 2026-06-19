@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  # CarPayIn 커스텀 DB 메트릭 익스포터
+  - job_name: carpayin-db-exporter
+    static_configs:
+      - targets: ["db-exporter:9001"]
+
+  # CarPayIn Redis (포트 6379)
+  - job_name: redis-carpayin
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          redis_instance: carpayin
+
+  # Prometheus 자체 메트릭
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
