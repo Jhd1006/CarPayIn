@@ -23,7 +23,6 @@ Phase 순서:
 import math
 import json
 import os
-import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -59,8 +58,8 @@ if os.path.exists(_env_path):
                 os.environ[_k] = _v
 
 PMS_URL = os.environ.get("PARKING_PMS_URL", "http://localhost:8001")
-PLATE   = os.environ.get("WEBOTS_PLATE",    "123가4567")
-LOT_ID  = os.environ.get("WEBOTS_LOT_ID",   "LOT_GANGNAM_01")
+PLATE   = os.environ.get("WEBOTS_PLATE",    "12가3456")
+LOT_ID  = os.environ.get("WEBOTS_LOT_ID",   "LOT_TEST_01")
 
 ENTRY_BARRIER_PORT = 8100
 EXIT_BARRIER_PORT  = 8101
@@ -71,39 +70,51 @@ _ENTRY_Y = 1.65
 _EXIT_Y  = 0.31
 
 WP = {
-    # 입차 차단기 앞 정차 (차단기 X=49.78 기준 약 6m 앞)
+    # 입차 차단기 앞 정차 지점 (X=53.5: 차단기 X=49.78 기준 약 4m 앞)
     "approaching_entry": [
-        (56.0,   _ENTRY_Y,   8.0),
+        (53.5,   _ENTRY_Y,  10.0),
     ],
-    # 차단기 통과 — 천천히 진입
+    # 차단기 통과 → 주차장 내부
     "entering": [
-        (44.0,   _ENTRY_Y,   5.0),
+        (47.0,   _ENTRY_Y,  10.0),
+        (28.0,   _ENTRY_Y,  15.0),
     ],
-    # 입차 후 단순 루프: 서→남→동 방향으로 출차 차선 합류
+    # 주차 지점 (13.14, -7.04) 까지
     "parking": [
-        (32.0,   _ENTRY_Y,   5.0),   # 서쪽으로 이동
-        (25.0,    1.0,        4.0),   # 남서 방향
-        (25.0,   _EXIT_Y,    4.0),   # 출차 차선 Y로 이동
-        (40.0,   _EXIT_Y,    5.0),   # 동쪽으로 이동
+        (20.0,    1.0,      10.0),
+        (20.0,   -6.0,       8.0),
+        (13.0,   -7.0,       5.0),
     ],
-    # 출차 차단기 앞 정차 (차단기 X=49.73 기준 약 4m 앞)
+    # U턴: 서 → 북 방향 루프
+    "uturn": [
+        ( 7.0,   -7.0,       8.0),
+        ( 7.0,    2.0,      10.0),
+    ],
+    # 출구 차선 합류
+    "to_exit": [
+        (20.0,    0.5,      12.0),
+        (37.0,   _EXIT_Y,  12.0),
+    ],
+    # 출차 차단기 앞 정차 지점 (X=47.5: 차단기 X=49.73 기준 약 2m 앞)
     "approaching_exit": [
-        (46.0,   _EXIT_Y,    5.0),
+        (47.5,   _EXIT_Y,    8.0),
     ],
     # 차단기 통과 → 출차 완료
     "exiting": [
-        (57.0,   _EXIT_Y,   10.0),
+        (57.0,   _EXIT_Y,   12.0),
         (74.0,   _EXIT_Y,   10.0),
     ],
 }
 
-# 단계 순서
+# 단계 순서 (주행 단계와 특수 대기 단계 교대)
 STATE_SEQUENCE = [
     "approaching_entry",
     "at_entry_gate",
     "entering",
     "parking",
     "at_parking",
+    "uturn",
+    "to_exit",
     "approaching_exit",
     "at_exit_gate",
     "exiting",
@@ -116,7 +127,7 @@ ARRIVE_PASS = 5.0   # m — 통과용 중간 웨이포인트
 
 # 속도/조향 파라미터
 SLOW_RADIUS = 8.0   # m — 이 거리부터 감속
-MIN_SPEED   = 4.0   # km/h — 최저 속도
+MIN_SPEED   = 2.0   # km/h — 최저 속도
 KP_STEER    = 1.2   # 조향 P 게인
 MAX_STEER   = 0.4   # rad
 
@@ -157,8 +168,7 @@ def is_barrier_open(port):
 
 
 def get_pms_status():
-    query = urllib.parse.urlencode({"plate": PLATE, "lot_id": LOT_ID})
-    data = _get(f"{PMS_URL}/parking/session-status?{query}")
+    data = _get(f"{PMS_URL}/parking/session-status?plate={PLATE}&lot_id={LOT_ID}")
     return data.get("status") if data else None
 
 
@@ -182,7 +192,7 @@ def compute_steer(wx, wy, tx, ty, heading):
     bearing = math.atan2(ty - wy, tx - wx)
     err = bearing - heading
     err = (err + math.pi) % (2 * math.pi) - math.pi
-    return max(-MAX_STEER, min(MAX_STEER, -KP_STEER * err))
+    return max(-MAX_STEER, min(MAX_STEER, KP_STEER * err))
 
 
 def approach_speed(dist, target_speed):
@@ -207,12 +217,10 @@ if gps:
     gps.enable(timestep)
 
 translation_field = None
-rotation_field = None
 GROUND_Z = -0.173432
 try:
     self_node = robot.getSelf()
     translation_field = self_node.getField("translation")
-    rotation_field = self_node.getField("rotation")
     GROUND_Z = translation_field.getSFVec3f()[2]
 except Exception as e:
     print(f"[VC] Supervisor 불가: {e}", flush=True)
@@ -229,11 +237,9 @@ prev_wy  = 1.05
 wx, wy   = prev_wx, prev_wy
 
 # at_entry_gate
-entry_lpr_sent     = False
-entry_wait_t       = 0.0
-entry_poll_t       = 0.0
-entry_open_wait_t  = 0.0   # 차단기 열림 확인 후 추가 대기
-entry_open_confirmed = False
+entry_lpr_sent   = False
+entry_wait_t     = 0.0
+entry_poll_t     = 0.0
 
 # at_parking
 park_poll_t      = 0.0
@@ -248,7 +254,7 @@ exit_retry_t     = 0.0
 
 def advance_state():
     global state_idx, state, wp_idx
-    global entry_lpr_sent, entry_wait_t, entry_poll_t, entry_open_wait_t, entry_open_confirmed
+    global entry_lpr_sent, entry_wait_t, entry_poll_t
     global park_poll_t
     global exit_lpr_sent, exit_lpr_res, exit_wait_t, exit_poll_t, exit_retry_t
 
@@ -257,8 +263,7 @@ def advance_state():
     wp_idx    = 0
 
     entry_lpr_sent = False
-    entry_wait_t = entry_poll_t = entry_open_wait_t = 0.0
-    entry_open_confirmed = False
+    entry_wait_t = entry_poll_t = 0.0
     park_poll_t  = 0.0
     exit_lpr_sent = False
     exit_lpr_res  = None
@@ -283,14 +288,10 @@ while step_robot() != -1:
         cur = translation_field.getSFVec3f()
         wx, wy = cur[0], cur[1]
 
-    if rotation_field:
-        rot = rotation_field.getSFRotation()
-        heading = rot[3] * (1.0 if rot[2] >= 0 else -1.0)
-    else:
-        moved = math.sqrt((wx - prev_wx) ** 2 + (wy - prev_wy) ** 2)
-        if moved > 0.12:
-            heading = math.atan2(wy - prev_wy, wx - prev_wx)
-            prev_wx, prev_wy = wx, wy
+    moved = math.sqrt((wx - prev_wx) ** 2 + (wy - prev_wy) ** 2)
+    if moved > 0.12:
+        heading = math.atan2(wy - prev_wy, wx - prev_wx)
+        prev_wx, prev_wy = wx, wy
 
     # ════════════════════════════════════════════════════════════════════
     # 주행 단계 — 웨이포인트 추종
@@ -317,40 +318,25 @@ while step_robot() != -1:
             steer = compute_steer(wx, wy, tx, ty, heading)
             speed = approach_speed(dist, tspeed) if is_last else tspeed
             drive(speed, steer)
-            print(f"[POS] ({wx:.1f},{wy:.1f}) hdg={math.degrees(heading):.0f}° → ({tx},{ty}) dist={dist:.1f}m [{state}]", flush=True)
 
     # ════════════════════════════════════════════════════════════════════
     # at_entry_gate — LPR 입차 + 차단기 열림 대기
     # ════════════════════════════════════════════════════════════════════
     elif state == "at_entry_gate":
         if not entry_lpr_sent:
-            res = trigger_entry()
+            trigger_entry()
             entry_lpr_sent = True
-            lpr_status = res.get("status") if res else None
-            if lpr_status in ("created", "existing"):
-                print(f"[VC] 입차 승인({lpr_status}) → 차단기 열기", flush=True)
-                _post(f"http://localhost:{ENTRY_BARRIER_PORT}/open", {})
-            else:
-                print(f"[VC] 입차 LPR 응답: {lpr_status} → 차단기 열기 시도", flush=True)
-                _post(f"http://localhost:{ENTRY_BARRIER_PORT}/open", {})
             print("[VC] 입차 차단기 열림 대기…", flush=True)
 
         entry_wait_t += dt
 
-        if entry_open_confirmed:
-            # 차단기 완전 개방 대기 (arm 회전 시간)
-            entry_open_wait_t += dt
-            if entry_open_wait_t >= 3.0:
-                print("[VC] 차단기 완전 개방 확인 → 진입", flush=True)
-                advance_state()
-        elif entry_wait_t >= 2.0:
+        if entry_wait_t >= 2.0:   # 최소 2초 대기 후 폴링 시작
             entry_poll_t += dt
             if entry_poll_t >= BARRIER_POLL_INTERVAL:
                 entry_poll_t = 0.0
                 if is_barrier_open(ENTRY_BARRIER_PORT):
-                    print("[VC] 입차 차단기 열림 확인 — 3초 후 진입", flush=True)
-                    entry_open_confirmed = True
-                    entry_open_wait_t = 0.0
+                    print("[VC] 입차 차단기 열림 확인 → 통과 시작", flush=True)
+                    advance_state()
 
         if entry_wait_t >= ENTRY_BARRIER_TIMEOUT:
             print("[VC] 입차 차단기 타임아웃 → 강제 통과", flush=True)
@@ -382,9 +368,6 @@ while step_robot() != -1:
         status = exit_lpr_res.get("status") if exit_lpr_res else None
 
         if status == "opened":
-            if exit_wait_t == 0.0:
-                print("[VC] 출차 승인 → 차단기 열기", flush=True)
-                _post(f"http://localhost:{EXIT_BARRIER_PORT}/open", {})
             exit_wait_t += dt
             exit_poll_t += dt
             if exit_wait_t >= 2.0 and exit_poll_t >= BARRIER_POLL_INTERVAL:

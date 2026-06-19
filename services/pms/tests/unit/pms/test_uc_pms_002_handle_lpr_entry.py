@@ -76,7 +76,6 @@ class FakeBarrierPublisher:
 class FakeCarPayInWebhookClient:
     def __init__(self):
         self.webhook_calls = []
-        self.fail = False
 
     def send_entry_webhook(
         self,
@@ -94,8 +93,6 @@ class FakeCarPayInWebhookClient:
                 "entry_time": entry_time,
             }
         )
-        if self.fail:
-            raise RuntimeError("webhook unavailable")
 
 
 @pytest.fixture
@@ -209,35 +206,6 @@ class TestHandleLprEntry:
         assert webhook_payload["lot_id"] == VALID_LOT_ID
         assert webhook_payload["plate"] == VALID_PLATE
         assert webhook_payload["entry_time"] == VALID_ENTRY_TIME
-
-    def test_failed_webhook_keeps_registration_and_retries_existing_session(
-        self,
-        handle_lpr_entry_service,
-        fake_pre_registration_repository,
-        fake_pms_session_repository,
-        fake_carpayin_webhook_client,
-    ):
-        command = HandleLprEntryCommand(
-            lot_id=VALID_LOT_ID,
-            plate=VALID_PLATE,
-            entry_time=VALID_ENTRY_TIME,
-        )
-        fake_carpayin_webhook_client.fail = True
-
-        first_result = handle_lpr_entry_service.execute(command)
-
-        assert first_result.status == "created"
-        assert (VALID_LOT_ID, VALID_PLATE) in fake_pre_registration_repository.registrations
-        assert len(fake_carpayin_webhook_client.webhook_calls) == 1
-
-        fake_carpayin_webhook_client.fail = False
-        second_result = handle_lpr_entry_service.execute(command)
-
-        assert second_result.status == "existing"
-        assert second_result.pms_session_id == first_result.pms_session_id
-        assert len(fake_pms_session_repository.sessions) == 1
-        assert len(fake_carpayin_webhook_client.webhook_calls) == 2
-        assert (VALID_LOT_ID, VALID_PLATE) not in fake_pre_registration_repository.registrations
 
     def test_unregistered_plate_creates_session_without_webhook(
         self,

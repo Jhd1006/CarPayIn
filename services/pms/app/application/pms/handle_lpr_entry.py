@@ -47,12 +47,7 @@ class HandleLprEntryService:
         )
 
         if existing_session:
-            self._send_entry_webhook_if_registered(
-                pms_session_id=existing_session["pms_session_id"],
-                lot_id=command.lot_id,
-                plate=command.plate,
-                entry_time=existing_session["entry_time"],
-            )
+            # 중복 생성하지 않고 기존 세션 반환
             return HandleLprEntryResult(
                 status="existing",
                 pms_session_id=existing_session["pms_session_id"],
@@ -74,49 +69,30 @@ class HandleLprEntryService:
                 entry_time=command.entry_time,
             )
 
-        self._send_entry_webhook_if_registered(
-            pms_session_id=pms_session_id,
+        # Car Pay-in 사전등록 차량이면 백엔드에 webhook 전송
+        registration = self.pre_registration_repository.get_active_pre_registration(
             lot_id=command.lot_id,
             plate=command.plate,
-            entry_time=command.entry_time,
         )
+        if registration is not None:
+            self.pre_registration_repository.consume_pre_registration(
+                lot_id=command.lot_id,
+                plate=command.plate,
+            )
+            try:
+                self.carpayin_webhook_client.send_entry_webhook(
+                    pms_session_id=pms_session_id,
+                    lot_id=command.lot_id,
+                    plate=command.plate,
+                    entry_time=command.entry_time,
+                )
+            except Exception as exc:
+                _logger.warning(
+                    "carpayin_webhook_failed_but_session_created: %s (pms_session_id=%s)",
+                    exc, pms_session_id,
+                )
 
         return HandleLprEntryResult(
             status="created",
             pms_session_id=pms_session_id,
-        )
-
-    def _send_entry_webhook_if_registered(
-        self,
-        *,
-        pms_session_id: str,
-        lot_id: str,
-        plate: str,
-        entry_time: str,
-    ) -> None:
-        registration = self.pre_registration_repository.get_active_pre_registration(
-            lot_id=lot_id,
-            plate=plate,
-        )
-        if registration is None:
-            return
-
-        try:
-            self.carpayin_webhook_client.send_entry_webhook(
-                pms_session_id=pms_session_id,
-                lot_id=lot_id,
-                plate=plate,
-                entry_time=entry_time,
-            )
-        except Exception as exc:
-            _logger.warning(
-                "carpayin_webhook_failed_but_session_created: %s (pms_session_id=%s)",
-                exc,
-                pms_session_id,
-            )
-            return
-
-        self.pre_registration_repository.consume_pre_registration(
-            lot_id=lot_id,
-            plate=plate,
         )
