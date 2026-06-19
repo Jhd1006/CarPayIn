@@ -64,7 +64,7 @@ def seed_test_user(
     req: SeedRequest,
     session: Session = Depends(get_db_session),
 ) -> SeedResponse:
-    count = min(max(req.count, 1), 100)
+    count = min(max(req.count, 1), 500)
     seeded: list[SeededUser] = []
 
     for i in range(count):
