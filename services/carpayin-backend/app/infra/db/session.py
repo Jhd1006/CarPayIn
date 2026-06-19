@@ -28,8 +28,8 @@ DATABASE_URL = _database_url()
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=20,
-    max_overflow=30,
+    pool_size=10,
+    max_overflow=15,
 )
 
 SessionLocal = sessionmaker(
