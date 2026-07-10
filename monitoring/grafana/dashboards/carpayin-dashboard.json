@@ -1,0 +1,1928 @@
+{
+    "title":  "CarPayIn 부하테스트 모니터링",
+    "uid":  "carpayin-load-test",
+    "schemaVersion":  39,
+    "version":  1,
+    "refresh":  "5s",
+    "time":  {
+                 "from":  "now-30m",
+                 "to":  "now"
+             },
+    "timezone":  "browser",
+    "tags":  [
+                 "carpayin",
+                 "load-test"
+             ],
+    "graphTooltip":  1,
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "links":  [
+
+              ],
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "panels":  [
+                   {
+                       "id":  1,
+                       "type":  "stat",
+                       "title":  "DB 연결 상태",
+                       "description":  "4개 DB 중 익스포터가 연결된 수",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  0,
+                                       "w":  4,
+                                       "h":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "sum(carpayin_db_up)",
+                                           "legendFormat":  "connected",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "auto",
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "justifyMode":  "center"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "orange",
+                                                                                                 "value":  1
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  4
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short",
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "4":  {
+                                                                                                           "text":  "4/4 ✓"
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  2,
+                       "type":  "stat",
+                       "title":  "Active DB 연결",
+                       "description":  "전체 DB의 active 상태 연결 수 합계",
+                       "gridPos":  {
+                                       "x":  4,
+                                       "y":  0,
+                                       "w":  4,
+                                       "h":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "sum(carpayin_db_connections{state=\"active\"})",
+                                           "legendFormat":  "active",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "auto",
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "center"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "yellow",
+                                                                                                 "value":  20
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  50
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  3,
+                       "type":  "stat",
+                       "title":  "진행중 주차세션",
+                       "description":  "carpayin DB의 active 주차세션 수",
+                       "gridPos":  {
+                                       "x":  8,
+                                       "y":  0,
+                                       "w":  4,
+                                       "h":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_parking_sessions{status=\"active\"}",
+                                           "legendFormat":  "active sessions",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "auto",
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "center"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "fixed",
+                                                                          "fixedColor":  "blue"
+                                                                      },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  4,
+                       "type":  "stat",
+                       "title":  "결제 성공",
+                       "description":  "transactions 테이블의 success 상태 누적",
+                       "gridPos":  {
+                                       "x":  12,
+                                       "y":  0,
+                                       "w":  4,
+                                       "h":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_transactions{status=\"success\"}",
+                                           "legendFormat":  "success",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "auto",
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "center"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "fixed",
+                                                                          "fixedColor":  "green"
+                                                                      },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  5,
+                       "type":  "stat",
+                       "title":  "결제 실패",
+                       "description":  "transactions 테이블의 failed 상태 누적",
+                       "gridPos":  {
+                                       "x":  16,
+                                       "y":  0,
+                                       "w":  4,
+                                       "h":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_transactions{status=\"failed\"}",
+                                           "legendFormat":  "failed",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "auto",
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "center"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  1
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  6,
+                       "type":  "stat",
+                       "title":  "최대 쿼리 지연",
+                       "description":  "전체 DB 중 가장 오래 실행 중인 쿼리 시간",
+                       "gridPos":  {
+                                       "x":  20,
+                                       "y":  0,
+                                       "w":  4,
+                                       "h":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "max(carpayin_db_longest_query_seconds)",
+                                           "legendFormat":  "max",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "auto",
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "justifyMode":  "center"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "yellow",
+                                                                                                 "value":  1
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  5
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "s",
+                                                            "decimals":  2
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  10,
+                       "type":  "row",
+                       "title":  "DB 연결 현황",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  4,
+                                       "w":  24,
+                                       "h":  1
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  11,
+                       "type":  "timeseries",
+                       "title":  "DB별 Active 연결 수",
+                       "description":  "각 DB의 active 상태 연결 추이",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  5,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_connections{state=\"active\"}",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  12,
+                       "type":  "timeseries",
+                       "title":  "DB별 Idle 연결 수",
+                       "description":  "각 DB의 idle 상태 연결 추이",
+                       "gridPos":  {
+                                       "x":  12,
+                                       "y":  5,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_connections{state=\"idle\"}",
+                                           "legendFormat":  "{{db_name}} idle",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_connections{state=\"idle in transaction\"}",
+                                           "legendFormat":  "{{db_name}} idle-in-tx",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  5,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  20,
+                       "type":  "row",
+                       "title":  "주차 / 결제 흐름",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  13,
+                                       "w":  24,
+                                       "h":  1
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  21,
+                       "type":  "timeseries",
+                       "title":  "주차세션 상태 추이 (carpayin)",
+                       "description":  "parking_sessions 테이블의 상태별 누적 수",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  14,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_parking_sessions{status=\"active\"}",
+                                           "legendFormat":  "active",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_parking_sessions{status=\"completed\"}",
+                                           "legendFormat":  "completed",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_parking_sessions{status=\"cancelled\"}",
+                                           "legendFormat":  "cancelled",
+                                           "refId":  "C"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  15,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "active"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "blue",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             },
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "completed"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "green",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             },
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "cancelled"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "orange",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             }
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  22,
+                       "type":  "timeseries",
+                       "title":  "결제 트랜잭션 상태 추이 (carpayin)",
+                       "description":  "transactions 테이블의 상태별 누적 수",
+                       "gridPos":  {
+                                       "x":  12,
+                                       "y":  14,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_transactions{status=\"pending\"}",
+                                           "legendFormat":  "pending",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_transactions{status=\"success\"}",
+                                           "legendFormat":  "success",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_transactions{status=\"failed\"}",
+                                           "legendFormat":  "failed",
+                                           "refId":  "C"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_transactions{status=\"cancelled\"}",
+                                           "legendFormat":  "cancelled",
+                                           "refId":  "D"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  15,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "success"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "green",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             },
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "failed"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "red",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             },
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "pending"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "yellow",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             }
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  23,
+                       "type":  "timeseries",
+                       "title":  "알림 아웃박스 상태 추이",
+                       "description":  "payment_notification_outbox 테이블 — IoT 알림 전달 상태 추적",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  22,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_notification_outbox{status=\"pending\"}",
+                                           "legendFormat":  "pending",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_notification_outbox{status=\"delivered\"}",
+                                           "legendFormat":  "delivered",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_notification_outbox{status=\"failed\"}",
+                                           "legendFormat":  "failed",
+                                           "refId":  "C"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_notification_outbox{status=\"dead\"}",
+                                           "legendFormat":  "dead (재시도 초과)",
+                                           "refId":  "D"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "delivered"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "green",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             },
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "dead (재시도 초과)"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "color",
+                                                                                        "value":  {
+                                                                                                      "fixedColor":  "dark-red",
+                                                                                                      "mode":  "fixed"
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             }
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  24,
+                       "type":  "timeseries",
+                       "title":  "PMS 주차/결제 상태 추이",
+                       "description":  "PMS DB의 parking_sessions 및 payment_requests 상태",
+                       "gridPos":  {
+                                       "x":  12,
+                                       "y":  22,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "pms_parking_sessions{status=\"active\"}",
+                                           "legendFormat":  "주차세션 active",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "pms_parking_sessions{status=\"paid\"}",
+                                           "legendFormat":  "주차세션 paid",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "pms_payment_requests{status=\"success\"}",
+                                           "legendFormat":  "결제요청 success",
+                                           "refId":  "C"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "pms_payment_requests{status=\"failed\"}",
+                                           "legendFormat":  "결제요청 failed",
+                                           "refId":  "D"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  30,
+                       "type":  "row",
+                       "title":  "DB 성능",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  30,
+                                       "w":  24,
+                                       "h":  1
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  31,
+                       "type":  "timeseries",
+                       "title":  "DB Commit 속도 (commits/s)",
+                       "description":  "xact_commit 누적값의 30초 평균 증가율",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  31,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "rate(carpayin_db_xact_commit[30s])",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "ops",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  32,
+                       "type":  "timeseries",
+                       "title":  "가장 긴 쿼리 실행 시간",
+                       "description":  "각 DB에서 현재 가장 오래 실행 중인 active 쿼리 시간",
+                       "gridPos":  {
+                                       "x":  8,
+                                       "y":  31,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_longest_query_seconds",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "s",
+                                                            "min":  0,
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "yellow",
+                                                                                                 "value":  1
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  5
+                                                                                             }
+                                                                                         ]
+                                                                           }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  33,
+                       "type":  "timeseries",
+                       "title":  "데드락 발생",
+                       "description":  "데드락 누적값의 증가 (increase()로 발생 건수 확인)",
+                       "gridPos":  {
+                                       "x":  16,
+                                       "y":  31,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "increase(carpayin_db_deadlocks[1m])",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  20,
+                                                                           "showPoints":  "auto",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  40,
+                       "type":  "row",
+                       "title":  "Redis",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  39,
+                                       "w":  24,
+                                       "h":  1
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  41,
+                       "type":  "timeseries",
+                       "title":  "Redis 메모리 사용량",
+                       "description":  "carpayin / pms Redis 인스턴스 메모리",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  40,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "redis_memory_used_bytes{job=\"redis-carpayin\"}",
+                                           "legendFormat":  "carpayin",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "redis_memory_used_bytes{job=\"redis-pms\"}",
+                                           "legendFormat":  "pms",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "bytes",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  42,
+                       "type":  "timeseries",
+                       "title":  "Redis 명령 처리 속도 (ops/s)",
+                       "description":  "초당 Redis 명령 처리 수",
+                       "gridPos":  {
+                                       "x":  8,
+                                       "y":  40,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "rate(redis_commands_processed_total{job=\"redis-carpayin\"}[30s])",
+                                           "legendFormat":  "carpayin",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "rate(redis_commands_processed_total{job=\"redis-pms\"}[30s])",
+                                           "legendFormat":  "pms",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "ops",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  43,
+                       "type":  "timeseries",
+                       "title":  "Redis 연결 클라이언트 수",
+                       "description":  "각 Redis 인스턴스에 연결된 클라이언트 수",
+                       "gridPos":  {
+                                       "x":  16,
+                                       "y":  40,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "redis_connected_clients{job=\"redis-carpayin\"}",
+                                           "legendFormat":  "carpayin",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "redis_connected_clients{job=\"redis-pms\"}",
+                                           "legendFormat":  "pms",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  50,
+                       "type":  "row",
+                       "title":  "인프라 현황",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  48,
+                                       "w":  24,
+                                       "h":  1
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  51,
+                       "type":  "bargauge",
+                       "title":  "DB 크기",
+                       "description":  "각 DB의 현재 크기",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  49,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_size_bytes",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "horizontal",
+                                       "displayMode":  "gradient",
+                                       "showUnfilled":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "unit":  "bytes",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  52,
+                       "type":  "bargauge",
+                       "title":  "carpayin 테이블별 행 수",
+                       "description":  "carpayin DB의 주요 테이블 예상 행 수",
+                       "gridPos":  {
+                                       "x":  8,
+                                       "y":  49,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_table_rows{db_name=\"carpayin\"}",
+                                           "legendFormat":  "{{table_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "orientation":  "horizontal",
+                                       "displayMode":  "gradient",
+                                       "showUnfilled":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  53,
+                       "type":  "timeseries",
+                       "title":  "사용자 / 차량 / 빌링키 등록 추이",
+                       "description":  "carpayin DB 기준 누적 등록 수",
+                       "gridPos":  {
+                                       "x":  16,
+                                       "y":  49,
+                                       "w":  8,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_users_total",
+                                           "legendFormat":  "users",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_vehicles_total",
+                                           "legendFormat":  "vehicles",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_billing_keys{status=\"active\"}",
+                                           "legendFormat":  "billing_keys (active)",
+                                           "refId":  "C"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  60,
+                       "type":  "row",
+                       "title":  "Exporter 상태",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  57,
+                                       "w":  24,
+                                       "h":  1
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  61,
+                       "type":  "timeseries",
+                       "title":  "Scrape 소요 시간",
+                       "description":  "각 DB 스크레이프에 소요된 시간",
+                       "gridPos":  {
+                                       "x":  0,
+                                       "y":  58,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_scrape_duration_seconds",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  5,
+                                                                           "showPoints":  "never",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "s",
+                                                            "min":  0,
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "yellow",
+                                                                                                 "value":  1
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  3
+                                                                                             }
+                                                                                         ]
+                                                                           }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  62,
+                       "type":  "timeseries",
+                       "title":  "Scrape 오류 누적",
+                       "description":  "DB 연결 실패 또는 쿼리 오류 누적 수",
+                       "gridPos":  {
+                                       "x":  12,
+                                       "y":  58,
+                                       "w":  12,
+                                       "h":  8
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_db_scrape_errors",
+                                           "legendFormat":  "{{db_name}}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "displayMode":  "list",
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true
+                                                  }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "lineWidth":  2,
+                                                                           "fillOpacity":  15,
+                                                                           "showPoints":  "auto",
+                                                                           "spanNulls":  true
+                                                                       },
+                                                            "unit":  "short",
+                                                            "min":  0
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  70,
+                       "type":  "row",
+                       "title":  "서비스별 처리 현황",
+                       "collapsed":  false,
+                       "gridPos":  {
+                                       "y":  67,
+                                       "w":  24,
+                                       "h":  1,
+                                       "x":  0
+                                   },
+                       "panels":  [
+
+                                  ]
+                   },
+                   {
+                       "id":  71,
+                       "type":  "stat",
+                       "title":  "carpayin 완료 주차세션",
+                       "description":  "completed / total parking_sessions",
+                       "gridPos":  {
+                                       "y":  68,
+                                       "w":  6,
+                                       "h":  5,
+                                       "x":  0
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "completed",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "carpayin_parking_sessions{status=\"completed\"}",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "legendFormat":  "total",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "sum(carpayin_parking_sessions)",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "center",
+                                       "orientation":  "horizontal"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "fixedColor":  "blue",
+                                                                          "mode":  "fixed"
+                                                                      }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  72,
+                       "type":  "stat",
+                       "title":  "PMS 결제 완료 세션",
+                       "description":  "paid / total parking_sessions",
+                       "gridPos":  {
+                                       "y":  68,
+                                       "w":  6,
+                                       "h":  5,
+                                       "x":  6
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "paid",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "pms_parking_sessions{status=\"paid\"}",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "legendFormat":  "total",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "sum(pms_parking_sessions)",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "center",
+                                       "orientation":  "horizontal"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "fixedColor":  "blue",
+                                                                          "mode":  "fixed"
+                                                                      }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  73,
+                       "type":  "stat",
+                       "title":  "MockPG 결제 성공",
+                       "description":  "success / total transactions",
+                       "gridPos":  {
+                                       "y":  68,
+                                       "w":  6,
+                                       "h":  5,
+                                       "x":  12
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "success",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "mockpg_transactions{status=\"success\"}",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "legendFormat":  "total",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "sum(mockpg_transactions)",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "center",
+                                       "orientation":  "horizontal"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "fixedColor":  "blue",
+                                                                          "mode":  "fixed"
+                                                                      }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  74,
+                       "type":  "stat",
+                       "title":  "MockCard 결제 성공",
+                       "description":  "success / total tx",
+                       "gridPos":  {
+                                       "y":  68,
+                                       "w":  6,
+                                       "h":  5,
+                                       "x":  18
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "success",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "mockcard_tx{status=\"success\"}",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "legendFormat":  "total",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "expr":  "sum(mockcard_tx)",
+                                           "refId":  "B"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "center",
+                                       "orientation":  "horizontal"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "fixedColor":  "blue",
+                                                                          "mode":  "fixed"
+                                                                      }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   }
+               ]
+}
