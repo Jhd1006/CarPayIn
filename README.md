@@ -1,144 +1,115 @@
-# Car Pay In
+# 🚘 CarPayIn — AAOS 차량 자동 결제 플랫폼
 
-Car Pay In is a monorepo for the in-vehicle parking payment flow. It contains
-the Android client, the main backend, mock payment/card services, PMS service,
-scenario documents, local Docker Compose, and GitLab Registry deployment tools.
+> 현대오토에버 모빌리티 SW 스쿨 3기 팀 프로젝트 (5인, 기여도 30%)  
+> 2026.04 ~ 2026.06
 
-## Repository Layout
+AAOS 탑재 차량이 주차장 진입부터 요금 결제·출차까지 사용자 개입 없이 자동으로 처리하는 차량 결제 시스템입니다.
 
-```text
-services/
-  android-app/        Android client used for local and in-car testing
-  carpayin-backend/   Main API for auth, vehicle, card, parking, and payment
-  mock-card/          Mock card company API
-  mock-pg/            Mock PG API and card registration WebView
-  pms/                Mock parking management system API
-  webots/             Webots vehicle and barrier simulation controllers
+---
 
-docs/
-  api/                OpenAPI contract
-  DB schemas/         Database and Redis schema documents
-  deployment/         Registry, CI/CD, and deployment notes
-  diagrams/           Mermaid sequence diagrams
-  scenarios/          Scenario flow documents
-  use-cases/          Use-case level specifications
+## 🏗️ Architecture
 
-scripts/
-  build-push-images.ps1      Local GitLab Registry image build/push helper
-  start-local-full.ps1       Start Docker services and local support setup
-  deploy-from-registry.ps1   Pull registry images and run Docker Compose
-  start-local-e2e.ps1        Start local E2E dependencies
-  stop-local-e2e.ps1         Stop local E2E dependencies
+<img width="1032" height="727" alt="Group 417 white" src="https://github.com/user-attachments/assets/1576426e-dd93-480d-abb0-5c17f60241ce" />
+
+---
+
+## 📦 서비스 구성
+
+| 서비스 | 역할 | 인프라 |
+|---|---|---|
+| carpayin-backend | 핵심 비즈니스 로직 (인증·카드·주차·결제) | ECS Fargate, RDS PostgreSQL Multi-AZ, ElastiCache Redis |
+| mock-pms | 주차관제 시스템 (입차 이벤트, 요금 계산) | EC2 + Docker Compose + PostgreSQL |
+| mock-pg | 결제 게이트웨이 (billing key 발급, 승인) | EC2 + Docker Compose + PostgreSQL |
+| mock-card | 카드사 (카드 검증, card_token 발급) | OpenStack k3s, WireGuard VPN + PostgreSQL |
+| android-app | AAOS 탑재 Android 클라이언트 | Kotlin / Pleos |
+
+```
+CarPayIn
+├── services
+│   ├── android-app/        AAOS 차량 앱 (로컬/차량 내 테스트용)
+│   ├── carpayin-backend/   인증·차량·카드·주차·결제 메인 API
+│   ├── mock-card/          카드사 Mock API
+│   ├── mock-pg/            PG Mock API + 카드 등록 WebView
+│   ├── pms/                주차관제 시스템 Mock API
+│   └── webots/             Webots 차량/차단기 시뮬레이션 컨트롤러
+├── docs
+│   ├── api/                OpenAPI 계약서
+│   ├── DB schemas/         DB·Redis 스키마 문서
+│   ├── deployment/         레지스트리·CI/CD·배포 노트
+│   ├── diagrams/           Mermaid 시퀀스 다이어그램
+│   ├── scenarios/          시나리오 플로우 문서
+│   └── use-cases/          유스케이스 명세
+└── scripts
+    ├── build-push-images.ps1      로컬 GitLab Registry 이미지 빌드/푸시
+    ├── start-local-full.ps1       Docker 서비스 + 로컬 지원 구성 기동
+    ├── deploy-from-registry.ps1   레지스트리 이미지 pull 후 Docker Compose 실행
+    ├── start-local-e2e.ps1        로컬 E2E 의존성 기동
+    └── stop-local-e2e.ps1         로컬 E2E 의존성 종료
 ```
 
-## Documentation Map
+---
 
-- API contract: `docs/api/car-pay-in-openapi.yaml`
-- Business flow specs: `docs/use-cases/`
-- Presentation/scenario flow: `docs/scenarios/`
-- Mermaid sequence sources: `docs/diagrams/`
-- DB and Redis schemas: `docs/DB schemas/`
-- Testing conventions: `docs/conventions/`
-- Android setup: `services/android-app/README.md`
+## 🛠️ Tech Stack
 
-## Local Configuration
+<p>
+<img src="https://img.shields.io/badge/amazonaws-232F3E?style=flat-square&logo=amazonaws&logoColor=white">
+<img src="https://img.shields.io/badge/terraform-7B42BC?style=flat-square&logo=terraform&logoColor=white">
+<img src="https://img.shields.io/badge/docker-2496ED?style=flat-square&logo=docker&logoColor=white">
+<img src="https://img.shields.io/badge/prometheus-E6522C?style=flat-square&logo=prometheus&logoColor=white">
+<img src="https://img.shields.io/badge/grafana-F46800?style=flat-square&logo=grafana&logoColor=white">
+<img src="https://img.shields.io/badge/postgresql-4169E1?style=flat-square&logo=postgresql&logoColor=white">
+<img src="https://img.shields.io/badge/redis-DC382D?style=flat-square&logo=redis&logoColor=white">
+<img src="https://img.shields.io/badge/python-3776AB?style=flat-square&logo=python&logoColor=white">
+</p>
 
-Copy `.env.example` to `.env` and fill local secrets before running real
-Hyundai OAuth.
+---
 
-Required for the main local flow:
+## ⚙️ 로컬 환경 설정
 
-```text
+`.env.example`을 `.env`로 복사 후 아래 값 입력:
+
+```
 PUBLIC_BASE_URL
 HYUNDAI_CLIENT_ID
 HYUNDAI_CLIENT_SECRET
 PG_PUBLIC_BASE_URL
 ```
 
-Do not commit `.env` or real credentials.
+---
 
-Android uses `services/android-app/local.properties`. Copy
-`services/android-app/local.properties.example` before compiling or launching
-the app.
+## 🚀 로컬 실행
 
-## Local Run
-
-Start the local service stack:
-
-```powershell
+```bash
 docker compose up -d --build
 ```
 
-Useful ports:
+| 서비스 | 포트 | Swagger |
+|---|---|---|
+| carpayin-backend | 8000 | http://localhost:8000/docs |
+| pms | 8001 | http://localhost:8001/docs |
+| mock-pg | 8002 | http://localhost:8002/docs |
+| mock-card | 8003 | http://localhost:8003/docs |
 
-```text
-8000  carpayin-backend
-8001  pms
-8002  mock-pg
-8003  mock-card
-5432  carpayin-postgres
-5433  mock-card-postgres
-5434  mock-pg-postgres
-5435  pms-postgres
-6379  redis
-```
+---
 
-API docs are available after the stack starts:
+## 🧪 테스트
 
-```text
-http://localhost:8000/docs       carpayin-backend Swagger UI
-http://localhost:8001/docs       PMS Swagger UI
-http://localhost:8002/docs       mock-pg Swagger UI
-http://localhost:8003/docs       mock-card Swagger UI
-```
-
-For a guided local startup script:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start-local-full.ps1
-```
-
-Stop the full local stack:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\stop-local-full.ps1
-```
-
-## Tests
-
-Run all Python service unit/API tests:
-
-```powershell
+```bash
+# 전체 테스트
 make test
-```
 
-Run one backend test set directly:
-
-```powershell
+# 서비스별 테스트
 cd services/carpayin-backend
 python -m pytest tests/unit tests/api -q --import-mode=importlib
 ```
 
-Compile the Android app:
+---
 
-```powershell
-cd services/android-app
-.\gradlew.bat :app:compileDebugKotlin
-```
+## 🔄 CI/CD
 
-## CI/CD
+시맨틱 버전 태그 push 시 GitLab Registry에 이미지 자동 빌드·푸시:
 
-Merge requests run a lightweight validation pipeline.
-
-Pushing a semantic version tag builds and pushes runtime images to GitLab
-Container Registry:
-
-```powershell
+```bash
 git tag 0.0.2
 git push origin 0.0.2
 ```
-
-Images are pushed as both the semantic version tag and `latest`.
-
-See `docs/deployment/gitlab-registry.md` for registry, local runner, and AWS
-pull details.
